@@ -16,6 +16,7 @@ import {
   Search,
   ShieldCheck,
   UserPlus,
+  Users2,
   UsersRound,
   X,
 } from "lucide-react";
@@ -35,6 +36,7 @@ type TenantProfile = {
   full_name: string | null;
   tenant_id: string | null;
   tenant_role: TenantRole | null;
+  member_id?: string | null;
   status: "active" | "invited" | "suspended";
   avatar_url: string | null;
 };
@@ -54,6 +56,13 @@ type MemberRecord = {
   email: string | null;
   phone: string | null;
   status: string;
+  status_v2?: "active" | "inactive" | "visitor" | "in_process";
+  date_of_birth?: string | null;
+  document_number?: string | null;
+  address_line1?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_postal_code?: string | null;
   ministry: string | null;
   notes: string | null;
   created_at: string;
@@ -90,6 +99,21 @@ type CatalogItemRecord = {
   name: string;
 };
 
+type MemberRoleRecord = {
+  tenant_id: string;
+  member_id: string;
+  role_id: string;
+  catalog_roles: { name: string } | null;
+};
+
+type MemberMinistryRecord = {
+  tenant_id: string;
+  member_id: string;
+  ministry_id: string;
+  is_admin: boolean;
+  catalog_ministries: { name: string } | null;
+};
+
 type TenantUserRecord = {
   id: string;
   full_name: string | null;
@@ -98,10 +122,41 @@ type TenantUserRecord = {
   status: "active" | "invited" | "suspended";
 };
 
+type FamilyRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type FamilyMemberRecord = {
+  tenant_id: string;
+  family_id: string;
+  member_id: string;
+  relationship: string;
+  is_primary: boolean;
+  members: { name: string; email: string | null } | null;
+};
+
+type MemberHistoryRecord = {
+  id: string;
+  tenant_id: string;
+  member_id: string;
+  event_type: string;
+  notes: string | null;
+  occurred_at: string;
+};
+
 type ClientDashboardData = {
   profile: TenantProfile;
   tenant: TenantRecord;
   members: MemberRecord[];
+  memberRoleIdsByMemberId: Record<string, string[]>;
+  memberMinistriesByMemberId: Record<string, Array<{ ministry_id: string; name: string; is_admin: boolean }>>;
+  families: FamilyRecord[];
+  familyMembersByFamilyId: Record<string, Array<{ member_id: string; name: string; relationship: string; is_primary: boolean }>>;
   events: EventRecord[];
   announcements: AnnouncementRecord[];
   users: TenantUserRecord[];
@@ -110,7 +165,31 @@ type ClientDashboardData = {
   catalogMinistries: CatalogItemRecord[];
 };
 
-type MemberFormState = Omit<MemberRecord, "created_at"> & { tenant_id: string };
+type MemberFormState = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  status: "active" | "inactive" | "visitor" | "in_process";
+  date_of_birth: string;
+  document_number: string;
+  address_line1: string;
+  address_city: string;
+  address_state: string;
+  address_postal_code: string;
+  notes: string;
+  roleIds: string[];
+  ministries: Array<{ ministry_id: string; is_admin: boolean }>;
+};
+
+type FamilyFormState = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  notes: string;
+  members: Array<{ member_id: string; relationship: string; is_primary: boolean }>;
+};
 type EventFormState = Omit<EventRecord, "created_at"> & { tenant_id: string };
 type AnnouncementFormState = Omit<AnnouncementRecord, "created_at"> & { tenant_id: string };
 type ThemeFormState = {
@@ -131,9 +210,24 @@ const emptyMemberForm: MemberFormState = {
   email: "",
   phone: "",
   status: "active",
-  ministry: "",
+  date_of_birth: "",
+  document_number: "",
+  address_line1: "",
+  address_city: "",
+  address_state: "",
+  address_postal_code: "",
   notes: "",
   tenant_id: "",
+  roleIds: [],
+  ministries: [],
+};
+
+const emptyFamilyForm: FamilyFormState = {
+  id: "",
+  tenant_id: "",
+  name: "",
+  notes: "",
+  members: [],
 };
 
 const emptyEventForm: EventFormState = {
@@ -166,6 +260,7 @@ const sampleClientDashboardData: ClientDashboardData = {
     full_name: "Admin Demo",
     tenant_id: "demo-tenant",
     tenant_role: "owner",
+    member_id: "member-1",
     status: "active",
     avatar_url: null,
   },
@@ -199,6 +294,28 @@ const sampleClientDashboardData: ClientDashboardData = {
       created_at: new Date().toISOString(),
     },
   ],
+  memberRoleIdsByMemberId: {
+    "member-1": ["role-sys-2"],
+  },
+  memberMinistriesByMemberId: {
+    "member-1": [{ ministry_id: "min-sys-1", name: "Ministério de Louvor", is_admin: true }],
+  },
+  families: [
+    {
+      id: "family-1",
+      tenant_id: "demo-tenant",
+      name: "Família Souza",
+      notes: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ],
+  familyMembersByFamilyId: {
+    "family-1": [
+      { member_id: "member-1", name: "Mariana Souza", relationship: "self", is_primary: true },
+      { member_id: "member-2", name: "Paulo Alves", relationship: "spouse", is_primary: false },
+    ],
+  },
   events: [
     {
       id: "event-1",
@@ -280,6 +397,7 @@ const sampleClientDashboardData: ClientDashboardData = {
 const clientTabs = [
   { key: "overview", label: "Visão geral", icon: LayoutDashboard },
   { key: "members", label: "Membros", icon: UsersRound },
+  { key: "families", label: "Famílias", icon: Users2 },
   { key: "events", label: "Calendário", icon: CalendarCheck },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "lists", label: "Listagens", icon: Edit3 },
@@ -299,10 +417,23 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [dataStatus, setDataStatus] = useState<LoadStatus>("idle");
   const [clientData, setClientData] = useState<ClientDashboardData | null>(null);
   const [activeTab, setActiveTab] = useState<ClientTab>("overview");
+  const [memberSearchTerm, setMemberSearchTerm] = useState("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState<"all" | MemberFormState["status"]>("all");
   const [memberForm, setMemberForm] = useState<MemberFormState>(emptyMemberForm);
   const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
   const [memberSaveStatus, setMemberSaveStatus] = useState<LoginStatus>("idle");
   const [memberSaveMessage, setMemberSaveMessage] = useState("");
+  const [memberHistory, setMemberHistory] = useState<MemberHistoryRecord[]>([]);
+  const [memberHistoryStatus, setMemberHistoryStatus] = useState<LoadStatus>("idle");
+  const [memberHistoryDraftType, setMemberHistoryDraftType] = useState("");
+  const [memberHistoryDraftNotes, setMemberHistoryDraftNotes] = useState("");
+  const [familyForm, setFamilyForm] = useState<FamilyFormState>(emptyFamilyForm);
+  const [isFamilyFormOpen, setIsFamilyFormOpen] = useState(false);
+  const [familySaveStatus, setFamilySaveStatus] = useState<LoginStatus>("idle");
+  const [familySaveMessage, setFamilySaveMessage] = useState("");
+  const [familyMemberPickerId, setFamilyMemberPickerId] = useState("");
+  const [familyMemberRelationship, setFamilyMemberRelationship] = useState("other");
+  const [familyMemberPrimary, setFamilyMemberPrimary] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(emptyEventForm);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [eventSaveStatus, setEventSaveStatus] = useState<LoginStatus>("idle");
@@ -325,11 +456,82 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [catalogEdits, setCatalogEdits] = useState<Record<string, string>>({});
   const [catalogSaveStatus, setCatalogSaveStatus] = useState<LoginStatus>("idle");
   const [catalogSaveMessage, setCatalogSaveMessage] = useState("");
+  const [ministryPickerId, setMinistryPickerId] = useState("");
 
   const isTenantAdmin = useMemo(() => {
     if (!profile) return false;
-    return profile.tenant_role !== "member" || profile.tenant_role === null;
+    return profile.tenant_role === "owner" || profile.tenant_role === "admin";
   }, [profile]);
+
+  const isSecretariaAdmin = useMemo(() => {
+    if (!profile?.member_id || !clientData) {
+      return false;
+    }
+
+    const memberships = clientData.memberMinistriesByMemberId[profile.member_id] ?? [];
+    return memberships.some((item) => item.is_admin && item.name.toLowerCase().startsWith("secretaria"));
+  }, [clientData, profile?.member_id]);
+
+  const canManageMembers = isTenantAdmin || isSecretariaAdmin;
+
+  const catalogRoleNameById = useMemo(() => {
+    const items = clientData?.catalogRoles ?? [];
+    return items.reduce<Record<string, string>>((acc, item) => {
+      acc[item.id] = item.name;
+      return acc;
+    }, {});
+  }, [clientData?.catalogRoles]);
+
+  const catalogMinistryNameById = useMemo(() => {
+    const items = clientData?.catalogMinistries ?? [];
+    return items.reduce<Record<string, string>>((acc, item) => {
+      acc[item.id] = item.name;
+      return acc;
+    }, {});
+  }, [clientData?.catalogMinistries]);
+
+  const memberSummaryById = useMemo(() => {
+    if (!clientData) {
+      return {};
+    }
+
+    const roles = clientData.memberRoleIdsByMemberId;
+    const ministries = clientData.memberMinistriesByMemberId;
+
+    return clientData.members.reduce<Record<string, string>>((acc, member) => {
+      const roleNames = (roles[member.id] ?? [])
+        .map((id) => catalogRoleNameById[id])
+        .filter(Boolean);
+
+      const ministryNames = (ministries[member.id] ?? []).map((item) =>
+        item.is_admin ? `${item.name} (Admin)` : item.name,
+      );
+
+      const parts = [...ministryNames, ...roleNames].filter(Boolean);
+      acc[member.id] = parts.length ? parts.join(" · ") : member.email ?? "Sem vínculos";
+      return acc;
+    }, {});
+  }, [catalogRoleNameById, clientData, clientData?.members, clientData?.memberMinistriesByMemberId, clientData?.memberRoleIdsByMemberId]);
+
+  const filteredMembers = useMemo(() => {
+    if (!clientData) {
+      return [];
+    }
+
+    const term = memberSearchTerm.trim().toLowerCase();
+    return clientData.members.filter((member) => {
+      const status = (member.status_v2 ?? member.status) as MemberFormState["status"];
+      if (memberStatusFilter !== "all" && status !== memberStatusFilter) {
+        return false;
+      }
+
+      if (!term) {
+        return true;
+      }
+
+      return [member.name, member.email ?? "", member.phone ?? ""].join(" ").toLowerCase().includes(term);
+    });
+  }, [clientData, memberSearchTerm, memberStatusFilter]);
 
   const activeModules = clientData?.modules ?? [];
   const memberCount = clientData?.members.length ?? 0;
@@ -367,7 +569,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     const profileResult = await supabase
       .from("profiles")
-      .select("id, full_name, email, tenant_id, tenant_role, status, avatar_url")
+      .select("id, full_name, email, tenant_id, tenant_role, member_id, status, avatar_url")
       .eq("id", userId)
       .single<TenantProfile>();
 
@@ -377,11 +579,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return null;
     }
 
-    const currentProfile = profileResult.data;
+    let currentProfile = profileResult.data;
     if (!currentProfile.tenant_id || currentProfile.status !== "active") {
       setDataStatus("error");
       setLoginMessage("Este usuário não está autorizado como cliente ou está inativo.");
       return null;
+    }
+
+    if (!currentProfile.member_id) {
+      await supabase.rpc("ensure_current_profile_member");
+      const refreshedProfileResult = await supabase
+        .from("profiles")
+        .select("id, full_name, email, tenant_id, tenant_role, member_id, status, avatar_url")
+        .eq("id", userId)
+        .single<TenantProfile>();
+
+      if (!refreshedProfileResult.error && refreshedProfileResult.data) {
+        currentProfile = refreshedProfileResult.data;
+      }
     }
 
     const tenantId = currentProfile.tenant_id;
@@ -389,6 +604,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     const [
       tenantResult,
       membersResult,
+      memberRolesResult,
+      memberMinistriesResult,
+      familiesResult,
+      familyMembersResult,
       eventsResult,
       announcementsResult,
       usersResult,
@@ -403,10 +622,33 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .single<TenantRecord>(),
         supabase
           .from("members")
-          .select("id, name, email, phone, status, ministry, notes, created_at")
+          .select(
+            "id, name, email, phone, status, status_v2, date_of_birth, document_number, address_line1, address_city, address_state, address_postal_code, ministry, notes, created_at",
+          )
           .eq("tenant_id", tenantId)
           .order("created_at", { ascending: false })
           .returns<MemberRecord[]>(),
+        supabase
+          .from("member_roles")
+          .select("tenant_id, member_id, role_id, catalog_roles (name)")
+          .eq("tenant_id", tenantId)
+          .returns<MemberRoleRecord[]>(),
+        supabase
+          .from("member_ministries")
+          .select("tenant_id, member_id, ministry_id, is_admin, catalog_ministries (name)")
+          .eq("tenant_id", tenantId)
+          .returns<MemberMinistryRecord[]>(),
+        supabase
+          .from("families")
+          .select("id, tenant_id, name, notes, created_at, updated_at")
+          .eq("tenant_id", tenantId)
+          .order("name", { ascending: true })
+          .returns<FamilyRecord[]>(),
+        supabase
+          .from("family_members")
+          .select("tenant_id, family_id, member_id, relationship, is_primary, members (name, email)")
+          .eq("tenant_id", tenantId)
+          .returns<FamilyMemberRecord[]>(),
         supabase
           .from("tenant_events")
           .select("id, title, description, location, event_date, created_at")
@@ -446,6 +688,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     if (
       tenantResult.error ||
       membersResult.error ||
+      memberRolesResult.error ||
+      memberMinistriesResult.error ||
+      familiesResult.error ||
+      familyMembersResult.error ||
       eventsResult.error ||
       announcementsResult.error ||
       usersResult.error ||
@@ -468,10 +714,54 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       })
       .filter((module): module is TenantModuleRecord => Boolean(module?.id && module?.code));
 
+    const memberRoleIdsByMemberId = (memberRolesResult.data ?? []).reduce<Record<string, string[]>>(
+      (acc, row) => {
+        if (!acc[row.member_id]) {
+          acc[row.member_id] = [];
+        }
+        acc[row.member_id].push(row.role_id);
+        return acc;
+      },
+      {},
+    );
+
+    const memberMinistriesByMemberId = (memberMinistriesResult.data ?? []).reduce<
+      Record<string, Array<{ ministry_id: string; name: string; is_admin: boolean }>>
+    >((acc, row) => {
+      if (!acc[row.member_id]) {
+        acc[row.member_id] = [];
+      }
+      acc[row.member_id].push({
+        ministry_id: row.ministry_id,
+        name: row.catalog_ministries?.name ?? "Ministério",
+        is_admin: row.is_admin,
+      });
+      return acc;
+    }, {});
+
+    const familyMembersByFamilyId = (familyMembersResult.data ?? []).reduce<
+      Record<string, Array<{ member_id: string; name: string; relationship: string; is_primary: boolean }>>
+    >((acc, row) => {
+      if (!acc[row.family_id]) {
+        acc[row.family_id] = [];
+      }
+      acc[row.family_id].push({
+        member_id: row.member_id,
+        name: row.members?.name ?? "Membro",
+        relationship: row.relationship,
+        is_primary: row.is_primary,
+      });
+      return acc;
+    }, {});
+
     setClientData({
       profile: currentProfile,
       tenant: tenantResult.data,
       members: membersResult.data ?? [],
+      memberRoleIdsByMemberId,
+      memberMinistriesByMemberId,
+      families: familiesResult.data ?? [],
+      familyMembersByFamilyId,
       events: eventsResult.data ?? [],
       announcements: announcementsResult.data ?? [],
       users: usersResult.data ?? [],
@@ -663,21 +953,179 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function openCreateMemberForm() {
+    if (!canManageMembers) {
+      return;
+    }
+
     setMemberForm({ ...emptyMemberForm, tenant_id: clientData?.tenant.id ?? "" });
     setMemberSaveStatus("idle");
     setMemberSaveMessage("");
+    setMemberHistory([]);
+    setMemberHistoryStatus("idle");
+    setMemberHistoryDraftType("");
+    setMemberHistoryDraftNotes("");
+    setMinistryPickerId("");
     setIsMemberFormOpen(true);
   }
 
   function openEditMemberForm(member: MemberRecord) {
-    setMemberForm({ ...member, tenant_id: clientData?.tenant.id ?? "" });
+    if (!canManageMembers) {
+      return;
+    }
+
+    const memberId = member.id;
+    const roleIds = clientData?.memberRoleIdsByMemberId[memberId] ?? [];
+    const ministries =
+      clientData?.memberMinistriesByMemberId[memberId]?.map((item) => ({
+        ministry_id: item.ministry_id,
+        is_admin: item.is_admin,
+      })) ?? [];
+
+    setMemberForm({
+      id: member.id,
+      tenant_id: clientData?.tenant.id ?? "",
+      name: member.name,
+      email: member.email ?? "",
+      phone: member.phone ?? "",
+      status: (member.status_v2 ?? member.status) as MemberFormState["status"],
+      date_of_birth: member.date_of_birth ?? "",
+      document_number: member.document_number ?? "",
+      address_line1: member.address_line1 ?? "",
+      address_city: member.address_city ?? "",
+      address_state: member.address_state ?? "",
+      address_postal_code: member.address_postal_code ?? "",
+      notes: member.notes ?? "",
+      roleIds,
+      ministries,
+    });
     setMemberSaveStatus("idle");
     setMemberSaveMessage("");
+    setMemberHistory([]);
+    setMemberHistoryStatus("idle");
+    setMemberHistoryDraftType("");
+    setMemberHistoryDraftNotes("");
+    setMinistryPickerId("");
     setIsMemberFormOpen(true);
+    void loadMemberHistory(member.id);
   }
 
   function updateMemberForm(field: keyof MemberFormState, value: string) {
     setMemberForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleMemberRole(roleId: string) {
+    setMemberForm((current) => {
+      const exists = current.roleIds.includes(roleId);
+      return {
+        ...current,
+        roleIds: exists ? current.roleIds.filter((id) => id !== roleId) : [...current.roleIds, roleId],
+      };
+    });
+  }
+
+  function addMemberMinistry(ministryId: string) {
+    if (!ministryId) return;
+    setMemberForm((current) => {
+      if (current.ministries.some((item) => item.ministry_id === ministryId)) {
+        return current;
+      }
+      return { ...current, ministries: [...current.ministries, { ministry_id: ministryId, is_admin: false }] };
+    });
+    setMinistryPickerId("");
+  }
+
+  function removeMemberMinistry(ministryId: string) {
+    setMemberForm((current) => ({
+      ...current,
+      ministries: current.ministries.filter((item) => item.ministry_id !== ministryId),
+    }));
+  }
+
+  function setMemberMinistryAdmin(ministryId: string, isAdmin: boolean) {
+    setMemberForm((current) => ({
+      ...current,
+      ministries: current.ministries.map((item) =>
+        item.ministry_id === ministryId ? { ...item, is_admin: isAdmin } : item,
+      ),
+    }));
+  }
+
+  async function loadMemberHistory(memberId: string) {
+    if (!clientData || !memberId) {
+      return;
+    }
+
+    if (demoMode) {
+      setMemberHistory([]);
+      setMemberHistoryStatus("ready");
+      return;
+    }
+
+    setMemberHistoryStatus("loading");
+    const { data, error } = await supabase
+      .from("member_history")
+      .select("id, tenant_id, member_id, event_type, notes, occurred_at")
+      .eq("tenant_id", clientData.tenant.id)
+      .eq("member_id", memberId)
+      .order("occurred_at", { ascending: false })
+      .limit(20)
+      .returns<MemberHistoryRecord[]>();
+
+    if (error) {
+      setMemberHistoryStatus("error");
+      return;
+    }
+
+    setMemberHistory(data ?? []);
+    setMemberHistoryStatus("ready");
+  }
+
+  async function handleAddMemberHistory() {
+    if (!clientData || !profile || !canManageMembers || !memberForm.id) {
+      return;
+    }
+
+    const eventType = memberHistoryDraftType.trim();
+    if (eventType.length < 3) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Informe um tipo de histórico válido.");
+      return;
+    }
+
+    if (demoMode) {
+      const now = new Date().toISOString();
+      setMemberHistory((current) => [
+        {
+          id: `history-${Date.now()}`,
+          tenant_id: clientData.tenant.id,
+          member_id: memberForm.id,
+          event_type: eventType,
+          notes: memberHistoryDraftNotes.trim() || null,
+          occurred_at: now,
+        },
+        ...current,
+      ]);
+      setMemberHistoryDraftType("");
+      setMemberHistoryDraftNotes("");
+      return;
+    }
+
+    const { error } = await supabase.from("member_history").insert({
+      tenant_id: clientData.tenant.id,
+      member_id: memberForm.id,
+      event_type: eventType,
+      notes: memberHistoryDraftNotes.trim() || null,
+    });
+
+    if (error) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Não foi possível salvar o histórico.");
+      return;
+    }
+
+    setMemberHistoryDraftType("");
+    setMemberHistoryDraftNotes("");
+    await loadMemberHistory(memberForm.id);
   }
 
   async function handleMemberSubmit(event: FormEvent<HTMLFormElement>) {
@@ -691,42 +1139,349 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
+    if (!clientData) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Tenant não carregado.");
+      return;
+    }
+
     const payload = {
       id: memberForm.id || undefined,
-      tenant_id: clientData?.tenant.id,
+      tenant_id: clientData.tenant.id,
       name: memberForm.name.trim(),
-      email: memberForm.email?.trim() || null,
-      phone: memberForm.phone?.trim() || null,
+      email: memberForm.email.trim() || null,
+      phone: memberForm.phone.trim() || null,
       status: memberForm.status,
-      ministry: memberForm.ministry?.trim() || null,
-      notes: memberForm.notes?.trim() || null,
+      status_v2: memberForm.status,
+      date_of_birth: memberForm.date_of_birth || null,
+      document_number: memberForm.document_number.trim() || null,
+      address_line1: memberForm.address_line1.trim() || null,
+      address_city: memberForm.address_city.trim() || null,
+      address_state: memberForm.address_state.trim() || null,
+      address_postal_code: memberForm.address_postal_code.trim() || null,
+      notes: memberForm.notes.trim() || null,
     };
 
-    const result = memberForm.id
-      ? await supabase.from("members").update(payload).eq("id", memberForm.id)
-      : await supabase.from("members").insert(payload);
+    if (demoMode) {
+      const now = new Date().toISOString();
+      const memberId = memberForm.id || `member-${Date.now()}`;
+      const memberRow: MemberRecord = {
+        id: memberId,
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone,
+        status: payload.status,
+        status_v2: payload.status_v2,
+        date_of_birth: payload.date_of_birth,
+        document_number: payload.document_number,
+        address_line1: payload.address_line1,
+        address_city: payload.address_city,
+        address_state: payload.address_state,
+        address_postal_code: payload.address_postal_code,
+        ministry: null,
+        notes: payload.notes,
+        created_at: now,
+      };
 
-    if (result.error) {
+      setClientData((current) => {
+        if (!current) return current;
+        const nextMembers = memberForm.id
+          ? current.members.map((row) => (row.id === memberId ? { ...row, ...memberRow } : row))
+          : [memberRow, ...current.members];
+        return {
+          ...current,
+          members: nextMembers,
+          memberRoleIdsByMemberId: { ...current.memberRoleIdsByMemberId, [memberId]: [...memberForm.roleIds] },
+          memberMinistriesByMemberId: {
+            ...current.memberMinistriesByMemberId,
+            [memberId]: memberForm.ministries.map((item) => ({
+              ministry_id: item.ministry_id,
+              name:
+                current.catalogMinistries.find((m) => m.id === item.ministry_id)?.name ??
+                "Ministério",
+              is_admin: item.is_admin,
+            })),
+          },
+        };
+      });
+
+      setMemberSaveStatus("success");
+      setMemberSaveMessage(memberForm.id ? "Membro atualizado." : "Membro criado.");
+      setIsMemberFormOpen(false);
+      setMemberForm({ ...emptyMemberForm, tenant_id: clientData.tenant.id });
+      return;
+    }
+
+    const memberResult = memberForm.id
+      ? await supabase.from("members").update(payload).eq("id", memberForm.id).select("id").single<{ id: string }>()
+      : await supabase.from("members").insert(payload).select("id").single<{ id: string }>();
+
+    if (memberResult.error || !memberResult.data) {
       setMemberSaveStatus("error");
       setMemberSaveMessage("Não foi possível salvar o membro.");
+      return;
+    }
+
+    const memberId = memberResult.data.id;
+
+    const [deleteRolesResult, deleteMinistriesResult] = await Promise.all([
+      supabase.from("member_roles").delete().eq("member_id", memberId),
+      supabase.from("member_ministries").delete().eq("member_id", memberId),
+    ]);
+
+    if (deleteRolesResult.error || deleteMinistriesResult.error) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Membro salvo, mas não foi possível atualizar cargos/ministérios.");
+      return;
+    }
+
+    const roleRows = memberForm.roleIds.map((roleId) => ({
+      tenant_id: clientData.tenant.id,
+      member_id: memberId,
+      role_id: roleId,
+    }));
+
+    const ministryRows = memberForm.ministries.map((item) => ({
+      tenant_id: clientData.tenant.id,
+      member_id: memberId,
+      ministry_id: item.ministry_id,
+      is_admin: item.is_admin,
+    }));
+
+    const [insertRolesResult, insertMinistriesResult] = await Promise.all([
+      roleRows.length ? supabase.from("member_roles").insert(roleRows) : Promise.resolve({ error: null }),
+      ministryRows.length ? supabase.from("member_ministries").insert(ministryRows) : Promise.resolve({ error: null }),
+    ]);
+
+    if ("error" in insertRolesResult && insertRolesResult.error) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Membro salvo, mas não foi possível vincular cargos.");
+      return;
+    }
+
+    if ("error" in insertMinistriesResult && insertMinistriesResult.error) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Membro salvo, mas não foi possível vincular ministérios.");
       return;
     }
 
     setMemberSaveStatus("success");
     setMemberSaveMessage(memberForm.id ? "Membro atualizado." : "Membro criado.");
     setIsMemberFormOpen(false);
-    setMemberForm({ ...emptyMemberForm, tenant_id: clientData?.tenant.id ?? "" });
+    setMemberForm({ ...emptyMemberForm, tenant_id: clientData.tenant.id });
     if (profile) {
       await loadClientData(profile.id);
     }
   }
 
   async function handleDeleteMember(memberId: string) {
-    if (!memberId || !profile) {
+    if (!memberId || !profile || !canManageMembers) {
       return;
     }
 
     const { error } = await supabase.from("members").delete().eq("id", memberId);
+    if (!error) {
+      await loadClientData(profile.id);
+    }
+  }
+
+  function openCreateFamilyForm() {
+    if (!canManageMembers) {
+      return;
+    }
+
+    setFamilyForm({ ...emptyFamilyForm, tenant_id: clientData?.tenant.id ?? "" });
+    setFamilySaveStatus("idle");
+    setFamilySaveMessage("");
+    setFamilyMemberPickerId("");
+    setFamilyMemberRelationship("other");
+    setFamilyMemberPrimary(false);
+    setIsFamilyFormOpen(true);
+  }
+
+  function openEditFamilyForm(family: FamilyRecord) {
+    if (!canManageMembers || !clientData) {
+      return;
+    }
+
+    const members = clientData.familyMembersByFamilyId[family.id] ?? [];
+    setFamilyForm({
+      id: family.id,
+      tenant_id: clientData.tenant.id,
+      name: family.name,
+      notes: family.notes ?? "",
+      members: members.map((item) => ({
+        member_id: item.member_id,
+        relationship: item.relationship,
+        is_primary: item.is_primary,
+      })),
+    });
+    setFamilySaveStatus("idle");
+    setFamilySaveMessage("");
+    setFamilyMemberPickerId("");
+    setFamilyMemberRelationship("other");
+    setFamilyMemberPrimary(false);
+    setIsFamilyFormOpen(true);
+  }
+
+  function addFamilyMemberToForm() {
+    if (!familyMemberPickerId) {
+      return;
+    }
+
+    setFamilyForm((current) => {
+      if (current.members.some((item) => item.member_id === familyMemberPickerId)) {
+        return current;
+      }
+
+      const nextMember = {
+        member_id: familyMemberPickerId,
+        relationship: familyMemberRelationship,
+        is_primary: familyMemberPrimary,
+      };
+
+      const nextMembers = familyMemberPrimary
+        ? current.members.map((item) => ({ ...item, is_primary: false })).concat(nextMember)
+        : current.members.concat(nextMember);
+
+      return { ...current, members: nextMembers };
+    });
+
+    setFamilyMemberPickerId("");
+    setFamilyMemberRelationship("other");
+    setFamilyMemberPrimary(false);
+  }
+
+  function updateFamilyMember(memberId: string, next: Partial<{ relationship: string; is_primary: boolean }>) {
+    setFamilyForm((current) => {
+      const nextMembers = current.members.map((item) => {
+        if (item.member_id !== memberId) {
+          return item;
+        }
+        return { ...item, ...next };
+      });
+
+      const shouldPrimary = next.is_primary === true;
+      return {
+        ...current,
+        members: shouldPrimary ? nextMembers.map((item) => ({ ...item, is_primary: item.member_id === memberId })) : nextMembers,
+      };
+    });
+  }
+
+  function removeFamilyMember(memberId: string) {
+    setFamilyForm((current) => ({ ...current, members: current.members.filter((item) => item.member_id !== memberId) }));
+  }
+
+  async function handleFamilySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!profile || !clientData || !canManageMembers) {
+      return;
+    }
+
+    const name = familyForm.name.trim();
+    if (name.length < 2) {
+      setFamilySaveStatus("error");
+      setFamilySaveMessage("Informe um nome de família válido.");
+      return;
+    }
+
+    setFamilySaveStatus("loading");
+    setFamilySaveMessage("");
+
+    if (demoMode) {
+      const now = new Date().toISOString();
+      const familyId = familyForm.id || `family-${Date.now()}`;
+      const familyRow: FamilyRecord = {
+        id: familyId,
+        tenant_id: clientData.tenant.id,
+        name,
+        notes: familyForm.notes.trim() || null,
+        created_at: now,
+        updated_at: now,
+      };
+
+      setClientData((current) => {
+        if (!current) return current;
+        const families = familyForm.id
+          ? current.families.map((row) => (row.id === familyId ? { ...row, ...familyRow } : row))
+          : [...current.families, familyRow].sort((a, b) => a.name.localeCompare(b.name));
+
+        const familyMembersByFamilyId = {
+          ...current.familyMembersByFamilyId,
+          [familyId]: familyForm.members.map((item) => ({
+            member_id: item.member_id,
+            name: current.members.find((m) => m.id === item.member_id)?.name ?? "Membro",
+            relationship: item.relationship,
+            is_primary: item.is_primary,
+          })),
+        };
+
+        return { ...current, families, familyMembersByFamilyId };
+      });
+
+      setFamilySaveStatus("success");
+      setFamilySaveMessage(familyForm.id ? "Família atualizada." : "Família criada.");
+      setIsFamilyFormOpen(false);
+      setFamilyForm({ ...emptyFamilyForm, tenant_id: clientData.tenant.id });
+      return;
+    }
+
+    const payload = {
+      tenant_id: clientData.tenant.id,
+      name,
+      notes: familyForm.notes.trim() || null,
+    };
+
+    const familyResult = familyForm.id
+      ? await supabase.from("families").update(payload).eq("id", familyForm.id).select("id").single<{ id: string }>()
+      : await supabase.from("families").insert(payload).select("id").single<{ id: string }>();
+
+    if (familyResult.error || !familyResult.data) {
+      setFamilySaveStatus("error");
+      setFamilySaveMessage("Não foi possível salvar a família.");
+      return;
+    }
+
+    const familyId = familyResult.data.id;
+    const deleteResult = await supabase.from("family_members").delete().eq("family_id", familyId);
+    if (deleteResult.error) {
+      setFamilySaveStatus("error");
+      setFamilySaveMessage("Família salva, mas não foi possível atualizar dependentes.");
+      return;
+    }
+
+    const familyMembersRows = familyForm.members.map((item) => ({
+      tenant_id: clientData.tenant.id,
+      family_id: familyId,
+      member_id: item.member_id,
+      relationship: item.relationship,
+      is_primary: item.is_primary,
+    }));
+
+    if (familyMembersRows.length) {
+      const insertResult = await supabase.from("family_members").insert(familyMembersRows);
+      if (insertResult.error) {
+        setFamilySaveStatus("error");
+        setFamilySaveMessage("Família salva, mas não foi possível vincular dependentes.");
+        return;
+      }
+    }
+
+    setFamilySaveStatus("success");
+    setFamilySaveMessage(familyForm.id ? "Família atualizada." : "Família criada.");
+    setIsFamilyFormOpen(false);
+    setFamilyForm({ ...emptyFamilyForm, tenant_id: clientData.tenant.id });
+    await loadClientData(profile.id);
+  }
+
+  async function handleDeleteFamily(familyId: string) {
+    if (!profile || !canManageMembers) {
+      return;
+    }
+
+    const { error } = await supabase.from("families").delete().eq("id", familyId);
     if (!error) {
       await loadClientData(profile.id);
     }
@@ -1068,6 +1823,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 ? "Painel da igreja"
                 : activeTab === "members"
                 ? "Gestão de membros"
+                : activeTab === "families"
+                ? "Famílias e dependentes"
                 : activeTab === "events"
                 ? "Calendário central"
                 : activeTab === "notices"
@@ -1083,6 +1840,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 ? "Acompanhe membros, eventos, módulos ativos e o tema white-label do tenant."
                 : activeTab === "members"
                 ? "Gerencie o cadastro básico dos membros da igreja." 
+                : activeTab === "families"
+                ? "Organize famílias, dependentes e vínculos principais para atendimento e acompanhamento."
                 : activeTab === "events"
                 ? "Planeje os eventos e cultos do calendário central." 
                 : activeTab === "notices"
@@ -1094,18 +1853,21 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 : "Gerencie usuários e permissões do tenant."}
             </p>
           </div>
-          {activeTab === "members" || activeTab === "events" || activeTab === "notices" ? (
+          {activeTab === "members" || activeTab === "families" || activeTab === "events" || activeTab === "notices" ? (
             <Button
               icon={<Plus size={18} />}
               onClick={() => {
                 if (activeTab === "members") openCreateMemberForm();
+                if (activeTab === "families") openCreateFamilyForm();
                 if (activeTab === "events") openCreateEventForm();
                 if (activeTab === "notices") openCreateAnnouncementForm();
               }}
-              disabled={!isTenantAdmin}
+              disabled={activeTab === "members" || activeTab === "families" ? !canManageMembers : !isTenantAdmin}
             >
               {activeTab === "members"
                 ? "Novo membro"
+                : activeTab === "families"
+                ? "Nova família"
                 : activeTab === "events"
                 ? "Novo evento"
                 : "Novo comunicado"}
@@ -1154,7 +1916,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <span>{member.name.slice(0, 1)}</span>
                       <div>
                         <strong>{member.name}</strong>
-                        <small>{member.ministry || member.email || "Sem grupo definido"}</small>
+                        <small>{memberSummaryById[member.id] ?? member.email ?? "Sem vínculos"}</small>
                       </div>
                       <em className={member.status === "active" ? "success" : "warning"}>{member.status}</em>
                     </div>
@@ -1234,32 +1996,109 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <span>Membros</span>
                   <h4>Lista de membros cadastrados</h4>
                 </div>
-                {isTenantAdmin ? (
+                {canManageMembers ? (
                   <button type="button" onClick={openCreateMemberForm}>Novo membro</button>
                 ) : null}
               </div>
 
               <div className="member-list">
-                {clientData.members.map((member) => (
-                  <div key={member.id} className="member-row">
-                    <span>{member.name.slice(0, 1)}</span>
-                    <div>
-                      <strong>{member.name}</strong>
-                      <small>{member.ministry || member.email || "Sem grupo definido"}</small>
-                    </div>
-                    <em className={member.status === "active" ? "success" : "warning"}>{member.status}</em>
-                    {isTenantAdmin ? (
-                      <div className="member-actions">
-                        <button type="button" onClick={() => openEditMemberForm(member)}>
-                          <Edit3 size={16} />
-                        </button>
-                        <button type="button" onClick={() => handleDeleteMember(member.id)}>
-                          <X size={16} />
-                        </button>
+                <div className="member-filters">
+                  <input
+                    className="catalog-input"
+                    placeholder="Buscar por nome, e-mail ou telefone"
+                    value={memberSearchTerm}
+                    onChange={(event) => setMemberSearchTerm(event.target.value)}
+                  />
+                  <select
+                    className="catalog-input"
+                    value={memberStatusFilter}
+                    onChange={(event) => setMemberStatusFilter(event.target.value as typeof memberStatusFilter)}
+                  >
+                    <option value="all">Todos os status</option>
+                    <option value="active">Ativo</option>
+                    <option value="inactive">Inativo</option>
+                    <option value="visitor">Visitante</option>
+                    <option value="in_process">Em processo</option>
+                  </select>
+                </div>
+
+                {filteredMembers.length === 0 ? (
+                  <div className="catalog-empty">Nenhum membro encontrado para os filtros informados.</div>
+                ) : null}
+
+                {filteredMembers.map((member) => {
+                  const status = (member.status_v2 ?? member.status) as MemberFormState["status"];
+                  return (
+                    <div key={member.id} className="member-row">
+                      <span>{member.name.slice(0, 1)}</span>
+                      <div>
+                        <strong>{member.name}</strong>
+                        <small>{memberSummaryById[member.id] ?? member.email ?? "Sem vínculos"}</small>
                       </div>
-                    ) : null}
-                  </div>
-                ))}
+                      <em className={status === "active" ? "success" : "warning"}>{status}</em>
+                      {canManageMembers ? (
+                        <div className="member-actions">
+                          <button type="button" onClick={() => openEditMemberForm(member)}>
+                            <Edit3 size={16} />
+                          </button>
+                          <button type="button" onClick={() => handleDeleteMember(member.id)}>
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+          ) : null}
+
+          {activeTab === "families" ? (
+            <article className="panel full-width">
+              <div className="panel-heading">
+                <div>
+                  <span>Famílias</span>
+                  <h4>Família e dependentes</h4>
+                </div>
+                {canManageMembers ? <button type="button" onClick={openCreateFamilyForm}>Nova família</button> : null}
+              </div>
+
+              <div className="member-list">
+                {clientData.families.length === 0 ? (
+                  <div className="catalog-empty">Nenhuma família cadastrada ainda.</div>
+                ) : null}
+
+                {clientData.families.map((family) => {
+                  const familyMembers = clientData.familyMembersByFamilyId[family.id] ?? [];
+                  const primary = familyMembers.find((item) => item.is_primary);
+                  const subtitleParts = [
+                    primary ? `Principal: ${primary.name}` : null,
+                    familyMembers.length ? `${familyMembers.length} pessoas` : "Sem dependentes",
+                  ].filter(Boolean);
+
+                  return (
+                    <div key={family.id} className="member-row">
+                      <span>{family.name.slice(0, 1)}</span>
+                      <div>
+                        <strong>{family.name}</strong>
+                        <small>{subtitleParts.join(" · ")}</small>
+                      </div>
+                      <em className={familyMembers.length > 0 ? "success" : "warning"}>
+                        {familyMembers.length > 0 ? "com vínculos" : "pendente"}
+                      </em>
+                      {canManageMembers ? (
+                        <div className="member-actions">
+                          <button type="button" onClick={() => openEditFamilyForm(family)}>
+                            <Edit3 size={16} />
+                          </button>
+                          <button type="button" onClick={() => handleDeleteFamily(family.id)}>
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </article>
           ) : null}
@@ -1605,6 +2444,415 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           ) : null}
         </div>
       </section>
+
+      {isFamilyFormOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Cadastro de família">
+          <div className="modal-card">
+            <div className="modal-header">
+              <div>
+                <span>Membresia</span>
+                <h2>{familyForm.id ? "Editar família" : "Nova família"}</h2>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setIsFamilyFormOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form className="modal-body" onSubmit={handleFamilySubmit}>
+              <label>
+                <span>Nome da família</span>
+                <input
+                  className="catalog-input"
+                  placeholder="Ex.: Família Silva"
+                  value={familyForm.name}
+                  onChange={(event) => setFamilyForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+
+              <label>
+                <span>Observações</span>
+                <textarea
+                  className="catalog-input catalog-textarea"
+                  placeholder="Observações internas (opcional)"
+                  value={familyForm.notes}
+                  onChange={(event) => setFamilyForm((current) => ({ ...current, notes: event.target.value }))}
+                  rows={3}
+                />
+              </label>
+
+              <div className="modal-section">
+                <div className="modal-section-header">
+                  <strong>Dependentes</strong>
+                  <small>Vincule membros do tenant a esta família e marque o responsável principal.</small>
+                </div>
+
+                <div className="family-add-grid">
+                  <select
+                    className="catalog-input"
+                    value={familyMemberPickerId}
+                    onChange={(event) => setFamilyMemberPickerId(event.target.value)}
+                  >
+                    <option value="">Selecionar membro</option>
+                    {clientData.members.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    className="catalog-input"
+                    value={familyMemberRelationship}
+                    onChange={(event) => setFamilyMemberRelationship(event.target.value)}
+                  >
+                    <option value="self">Titular</option>
+                    <option value="spouse">Cônjuge</option>
+                    <option value="child">Filho(a)</option>
+                    <option value="parent">Pai/Mãe</option>
+                    <option value="guardian">Responsável</option>
+                    <option value="sibling">Irmão(ã)</option>
+                    <option value="other">Outro</option>
+                  </select>
+
+                  <label className="family-primary">
+                    <input
+                      type="checkbox"
+                      checked={familyMemberPrimary}
+                      onChange={(event) => setFamilyMemberPrimary(event.target.checked)}
+                    />
+                    <span>Principal</span>
+                  </label>
+
+                  <Button type="button" variant="secondary" onClick={addFamilyMemberToForm}>
+                    Adicionar
+                  </Button>
+                </div>
+
+                <div className="catalog-list">
+                  {familyForm.members.length === 0 ? (
+                    <div className="catalog-empty">Nenhum membro vinculado ainda.</div>
+                  ) : null}
+
+                  {familyForm.members.map((item) => {
+                    const member = clientData.members.find((row) => row.id === item.member_id);
+                    return (
+                      <div key={item.member_id} className="ministry-row">
+                        <div className="family-row-content">
+                          <strong>{member?.name ?? "Membro"}</strong>
+                          <select
+                            className="catalog-input"
+                            value={item.relationship}
+                            onChange={(event) => updateFamilyMember(item.member_id, { relationship: event.target.value })}
+                          >
+                            <option value="self">Titular</option>
+                            <option value="spouse">Cônjuge</option>
+                            <option value="child">Filho(a)</option>
+                            <option value="parent">Pai/Mãe</option>
+                            <option value="guardian">Responsável</option>
+                            <option value="sibling">Irmão(ã)</option>
+                            <option value="other">Outro</option>
+                          </select>
+                          <label className="ministry-admin">
+                            <input
+                              type="checkbox"
+                              checked={item.is_primary}
+                              onChange={(event) => updateFamilyMember(item.member_id, { is_primary: event.target.checked })}
+                            />
+                            <span>Principal</span>
+                          </label>
+                        </div>
+                        <button type="button" onClick={() => removeFamilyMember(item.member_id)} aria-label="Remover">
+                          <X size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {familySaveMessage ? <p className={`login-feedback ${familySaveStatus}`}>{familySaveMessage}</p> : null}
+
+              <div className="modal-actions">
+                <Button type="button" variant="secondary" onClick={() => setIsFamilyFormOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={familySaveStatus === "loading"} icon={<CheckCircle2 size={18} />}>
+                  {familySaveStatus === "loading" ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isMemberFormOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Cadastro de membro">
+          <div className="modal-card">
+            <div className="modal-header">
+              <div>
+                <span>Membresia</span>
+                <h2>{memberForm.id ? "Editar membro" : "Novo membro"}</h2>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setIsMemberFormOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form className="modal-body" onSubmit={handleMemberSubmit}>
+              <TextField
+                icon={<UsersRound size={18} />}
+                label="Nome completo"
+                placeholder="Nome do membro"
+                type="text"
+                value={memberForm.name}
+                onChange={(event) => updateMemberForm("name", event.target.value)}
+              />
+
+              <div className="modal-grid">
+                <TextField
+                  icon={<Mail size={18} />}
+                  label="E-mail"
+                  placeholder="email@dominio.com"
+                  type="email"
+                  value={memberForm.email}
+                  onChange={(event) => updateMemberForm("email", event.target.value)}
+                />
+                <TextField
+                  icon={<Clock3 size={18} />}
+                  label="Telefone"
+                  placeholder="(00) 00000-0000"
+                  type="text"
+                  value={memberForm.phone}
+                  onChange={(event) => updateMemberForm("phone", event.target.value)}
+                />
+              </div>
+
+              <label>
+                <span>Status</span>
+                <select
+                  className="catalog-input"
+                  value={memberForm.status}
+                  onChange={(event) => updateMemberForm("status", event.target.value as MemberFormState["status"])}
+                >
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                  <option value="visitor">Visitante</option>
+                  <option value="in_process">Em processo</option>
+                </select>
+              </label>
+
+              <div className="modal-section">
+                <div className="modal-section-header">
+                  <strong>Dados pessoais</strong>
+                  <small>Informações de contato e cadastro (opcionais).</small>
+                </div>
+
+                <div className="modal-grid">
+                  <label>
+                    <span>Data de nascimento</span>
+                    <input
+                      className="catalog-input"
+                      type="date"
+                      value={memberForm.date_of_birth}
+                      onChange={(event) => updateMemberForm("date_of_birth", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Documento</span>
+                    <input
+                      className="catalog-input"
+                      placeholder="CPF/RG (opcional)"
+                      value={memberForm.document_number}
+                      onChange={(event) => updateMemberForm("document_number", event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  <span>Endereço</span>
+                  <input
+                    className="catalog-input"
+                    placeholder="Rua, número, bairro"
+                    value={memberForm.address_line1}
+                    onChange={(event) => updateMemberForm("address_line1", event.target.value)}
+                  />
+                </label>
+
+                <div className="modal-grid">
+                  <label>
+                    <span>Cidade</span>
+                    <input
+                      className="catalog-input"
+                      placeholder="Cidade"
+                      value={memberForm.address_city}
+                      onChange={(event) => updateMemberForm("address_city", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Estado</span>
+                    <input
+                      className="catalog-input"
+                      placeholder="UF"
+                      value={memberForm.address_state}
+                      onChange={(event) => updateMemberForm("address_state", event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  <span>CEP</span>
+                  <input
+                    className="catalog-input"
+                    placeholder="00000-000"
+                    value={memberForm.address_postal_code}
+                    onChange={(event) => updateMemberForm("address_postal_code", event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <label>
+                <span>Observações</span>
+                <textarea
+                  className="catalog-input catalog-textarea"
+                  placeholder="Anotações internas (opcional)"
+                  value={memberForm.notes}
+                  onChange={(event) => updateMemberForm("notes", event.target.value)}
+                  rows={3}
+                />
+              </label>
+
+              <div className="modal-section">
+                <div className="modal-section-header">
+                  <strong>Cargos</strong>
+                  <small>Vínculos de função no tenant (base do sistema + lista do seu tenant).</small>
+                </div>
+                <div className="check-grid">
+                  {clientData.catalogRoles.map((role) => (
+                    <label key={role.id} className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={memberForm.roleIds.includes(role.id)}
+                        onChange={() => toggleMemberRole(role.id)}
+                      />
+                      <span>{role.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="modal-section">
+                <div className="modal-section-header">
+                  <strong>Ministérios</strong>
+                  <small>
+                    Marque Admin para permitir acesso administrativo ao módulo do ministério quando existir.
+                  </small>
+                </div>
+
+                <div className="catalog-add">
+                  <select
+                    className="catalog-input"
+                    value={ministryPickerId}
+                    onChange={(event) => setMinistryPickerId(event.target.value)}
+                  >
+                    <option value="">Selecionar ministério</option>
+                    {clientData.catalogMinistries.map((ministry) => (
+                      <option key={ministry.id} value={ministry.id}>
+                        {ministry.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button type="button" variant="secondary" onClick={() => addMemberMinistry(ministryPickerId)}>
+                    Adicionar
+                  </Button>
+                </div>
+
+                <div className="catalog-list">
+                  {memberForm.ministries.length === 0 ? (
+                    <div className="catalog-empty">Nenhum ministério vinculado ainda.</div>
+                  ) : null}
+                  {memberForm.ministries.map((item) => (
+                    <div key={item.ministry_id} className="ministry-row">
+                      <div>
+                        <strong>{catalogMinistryNameById[item.ministry_id] ?? "Ministério"}</strong>
+                        <label className="ministry-admin">
+                          <input
+                            type="checkbox"
+                            checked={item.is_admin}
+                            onChange={(event) => setMemberMinistryAdmin(item.ministry_id, event.target.checked)}
+                          />
+                          <span>Admin</span>
+                        </label>
+                      </div>
+                      <button type="button" onClick={() => removeMemberMinistry(item.ministry_id)} aria-label="Remover">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {memberForm.id ? (
+                <div className="modal-section">
+                  <div className="modal-section-header">
+                    <strong>Histórico</strong>
+                    <small>Registros internos para acompanhamento (ex.: batismo, integração, atendimento).</small>
+                  </div>
+
+                  {memberHistoryStatus === "loading" ? (
+                    <div className="catalog-empty">Carregando histórico...</div>
+                  ) : memberHistoryStatus === "error" ? (
+                    <div className="catalog-empty">Não foi possível carregar o histórico.</div>
+                  ) : memberHistory.length === 0 ? (
+                    <div className="catalog-empty">Nenhum registro ainda.</div>
+                  ) : (
+                    <div className="catalog-list">
+                      {memberHistory.map((item) => (
+                        <div key={item.id} className="catalog-row system">
+                          <span>
+                            <strong>{item.event_type}</strong>{" "}
+                            <small>{new Date(item.occurred_at).toLocaleDateString("pt-BR")}</small>
+                          </span>
+                          {item.notes ? <small>{item.notes}</small> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="catalog-add">
+                    <input
+                      className="catalog-input"
+                      placeholder="Tipo (ex.: Batismo, Integração, Atendimento)"
+                      value={memberHistoryDraftType}
+                      onChange={(event) => setMemberHistoryDraftType(event.target.value)}
+                    />
+                    <Button type="button" variant="secondary" onClick={handleAddMemberHistory}>
+                      Adicionar
+                    </Button>
+                  </div>
+                  <textarea
+                    className="catalog-input catalog-textarea"
+                    placeholder="Observações (opcional)"
+                    value={memberHistoryDraftNotes}
+                    onChange={(event) => setMemberHistoryDraftNotes(event.target.value)}
+                    rows={2}
+                  />
+                </div>
+              ) : null}
+
+              {memberSaveMessage ? <p className={`login-feedback ${memberSaveStatus}`}>{memberSaveMessage}</p> : null}
+
+              <div className="modal-actions">
+                <Button type="button" variant="secondary" onClick={() => setIsMemberFormOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={memberSaveStatus === "loading"} icon={<CheckCircle2 size={18} />}>
+                  {memberSaveStatus === "loading" ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

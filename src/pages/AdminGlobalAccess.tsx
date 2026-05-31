@@ -16,6 +16,7 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  UsersRound,
   X,
 } from "lucide-react";
 import type { FormEvent } from "react";
@@ -60,6 +61,14 @@ type TenantRecord = {
       code: string;
     } | null;
   }>;
+  members_total?: number;
+  members_active?: number;
+};
+
+type TenantMemberMetric = {
+  tenant_id: string;
+  total_members: number;
+  active_members: number;
 };
 
 type AuditLogRecord = {
@@ -120,6 +129,8 @@ type AdminDashboardData = {
     configuringTenants: number;
     plans: number;
     modules: number;
+    membersTotal: number;
+    membersActive: number;
   };
 };
 
@@ -457,8 +468,44 @@ export function AdminGlobalAccess() {
       return;
     }
 
+    const tenants = tenantsResult.data ?? [];
+    const tenantIds = tenants.map((tenant) => tenant.id);
+
+    const tenantMetricsResult = tenantIds.length
+      ? await supabase
+          .from("tenant_member_metrics")
+          .select("tenant_id, total_members, active_members")
+          .in("tenant_id", tenantIds)
+          .returns<TenantMemberMetric[]>()
+      : { data: [], error: null };
+
+    if (tenantMetricsResult.error) {
+      setDataStatus("error");
+      return;
+    }
+
+    const metricByTenantId = (tenantMetricsResult.data ?? []).reduce<Record<string, TenantMemberMetric>>(
+      (acc, row) => {
+        acc[row.tenant_id] = row;
+        return acc;
+      },
+      {},
+    );
+
+    const tenantsWithMetrics = tenants.map((tenant) => {
+      const metric = metricByTenantId[tenant.id];
+      return {
+        ...tenant,
+        members_total: metric?.total_members ?? 0,
+        members_active: metric?.active_members ?? 0,
+      };
+    });
+
+    const membersTotal = tenantsWithMetrics.reduce((sum, tenant) => sum + (tenant.members_total ?? 0), 0);
+    const membersActive = tenantsWithMetrics.reduce((sum, tenant) => sum + (tenant.members_active ?? 0), 0);
+
     setDashboardData({
-      tenants: tenantsResult.data ?? [],
+      tenants: tenantsWithMetrics,
       auditLogs: auditLogsResult.data ?? [],
       plans: plansResult.data ?? [],
       modules: modulesResult.data ?? [],
@@ -469,6 +516,8 @@ export function AdminGlobalAccess() {
         configuringTenants,
         plans: plansCount,
         modules: modulesCount,
+        membersTotal,
+        membersActive,
       },
     });
     setDataStatus("ready");
@@ -1366,6 +1415,12 @@ export function AdminGlobalAccess() {
                   <small>Catálogo comercial</small>
                 </article>
                 <article>
+                  <UsersRound size={20} />
+                  <span>Membros</span>
+                  <strong>{dashboardData.counts.membersTotal}</strong>
+                  <small>{dashboardData.counts.membersActive} ativos</small>
+                </article>
+                <article>
                   <PackageCheck size={20} />
                   <span>Módulos</span>
                   <strong>{dashboardData.counts.modules}</strong>
@@ -1475,6 +1530,7 @@ export function AdminGlobalAccess() {
                         <span>Tenant</span>
                         <span>Plano</span>
                         <span>Status</span>
+                        <span>Membros</span>
                         <span>Ativos</span>
                       </div>
                       {dashboardData.tenants.slice(0, 5).map((tenant) => (
@@ -1486,6 +1542,9 @@ export function AdminGlobalAccess() {
                           <span>{tenant.plans?.name ?? "Sem plano"}</span>
                           <span>
                             <em className={tenant.status}>{statusLabels[tenant.status]}</em>
+                          </span>
+                          <span>
+                            {tenant.members_active ?? 0}/{tenant.members_total ?? 0}
                           </span>
                           <span>
                             {tenant.tenant_modules.filter((module) => module.status === "active").length || 0}
@@ -1500,6 +1559,7 @@ export function AdminGlobalAccess() {
                         <span>Igreja</span>
                         <span>Plano</span>
                         <span>Módulos</span>
+                        <span>Membros</span>
                         <span>Status</span>
                       </div>
 
@@ -1514,6 +1574,9 @@ export function AdminGlobalAccess() {
                             <span>
                               {tenant.tenant_modules.filter((module) => module.status === "active")
                                 .length || 0}
+                            </span>
+                            <span>
+                              {tenant.members_active ?? 0}/{tenant.members_total ?? 0}
                             </span>
                             <div className="tenant-row-actions">
                               <em className={tenant.status}>{statusLabels[tenant.status]}</em>

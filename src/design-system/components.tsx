@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "sso";
 
@@ -66,6 +66,8 @@ type TextFieldProps = {
   name?: string;
   placeholder: string;
   type: "email" | "password" | "text";
+  value?: string;
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
 export function TextField({
@@ -76,13 +78,22 @@ export function TextField({
   name,
   placeholder,
   type,
+  value,
+  onChange,
 }: TextFieldProps) {
   return (
     <label>
       <span>{label}</span>
       <div className="field">
         {icon}
-        <input name={name} type={type} placeholder={placeholder} autoComplete={autoComplete} />
+        <input
+          autoComplete={autoComplete}
+          name={name}
+          onChange={onChange}
+          placeholder={placeholder}
+          type={type}
+          value={value}
+        />
         {endIcon}
       </div>
     </label>

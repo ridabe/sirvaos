@@ -84,14 +84,15 @@ Objetivo: primeiro módulo funcional base.
 ## Etapa 6 - Módulo de Louvor
 
 Objetivo: primeiro módulo operacional com escala.
-
+Acesso: Apenas quem tiver cargo de lider do louvor, Admin geral do tenant
 - Integrantes.
 - Funções/instrumentos.
 - Eventos de culto/ensaio.
 - Escalas.
 - Confirmação de presença.
-- Notificações.
+- Notificações (poderao ser enviadas para o app caso o membro que faça parte do ministerio de louvor este logado, ou tambem pelo whatzapp do participante).
 - Histórico de participação.
+- Calendario estilo google para visualizar escalas e eventos do ministerio.
 
 Este módulo valida o fluxo operacional real.
 
@@ -107,22 +108,27 @@ Objetivo: expandir os módulos prioritários.
 - Categorias.
 - Relatórios.
 - Comprovantes para membros.
+- Dash completo financeiro
 
 ### Kids
-
-- Crianças.
+A ideia desta area/modulo e que o Lider do ministerio Infantil tenha acesso a esta area como admi. O modulo fucnionara da seguinte forma:
+Quando os pais forem deixar suas criancas na escolinha/area infantil durante o culto, a crianca devra ter um cadastro(vinculado ao cadastro de embro, caso os pais nao sejam membros criar apenas o cadastro da clranca sem vinculo de membro). Os pais irao ter o aplicativo no seu celular(Modulo futuro), sempre que os proefessores da escooinha precisarm chamar o pai da crianca, pelo sistema eles conseguirao enviar uma mensagem para os responsveis que deixaram a crianca, Essa comunicação podera ser feita entre comunicação entre o sistema e o app que estaralogado com os responsaveis pela crianca, ou caso nao te ham o app, podera ter a opçao de enviar uma mensagem para o whatzapp do responsavel cadastrado na hora que deixou a crianca.
+O moduloDevera ter estas funcionalidades:
+- Crianças (Cadastro).
 - Responsáveis.
 - Turmas.
 - Presença.
 - Comunicados aos pais.
+- Atividades
 
 ### Escola Bíblica
 
 - Turmas.
 - Professores.
-- Alunos.
+- Alunos.(podera ser adicionado da lista de mebros do tenant, ou adicionados avulsos)
 - Frequência.
 - Materiais.
+- Notas
 
 ## Etapa 8 - Relatórios e Auditoria
 
