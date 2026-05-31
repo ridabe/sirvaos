@@ -85,7 +85,7 @@ Objetivo: primeiro módulo funcional base.
 
 Objetivo: primeiro módulo operacional com escala.
 Acesso: Apenas quem tiver cargo de lider do louvor, Admin geral do tenant
-TEmos um sistema previamente criado na pasta C:\Projetos\ToNaEscalaWeb, analise o codigo dele e tente usar as mesmas fucnionalidades adaptando ao nosso projeto
+Temos um sistema previamente criado na pasta C:\Projetos\ToNaEscalaWeb, analise o codigo dele e tente usar as mesmas fucnionalidades adaptando ao nosso projeto
 - Integrantes.
 - Funções/instrumentos.
 - Eventos de culto/ensaio.

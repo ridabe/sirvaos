@@ -235,6 +235,32 @@ function createSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
+  if (!storedLogoUrl) {
+    return null;
+  }
+
+  const trimmed = storedLogoUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!trimmed.startsWith("http")) {
+    return trimmed.startsWith("tenant-logos/") ? trimmed.slice("tenant-logos/".length) : trimmed;
+  }
+
+  const match = trimmed.match(/\/storage\/v1\/object\/(?:public|sign)\/tenant-logos\/([^?]+)(?:\?.*)?$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 export function AdminGlobalAccess() {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -601,6 +627,7 @@ export function AdminGlobalAccess() {
   }
 
   function openCreateTenantForm() {
+    setSelectedTenantId(null);
     setTenantForm(emptyTenantForm);
     setTenantSaveStatus("idle");
     setTenantSaveMessage("");
@@ -608,6 +635,7 @@ export function AdminGlobalAccess() {
   }
 
   function openEditTenantForm(tenant: TenantRecord) {
+    setSelectedTenantId(tenant.id);
     setTenantForm({
       id: tenant.id,
       name: tenant.name,
@@ -907,11 +935,11 @@ export function AdminGlobalAccess() {
 
   async function resolveTenantLogo(tenantId: string) {
     const fallback = dashboardData?.tenants.find((tenant) => tenant.id === tenantId)?.logo_url ?? null;
-    const objectPath = `tenant-logos/${tenantId}/logo`;
-    const { data, error } = await supabase.storage.from("tenant-logos").createSignedUrl(objectPath, 60 * 60);
+    const objectKey = getTenantLogoObjectKey(fallback) ?? `${tenantId}/logo`;
+    const { data, error } = await supabase.storage.from("tenant-logos").createSignedUrl(objectKey, 60 * 60);
 
     if (error || !data?.signedUrl) {
-      setResolvedTenantLogoUrl(fallback);
+      setResolvedTenantLogoUrl(fallback?.startsWith("http") ? fallback : null);
       return;
     }
 
@@ -1001,9 +1029,9 @@ export function AdminGlobalAccess() {
     setTenantLogoUploadStatus("loading");
     setTenantLogoUploadMessage("");
 
-    const directory = `tenant-logos/${selectedTenantId}`;
-    const filePath = `${directory}/logo`;
-    const { error: uploadError } = await supabase.storage.from("tenant-logos").upload(filePath, file, {
+    const directory = `${selectedTenantId}`;
+    const objectKey = `${directory}/logo`;
+    const { error: uploadError } = await supabase.storage.from("tenant-logos").upload(objectKey, file, {
       upsert: true,
     });
 
@@ -1016,9 +1044,9 @@ export function AdminGlobalAccess() {
       return;
     }
 
-    const signedLogo = await supabase.storage.from("tenant-logos").createSignedUrl(filePath, 60 * 60);
-    const logoUrl = signedLogo.data?.signedUrl ?? null;
-    if (!logoUrl) {
+    const signedLogo = await supabase.storage.from("tenant-logos").createSignedUrl(objectKey, 60 * 60);
+    const logoPreviewUrl = signedLogo.data?.signedUrl ?? null;
+    if (!logoPreviewUrl) {
       setTenantLogoUploadStatus("error");
       setTenantLogoUploadMessage("Logo enviada, mas não foi possível obter a URL da imagem.");
       return;
@@ -1037,7 +1065,7 @@ export function AdminGlobalAccess() {
 
     const { error: tenantUpdateError } = await supabase
       .from("tenants")
-      .update({ logo_url: logoUrl })
+      .update({ logo_url: objectKey })
       .eq("id", selectedTenantId);
 
     if (tenantUpdateError) {
@@ -1051,7 +1079,7 @@ export function AdminGlobalAccess() {
 
     setTenantLogoUploadStatus("success");
     setTenantLogoUploadMessage("Logo enviada com sucesso.");
-    setResolvedTenantLogoUrl(logoUrl);
+    setResolvedTenantLogoUrl(logoPreviewUrl);
     await loadDashboardData();
   }
 
