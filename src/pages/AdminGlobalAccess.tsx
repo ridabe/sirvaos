@@ -49,6 +49,9 @@ type TenantRecord = {
   logo_url: string | null;
   primary_color: string;
   accent_color: string;
+  header_color: string;
+  sidebar_color: string;
+  footer_color: string;
   created_at: string;
   plans: {
     name: string;
@@ -135,6 +138,9 @@ type TenantFormState = {
   status: TenantStatus;
   primary_color: string;
   accent_color: string;
+  header_color: string;
+  sidebar_color: string;
+  footer_color: string;
 };
 
 type ModuleConfigState = Record<string, TenantModuleStatus>;
@@ -202,6 +208,9 @@ const emptyTenantForm: TenantFormState = {
   status: "configuring",
   primary_color: "#087C7A",
   accent_color: "#00A7C4",
+  header_color: "#087C7A",
+  sidebar_color: "#087C7A",
+  footer_color: "#087C7A",
 };
 
 const emptyPlanForm: PlanFormState = {
@@ -528,6 +537,9 @@ export function AdminGlobalAccess() {
             logo_url,
             primary_color,
             accent_color,
+            header_color,
+            sidebar_color,
+            footer_color,
             created_at,
             plans (name, code),
             tenant_modules (
@@ -649,6 +661,9 @@ export function AdminGlobalAccess() {
       status: tenant.status,
       primary_color: tenant.primary_color,
       accent_color: tenant.accent_color,
+      header_color: tenant.header_color || tenant.primary_color,
+      sidebar_color: tenant.sidebar_color || tenant.primary_color,
+      footer_color: tenant.footer_color || tenant.primary_color,
     });
     setTenantSaveStatus("idle");
     setTenantSaveMessage("");
@@ -669,6 +684,19 @@ export function AdminGlobalAccess() {
         return {
           ...current,
           slug: createSlug(value),
+        };
+      }
+
+      if (field === "primary_color") {
+        const shouldSyncHeader = current.header_color === current.primary_color;
+        const shouldSyncSidebar = current.sidebar_color === current.primary_color;
+        const shouldSyncFooter = current.footer_color === current.primary_color;
+        return {
+          ...current,
+          primary_color: value,
+          header_color: shouldSyncHeader ? value : current.header_color,
+          sidebar_color: shouldSyncSidebar ? value : current.sidebar_color,
+          footer_color: shouldSyncFooter ? value : current.footer_color,
         };
       }
 
@@ -837,6 +865,9 @@ export function AdminGlobalAccess() {
       status: tenantForm.status,
       primary_color: tenantForm.primary_color,
       accent_color: tenantForm.accent_color,
+      header_color: tenantForm.header_color || tenantForm.primary_color,
+      sidebar_color: tenantForm.sidebar_color || tenantForm.primary_color,
+      footer_color: tenantForm.footer_color || tenantForm.primary_color,
     };
 
     if (!payload.name || !payload.slug) {
@@ -1310,7 +1341,7 @@ export function AdminGlobalAccess() {
               <span>Etapa 2 · Admin Global SirvaOS</span>
               <h1>
                 {activeSection === "dashboard" && "Visão geral"}
-                {activeSection === "clients" && "Clientes / Tenants"}
+                {activeSection === "clients" && "Clientes / Igrejas"}
                 {activeSection === "plans" && "Gestão de planos"}
                 {activeSection === "modules" && "Catálogo global de módulos"}
               </h1>
@@ -1488,6 +1519,30 @@ export function AdminGlobalAccess() {
                         type="color"
                       />
                     </label>
+                    <label>
+                      <span>Cor do header</span>
+                      <input
+                        value={tenantForm.header_color}
+                        onChange={(event) => updateTenantForm("header_color", event.target.value)}
+                        type="color"
+                      />
+                    </label>
+                    <label>
+                      <span>Cor do menu lateral</span>
+                      <input
+                        value={tenantForm.sidebar_color}
+                        onChange={(event) => updateTenantForm("sidebar_color", event.target.value)}
+                        type="color"
+                      />
+                    </label>
+                    <label>
+                      <span>Cor do footer</span>
+                      <input
+                        value={tenantForm.footer_color}
+                        onChange={(event) => updateTenantForm("footer_color", event.target.value)}
+                        type="color"
+                      />
+                    </label>
 
                     <div className="tenant-theme-sample">
                       <span
@@ -1498,6 +1553,11 @@ export function AdminGlobalAccess() {
                       <span
                         style={{
                           background: tenantForm.accent_color,
+                        }}
+                      />
+                      <span
+                        style={{
+                          background: tenantForm.sidebar_color,
                         }}
                       />
                       <strong>{tenantForm.name || "Preview do tenant"}</strong>
@@ -2077,7 +2137,14 @@ export function AdminGlobalAccess() {
                               <span className="tenant-color-samples">
                                 <em style={{ background: selectedTenant.primary_color }} />
                                 <em style={{ background: selectedTenant.accent_color }} />
-                                <small>{selectedTenant.primary_color}, {selectedTenant.accent_color}</small>
+                                <em style={{ background: selectedTenant.header_color }} />
+                                <em style={{ background: selectedTenant.sidebar_color }} />
+                                <em style={{ background: selectedTenant.footer_color }} />
+                                <small>
+                                  Primária {selectedTenant.primary_color} · Destaque {selectedTenant.accent_color} · Header{" "}
+                                  {selectedTenant.header_color} · Menu {selectedTenant.sidebar_color} · Footer{" "}
+                                  {selectedTenant.footer_color}
+                                </small>
                               </span>
                             </article>
                             <article>

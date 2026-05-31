@@ -4,6 +4,8 @@
   --color-brand-primary-soft: #e0f6f4;
   --color-brand-accent: #00a7c4;
   --color-brand-accent-soft: #ddf7fc;
+  --color-brand-primary-rgb: 8, 124, 122;
+  --color-brand-accent-rgb: 0, 167, 196;
   --color-neutral-950: #162423;
   --color-neutral-700: #3d4a47;
   --color-neutral-500: #6b7774;
@@ -14,6 +16,16 @@
   --color-white: #ffffff;
   --color-success: #2f8a5f;
   --color-warning: #c98a13;
+  --tenant-header-bg: var(--color-neutral-50);
+  --tenant-header-fg: var(--color-neutral-950);
+  --tenant-sidebar-bg: var(--color-brand-primary-dark);
+  --tenant-sidebar-fg: var(--color-white);
+  --tenant-sidebar-muted-fg: rgba(255, 255, 255, 0.82);
+  --tenant-sidebar-hover-bg: rgba(255, 255, 255, 0.12);
+  --tenant-sidebar-hover-border: rgba(255, 255, 255, 0.16);
+  --tenant-sidebar-divider: rgba(255, 255, 255, 0.14);
+  --tenant-footer-bg: var(--color-brand-primary-dark);
+  --tenant-footer-fg: var(--color-white);
   --shadow-soft: 0 24px 70px rgba(8, 84, 82, 0.16);
   --shadow-card: 0 18px 50px rgba(22, 36, 35, 0.08);
   font-family:
@@ -73,7 +85,7 @@ a {
   width: 520px;
   height: 520px;
   content: "";
-  background: rgba(0, 167, 196, 0.12);
+  background: rgba(var(--color-brand-accent-rgb), 0.12);
   border-radius: 50%;
 }
 
@@ -84,7 +96,7 @@ a {
   width: 500px;
   height: 500px;
   content: "";
-  background: rgba(8, 124, 122, 0.1);
+  background: rgba(var(--color-brand-primary-rgb), 0.1);
   border-radius: 50%;
 }
 
@@ -180,7 +192,7 @@ a {
   font-weight: 760;
   color: var(--color-brand-primary-dark);
   background: var(--color-brand-primary-soft);
-  border: 1px solid rgba(8, 124, 122, 0.12);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.12);
   border-radius: 999px;
 }
 
@@ -225,7 +237,7 @@ h1 {
   color: var(--color-white);
   background: var(--color-brand-primary);
   border: 1px solid var(--color-brand-primary);
-  box-shadow: 0 14px 30px rgba(8, 124, 122, 0.23);
+  box-shadow: 0 14px 30px rgba(var(--color-brand-primary-rgb), 0.23);
 }
 
 .primary-button:hover,
@@ -509,7 +521,7 @@ h1 {
 
 .field:focus-within {
   border-color: var(--color-brand-accent);
-  box-shadow: 0 0 0 4px rgba(0, 167, 196, 0.12);
+  box-shadow: 0 0 0 4px rgba(var(--color-brand-accent-rgb), 0.12);
 }
 
 .field input {
@@ -676,7 +688,7 @@ h1 {
   width: 520px;
   height: 520px;
   content: "";
-  background: rgba(0, 167, 196, 0.12);
+  background: rgba(var(--color-brand-accent-rgb), 0.12);
   border-radius: 50%;
 }
 
@@ -851,7 +863,7 @@ h1 {
   margin-top: 24px;
   color: var(--color-brand-primary-dark);
   background: var(--color-brand-primary-soft);
-  border: 1px solid rgba(8, 124, 122, 0.12);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.12);
   border-radius: 14px;
 }
 
@@ -1157,8 +1169,8 @@ h1 {
 .tenant-temp-password {
   padding: 14px;
   border-radius: 14px;
-  border: 1px solid rgba(8, 124, 122, 0.15);
-  background: rgba(8, 124, 122, 0.06);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.15);
+  background: rgba(var(--color-brand-primary-rgb), 0.06);
   display: grid;
   gap: 8px;
 }
@@ -1308,7 +1320,7 @@ h1 {
   height: 34px;
   color: var(--color-brand-primary);
   background: var(--color-brand-primary-soft);
-  border: 1px solid rgba(8, 124, 122, 0.12);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.12);
   border-radius: 10px;
   place-items: center;
 }
@@ -1439,7 +1451,7 @@ h1 {
 .tenant-form input:focus,
 .tenant-form select:focus {
   border-color: var(--color-brand-accent);
-  box-shadow: 0 0 0 4px rgba(0, 167, 196, 0.12);
+  box-shadow: 0 0 0 4px rgba(var(--color-brand-accent-rgb), 0.12);
 }
 
 .tenant-theme-sample {
@@ -1656,7 +1668,7 @@ h1 {
   font-weight: 800;
   color: var(--color-brand-primary);
   background: var(--color-brand-primary-soft);
-  border: 1px solid rgba(8, 124, 122, 0.12);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.12);
   border-radius: 10px;
 }
 
@@ -1808,7 +1820,7 @@ h1 {
   font-weight: 800;
   color: var(--color-brand-primary);
   background: var(--color-brand-primary-soft);
-  border: 1px solid rgba(8, 124, 122, 0.12);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.12);
   border-radius: 10px;
 }
 
@@ -1920,7 +1932,7 @@ h1 {
 
 .catalog-input:focus {
   border-color: var(--color-brand-accent);
-  box-shadow: 0 0 0 4px rgba(0, 167, 196, 0.12);
+  box-shadow: 0 0 0 4px rgba(var(--color-brand-accent-rgb), 0.12);
 }
 
 .catalog-group {
@@ -2310,6 +2322,24 @@ h1 {
   background: var(--color-neutral-50);
 }
 
+.client-admin-page .global-admin-header {
+  padding: 18px 20px;
+  background: var(--tenant-header-bg);
+  color: var(--tenant-header-fg);
+  border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.client-admin-page .global-admin-header span,
+.client-admin-page .global-admin-header h1,
+.client-admin-page .global-admin-header p {
+  color: var(--tenant-header-fg);
+}
+
+.client-admin-page .global-admin-header p {
+  opacity: 0.84;
+}
+
 .client-admin-sidebar {
   position: sticky;
   top: 0;
@@ -2317,8 +2347,8 @@ h1 {
   flex-direction: column;
   min-height: 100vh;
   padding: 26px 22px;
-  background: var(--color-brand-primary-dark);
-  color: var(--color-white);
+  background: var(--tenant-sidebar-bg);
+  color: var(--tenant-sidebar-fg);
 }
 
 .client-brand {
@@ -2327,15 +2357,31 @@ h1 {
   gap: 16px;
 }
 
-.client-brand span {
-  width: 46px;
-  height: 46px;
+.tenant-sidebar-logo {
+  width: 56px;
+  height: 56px;
   display: grid;
   place-items: center;
-  background: var(--color-brand-primary);
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
   font-weight: 900;
-  color: var(--color-white);
+  color: var(--color-brand-primary-dark);
+  overflow: hidden;
+}
+
+.tenant-sidebar-logo img {
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  object-fit: contain;
+}
+
+.tenant-sidebar-logo-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
 }
 
 .client-brand strong {
@@ -2346,7 +2392,7 @@ h1 {
 .client-brand small {
   display: block;
   margin-top: 4px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--tenant-sidebar-muted-fg);
 }
 
 .client-admin-sidebar nav {
@@ -2363,7 +2409,7 @@ h1 {
   min-height: 46px;
   padding: 0 14px;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--tenant-sidebar-muted-fg);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 14px;
@@ -2373,9 +2419,9 @@ h1 {
 .client-admin-sidebar button.active,
 .client-admin-sidebar button:hover,
 .global-admin-logout:hover {
-  color: var(--color-white);
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--tenant-sidebar-fg);
+  background: var(--tenant-sidebar-hover-bg);
+  border-color: var(--tenant-sidebar-hover-border);
 }
 
 .logo-picker {
@@ -2392,6 +2438,9 @@ h1 {
   width: 88px;
   height: 88px;
   border-radius: 18px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   object-fit: contain;
 }
 

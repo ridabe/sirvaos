@@ -48,6 +48,9 @@ type TenantRecord = {
   logo_url: string | null;
   primary_color: string;
   accent_color: string;
+  header_color: string;
+  sidebar_color: string;
+  footer_color: string;
 };
 
 type MemberRecord = {
@@ -196,6 +199,9 @@ type ThemeFormState = {
   logo_url: string;
   primary_color: string;
   accent_color: string;
+  header_color: string;
+  sidebar_color: string;
+  footer_color: string;
 };
 
 type UserEditState = {
@@ -251,6 +257,9 @@ const emptyThemeForm: ThemeFormState = {
   logo_url: "",
   primary_color: "#087C7A",
   accent_color: "#00A7C4",
+  header_color: "#087C7A",
+  sidebar_color: "#087C7A",
+  footer_color: "#087C7A",
 };
 
 const sampleClientDashboardData: ClientDashboardData = {
@@ -271,6 +280,9 @@ const sampleClientDashboardData: ClientDashboardData = {
     logo_url: "/img/icon-sirvaos.svg",
     primary_color: "#087C7A",
     accent_color: "#00A7C4",
+    header_color: "#087C7A",
+    sidebar_color: "#087C7A",
+    footer_color: "#087C7A",
   },
   members: [
     {
@@ -411,6 +423,95 @@ type ClientAdminProps = {
   demoMode?: boolean;
 };
 
+function normalizeHexColor(value: string | null | undefined, fallback: string) {
+  const trimmed = String(value ?? "").trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+  return fallback.toLowerCase();
+}
+
+function hexToRgbTuple(hex: string) {
+  const normalized = normalizeHexColor(hex, "#000000");
+  const value = normalized.slice(1);
+  const r = Number.parseInt(value.slice(0, 2), 16);
+  const g = Number.parseInt(value.slice(2, 4), 16);
+  const b = Number.parseInt(value.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return null;
+  }
+  return [r, g, b] as const;
+}
+
+function rgbTupleToHex(rgb: readonly [number, number, number]) {
+  const [r, g, b] = rgb;
+  const toHex = (channel: number) => channel.toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function mixHexColors(aHex: string, bHex: string, weight: number) {
+  const a = hexToRgbTuple(aHex);
+  const b = hexToRgbTuple(bHex);
+  if (!a || !b) {
+    return normalizeHexColor(aHex, "#000000");
+  }
+
+  const w = Math.min(1, Math.max(0, weight));
+  const mix = (aValue: number, bValue: number) => Math.round(aValue * (1 - w) + bValue * w);
+  return rgbTupleToHex([mix(a[0], b[0]), mix(a[1], b[1]), mix(a[2], b[2])]);
+}
+
+function lightenHex(hex: string, amount: number) {
+  return mixHexColors(hex, "#ffffff", amount);
+}
+
+function darkenHex(hex: string, amount: number) {
+  return mixHexColors(hex, "#000000", amount);
+}
+
+function pickReadableTextColor(backgroundHex: string) {
+  const rgb = hexToRgbTuple(backgroundHex);
+  if (!rgb) {
+    return "#ffffff";
+  }
+
+  const srgb = rgb.map((channel) => channel / 255) as unknown as [number, number, number];
+  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const [r, g, b] = srgb.map(toLinear) as unknown as [number, number, number];
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.58 ? "#162423" : "#ffffff";
+}
+
+function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
+  if (!storedLogoUrl) {
+    return null;
+  }
+
+  const trimmed = storedLogoUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("/") || trimmed.startsWith("data:")) {
+    return null;
+  }
+
+  if (!trimmed.startsWith("http")) {
+    return trimmed.startsWith("tenant-logos/") ? trimmed.slice("tenant-logos/".length) : trimmed;
+  }
+
+  const match = trimmed.match(/\/storage\/v1\/object\/(?:public|sign)\/tenant-logos\/([^?]+)(?:\?.*)?$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -452,6 +553,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [themeSaveMessage, setThemeSaveMessage] = useState("");
   const [logoUploadStatus, setLogoUploadStatus] = useState<LoginStatus>("idle");
   const [logoUploadMessage, setLogoUploadMessage] = useState("");
+  const [resolvedTenantLogoUrl, setResolvedTenantLogoUrl] = useState<string | null>(null);
+  const [themeLogoPreviewUrl, setThemeLogoPreviewUrl] = useState<string | null>(null);
   const [userEdits, setUserEdits] = useState<Record<string, UserEditState>>({});
   const [userSaveStatus, setUserSaveStatus] = useState<Record<string, LoginStatus>>({});
   const [userSaveMessage, setUserSaveMessage] = useState<Record<string, string>>({});
@@ -544,12 +647,104 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const announcementCount = clientData?.announcements.length ?? 0;
 
   useEffect(() => {
+    const tenant = clientData?.tenant;
+    if (!tenant) {
+      return;
+    }
+
+    const primary = normalizeHexColor(tenant.primary_color, "#087c7a");
+    const accent = normalizeHexColor(tenant.accent_color, "#00a7c4");
+    const primaryDark = darkenHex(primary, 0.32);
+    const primarySoft = lightenHex(primary, 0.86);
+    const accentSoft = lightenHex(accent, 0.86);
+
+    const headerBg = normalizeHexColor(tenant.header_color || primary, primary);
+    const sidebarBg = normalizeHexColor(tenant.sidebar_color || primary, primaryDark);
+    const footerBg = normalizeHexColor(tenant.footer_color || primary, primaryDark);
+
+    const sidebarFg = pickReadableTextColor(sidebarBg);
+    const headerFg = pickReadableTextColor(headerBg);
+    const footerFg = pickReadableTextColor(footerBg);
+
+    const primaryRgb = hexToRgbTuple(primary) ?? [8, 124, 122];
+    const accentRgb = hexToRgbTuple(accent) ?? [0, 167, 196];
+
+    const root = document.documentElement;
+    root.style.setProperty("--color-brand-primary", primary);
+    root.style.setProperty("--color-brand-primary-dark", primaryDark);
+    root.style.setProperty("--color-brand-primary-soft", primarySoft);
+    root.style.setProperty("--color-brand-accent", accent);
+    root.style.setProperty("--color-brand-accent-soft", accentSoft);
+    root.style.setProperty("--color-brand-primary-rgb", primaryRgb.join(", "));
+    root.style.setProperty("--color-brand-accent-rgb", accentRgb.join(", "));
+
+    root.style.setProperty("--tenant-header-bg", headerBg);
+    root.style.setProperty("--tenant-header-fg", headerFg);
+    root.style.setProperty("--tenant-sidebar-bg", sidebarBg);
+    root.style.setProperty("--tenant-sidebar-fg", sidebarFg);
+    root.style.setProperty("--tenant-footer-bg", footerBg);
+    root.style.setProperty("--tenant-footer-fg", footerFg);
+
+    const isSidebarTextWhite = sidebarFg.toLowerCase() === "#ffffff";
+    root.style.setProperty("--tenant-sidebar-muted-fg", isSidebarTextWhite ? "rgba(255,255,255,0.82)" : "rgba(0,0,0,0.72)");
+    root.style.setProperty("--tenant-sidebar-hover-bg", isSidebarTextWhite ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)");
+    root.style.setProperty("--tenant-sidebar-hover-border", isSidebarTextWhite ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.14)");
+    root.style.setProperty("--tenant-sidebar-divider", isSidebarTextWhite ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)");
+  }, [
+    clientData?.tenant.id,
+    clientData?.tenant.primary_color,
+    clientData?.tenant.accent_color,
+    clientData?.tenant.header_color,
+    clientData?.tenant.sidebar_color,
+    clientData?.tenant.footer_color,
+  ]);
+
+  useEffect(() => {
+    const tenant = clientData?.tenant;
+    if (!tenant) {
+      setResolvedTenantLogoUrl(null);
+      setThemeLogoPreviewUrl(null);
+      return;
+    }
+
+    const rawLogo = tenant.logo_url?.trim() ?? "";
+    if (!rawLogo) {
+      setResolvedTenantLogoUrl(null);
+      setThemeLogoPreviewUrl(null);
+      return;
+    }
+
+    if (rawLogo.startsWith("http") || rawLogo.startsWith("/") || rawLogo.startsWith("data:")) {
+      setResolvedTenantLogoUrl(rawLogo);
+      setThemeLogoPreviewUrl(rawLogo);
+      return;
+    }
+
+    const objectKey = getTenantLogoObjectKey(rawLogo) ?? `${tenant.id}/logo`;
+    supabase.storage
+      .from("tenant-logos")
+      .createSignedUrl(objectKey, 60 * 60)
+      .then(({ data, error }) => {
+        if (error || !data?.signedUrl) {
+          setResolvedTenantLogoUrl(null);
+          setThemeLogoPreviewUrl(null);
+          return;
+        }
+        setResolvedTenantLogoUrl(data.signedUrl);
+        setThemeLogoPreviewUrl(data.signedUrl);
+      });
+  }, [clientData?.tenant.id, clientData?.tenant.logo_url]);
+
+  useEffect(() => {
     if (demoMode) {
       setClientData(sampleClientDashboardData);
       setThemeForm({
         logo_url: sampleClientDashboardData.tenant.logo_url ?? "",
         primary_color: sampleClientDashboardData.tenant.primary_color,
         accent_color: sampleClientDashboardData.tenant.accent_color,
+        header_color: sampleClientDashboardData.tenant.header_color,
+        sidebar_color: sampleClientDashboardData.tenant.sidebar_color,
+        footer_color: sampleClientDashboardData.tenant.footer_color,
       });
       setProfile(sampleClientDashboardData.profile);
       setDataStatus("ready");
@@ -665,7 +860,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     ] = await Promise.all([
         supabase
           .from("tenants")
-          .select("id, name, slug, logo_url, primary_color, accent_color")
+          .select(
+            "id, name, slug, logo_url, primary_color, accent_color, header_color, sidebar_color, footer_color",
+          )
           .eq("id", tenantId)
           .single<TenantRecord>(),
         supabase
@@ -822,6 +1019,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       logo_url: tenantResult.data.logo_url ?? "",
       primary_color: tenantResult.data.primary_color,
       accent_color: tenantResult.data.accent_color,
+      header_color: tenantResult.data.header_color,
+      sidebar_color: tenantResult.data.sidebar_color,
+      footer_color: tenantResult.data.footer_color,
     });
 
     setDataStatus("ready");
@@ -1667,7 +1867,22 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function updateThemeForm(field: keyof ThemeFormState, value: string) {
-    setThemeForm((current) => ({ ...current, [field]: value }));
+    setThemeForm((current) => {
+      if (field === "primary_color") {
+        const shouldSyncHeader = current.header_color === current.primary_color;
+        const shouldSyncSidebar = current.sidebar_color === current.primary_color;
+        const shouldSyncFooter = current.footer_color === current.primary_color;
+        return {
+          ...current,
+          primary_color: value,
+          header_color: shouldSyncHeader ? value : current.header_color,
+          sidebar_color: shouldSyncSidebar ? value : current.sidebar_color,
+          footer_color: shouldSyncFooter ? value : current.footer_color,
+        };
+      }
+
+      return { ...current, [field]: value };
+    });
   }
 
   async function handleThemeSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1679,6 +1894,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       logo_url: themeForm.logo_url || null,
       primary_color: themeForm.primary_color,
       accent_color: themeForm.accent_color,
+      header_color: themeForm.header_color || themeForm.primary_color,
+      sidebar_color: themeForm.sidebar_color || themeForm.primary_color,
+      footer_color: themeForm.footer_color || themeForm.primary_color,
     };
 
     const result = await supabase
@@ -1708,8 +1926,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setLogoUploadStatus("loading");
     setLogoUploadMessage("");
 
-    const filePath = `tenant-logos/${clientData.tenant.id}/${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("tenant-logos").upload(filePath, file, {
+    const directory = `${clientData.tenant.id}`;
+    const objectKey = `${directory}/logo`;
+    const { error: uploadError } = await supabase.storage.from("tenant-logos").upload(objectKey, file, {
       upsert: true,
     });
 
@@ -1722,14 +1941,27 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const { data } = supabase.storage.from("tenant-logos").getPublicUrl(filePath);
-    if (!data.publicUrl) {
+    const signedLogo = await supabase.storage.from("tenant-logos").createSignedUrl(objectKey, 60 * 60);
+    const logoPreviewUrl = signedLogo.data?.signedUrl ?? null;
+    if (!logoPreviewUrl) {
       setLogoUploadStatus("error");
-      setLogoUploadMessage("Logo enviada, mas não foi possível obter a URL pública.");
+      setLogoUploadMessage("Logo enviada, mas não foi possível obter a URL da imagem.");
       return;
     }
 
-    setThemeForm((current) => ({ ...current, logo_url: data.publicUrl }));
+    const { data: existingFiles } = await supabase.storage.from("tenant-logos").list(directory, { limit: 100 });
+    const extraPaths =
+      (existingFiles ?? [])
+        .map((item) => item.name)
+        .filter((name) => name && name !== "logo")
+        .map((name) => `${directory}/${name}`);
+
+    if (extraPaths.length) {
+      await supabase.storage.from("tenant-logos").remove(extraPaths);
+    }
+
+    setThemeForm((current) => ({ ...current, logo_url: objectKey }));
+    setThemeLogoPreviewUrl(logoPreviewUrl);
     setLogoUploadStatus("success");
     setLogoUploadMessage("Logo enviada com sucesso.");
   }
@@ -1888,7 +2120,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
       <aside className="client-admin-sidebar" aria-label="Navegação do Admin Cliente">
         <div className="client-brand">
-          <span>{tenant.name.slice(0, 2).toUpperCase()}</span>
+          <div className="tenant-sidebar-logo" aria-label="Logo do tenant">
+            {resolvedTenantLogoUrl ? (
+              <img src={resolvedTenantLogoUrl} alt={`Logo ${tenant.name}`} />
+            ) : (
+              <span className="tenant-sidebar-logo-fallback">{tenant.name.slice(0, 2).toUpperCase()}</span>
+            )}
+          </div>
           <div>
             <strong>{tenant.name}</strong>
             <small>{tenant.slug}</small>
@@ -1918,7 +2156,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       <section className="global-admin-content">
         <header className="global-admin-header">
           <div>
-            <span>Etapa 3 · Admin Cliente/Igreja</span>
+            <span>Seja bem-vindo {tenant.name}</span>
             <h1>
               {activeTab === "overview"
                 ? "Painel da igreja"
@@ -2442,8 +2680,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <label>
                   <span>Logo da igreja</span>
                   <div className="logo-picker">
-                    {themeForm.logo_url ? (
-                      <img src={themeForm.logo_url} alt="Logo do tenant" />
+                    {themeLogoPreviewUrl ? (
+                      <img src={themeLogoPreviewUrl} alt="Logo do tenant" />
                     ) : (
                       <span className="logo-placeholder">Sem logo</span>
                     )}
@@ -2464,6 +2702,30 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     type="color"
                     value={themeForm.accent_color}
                     onChange={(event) => updateThemeForm("accent_color", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Cor do header</span>
+                  <input
+                    type="color"
+                    value={themeForm.header_color}
+                    onChange={(event) => updateThemeForm("header_color", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Cor do menu lateral</span>
+                  <input
+                    type="color"
+                    value={themeForm.sidebar_color}
+                    onChange={(event) => updateThemeForm("sidebar_color", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Cor do footer</span>
+                  <input
+                    type="color"
+                    value={themeForm.footer_color}
+                    onChange={(event) => updateThemeForm("footer_color", event.target.value)}
                   />
                 </label>
 
