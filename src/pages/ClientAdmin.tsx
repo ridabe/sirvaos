@@ -12,6 +12,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Music,
   Palette,
   PanelLeftClose,
   PanelLeftOpen,
@@ -89,6 +90,43 @@ type AnnouncementRecord = {
   message: string;
   published_at: string;
   created_at: string;
+};
+
+type WorshipRoleRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  role_type: "vocal" | "instrument" | "technical" | "leadership" | "other";
+  sort_order: number;
+  is_active: boolean;
+};
+
+type WorshipEventRecord = {
+  id: string;
+  tenant_id: string;
+  title: string;
+  event_type: "service" | "rehearsal" | "meeting" | "other";
+  starts_at: string;
+  ends_at: string | null;
+  location: string | null;
+  notes: string | null;
+  status: "draft" | "published" | "completed" | "cancelled";
+  created_at: string;
+};
+
+type WorshipAssignmentRecord = {
+  id: string;
+  tenant_id: string;
+  event_id: string;
+  member_id: string;
+  role_id: string | null;
+  role_name: string | null;
+  arrival_at: string | null;
+  status: "pending" | "confirmed" | "declined" | "standby";
+  decline_reason: string | null;
+  notes: string | null;
+  members: { name: string; email: string | null } | null;
+  worship_roles: { name: string } | null;
 };
 
 type TenantModuleRecord = {
@@ -171,6 +209,9 @@ type ClientDashboardData = {
   familyMembersByFamilyId: Record<string, Array<{ member_id: string; name: string; relationship: string; is_primary: boolean }>>;
   events: EventRecord[];
   announcements: AnnouncementRecord[];
+  worshipRoles: WorshipRoleRecord[];
+  worshipEvents: WorshipEventRecord[];
+  worshipAssignmentsByEventId: Record<string, WorshipAssignmentRecord[]>;
   users: TenantUserRecord[];
   modules: TenantModuleRecord[];
   moduleAdminModuleIdsByProfileId: Record<string, string[]>;
@@ -207,6 +248,23 @@ type FamilyFormState = {
 };
 type EventFormState = Omit<EventRecord, "created_at"> & { tenant_id: string };
 type AnnouncementFormState = Omit<AnnouncementRecord, "created_at"> & { tenant_id: string };
+type WorshipEventFormState = {
+  title: string;
+  event_type: WorshipEventRecord["event_type"];
+  starts_at: string;
+  ends_at: string;
+  location: string;
+  notes: string;
+  status: WorshipEventRecord["status"];
+};
+type WorshipAssignmentFormState = {
+  event_id: string;
+  member_id: string;
+  role_id: string;
+  role_name: string;
+  arrival_at: string;
+  notes: string;
+};
 type ThemeFormState = {
   logo_url: string;
   primary_color: string;
@@ -265,6 +323,25 @@ const emptyAnnouncementForm: AnnouncementFormState = {
   message: "",
   published_at: new Date().toISOString(),
   tenant_id: "",
+};
+
+const emptyWorshipEventForm: WorshipEventFormState = {
+  title: "",
+  event_type: "service",
+  starts_at: "",
+  ends_at: "",
+  location: "",
+  notes: "",
+  status: "published",
+};
+
+const emptyWorshipAssignmentForm: WorshipAssignmentFormState = {
+  event_id: "",
+  member_id: "",
+  role_id: "",
+  role_name: "",
+  arrival_at: "",
+  notes: "",
 };
 
 const emptyThemeForm: ThemeFormState = {
@@ -369,6 +446,42 @@ const sampleClientDashboardData: ClientDashboardData = {
       created_at: new Date().toISOString(),
     },
   ],
+  worshipRoles: [
+    { id: "worship-role-1", tenant_id: "demo-tenant", name: "Vocal", role_type: "vocal", sort_order: 20, is_active: true },
+    { id: "worship-role-2", tenant_id: "demo-tenant", name: "Violao", role_type: "instrument", sort_order: 30, is_active: true },
+  ],
+  worshipEvents: [
+    {
+      id: "worship-event-1",
+      tenant_id: "demo-tenant",
+      title: "Louvor - Culto Dominical",
+      event_type: "service",
+      starts_at: new Date(Date.now() + 86400000).toISOString(),
+      ends_at: null,
+      location: "Templo principal",
+      notes: "Separar repertorio antes do ensaio.",
+      status: "published",
+      created_at: new Date().toISOString(),
+    },
+  ],
+  worshipAssignmentsByEventId: {
+    "worship-event-1": [
+      {
+        id: "worship-assignment-1",
+        tenant_id: "demo-tenant",
+        event_id: "worship-event-1",
+        member_id: "member-1",
+        role_id: "worship-role-1",
+        role_name: null,
+        arrival_at: new Date(Date.now() + 82800000).toISOString(),
+        status: "confirmed",
+        decline_reason: null,
+        notes: null,
+        members: { name: "Mariana Souza", email: "mariana@igreja.org" },
+        worship_roles: { name: "Vocal" },
+      },
+    ],
+  },
   users: [
     {
       id: "user-1",
@@ -388,31 +501,38 @@ const sampleClientDashboardData: ClientDashboardData = {
   modules: [
     {
       id: "module-1",
-      code: "membros",
+      code: "members",
       name: "Membros",
       description: "Gestão de membros e ministérios.",
       status: "active",
     },
     {
       id: "module-2",
-      code: "eventos",
+      code: "calendar",
       name: "Eventos",
       description: "Calendário e programação de cultos.",
       status: "active",
     },
     {
       id: "module-3",
-      code: "comunicados",
+      code: "announcements",
       name: "Comunicados",
       description: "Notícias e avisos para a comunidade.",
       status: "beta",
+    },
+    {
+      id: "module-4",
+      code: "worship",
+      name: "Louvor",
+      description: "Escalas, integrantes, funcoes e confirmacao de presenca.",
+      status: "active",
     },
   ],
   moduleAdminModuleIdsByProfileId: {
     "user-1": ["module-1", "module-2"],
   },
   moduleAdminModuleIdsByMemberId: {
-    "member-1": ["module-1"],
+    "member-1": ["module-1", "module-4"],
   },
   catalogRoles: [
     { id: "role-sys-1", tenant_id: null, name: "Membro" },
@@ -431,6 +551,7 @@ const clientTabs = [
   { key: "members", label: "Membros", icon: UsersRound },
   { key: "families", label: "Famílias", icon: Users2 },
   { key: "events", label: "Calendário", icon: CalendarCheck },
+  { key: "worship", label: "Louvor", icon: Music },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
@@ -445,6 +566,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   members: "members",
   families: "members",
   events: "calendar",
+  worship: "worship",
   notices: "announcements",
 };
 
@@ -571,6 +693,20 @@ function getTenantLogoPublicUrl(storedLogoUrl: string | null | undefined, tenant
   return data.publicUrl ? `${data.publicUrl}?v=${encodeURIComponent(rawLogo)}` : null;
 }
 
+function worshipStatusLabel(status: WorshipEventRecord["status"]) {
+  if (status === "published") return "Publicado";
+  if (status === "completed") return "Concluido";
+  if (status === "cancelled") return "Cancelado";
+  return "Rascunho";
+}
+
+function worshipAssignmentStatusLabel(status: WorshipAssignmentRecord["status"]) {
+  if (status === "confirmed") return "Confirmado";
+  if (status === "declined") return "Recusado";
+  if (status === "standby") return "Apoio";
+  return "Pendente";
+}
+
 export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -603,6 +739,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [eventSaveStatus, setEventSaveStatus] = useState<LoginStatus>("idle");
   const [eventSaveMessage, setEventSaveMessage] = useState("");
+  const [worshipEventForm, setWorshipEventForm] = useState<WorshipEventFormState>(emptyWorshipEventForm);
+  const [worshipAssignmentForm, setWorshipAssignmentForm] = useState<WorshipAssignmentFormState>(
+    emptyWorshipAssignmentForm,
+  );
+  const [worshipSaveStatus, setWorshipSaveStatus] = useState<LoginStatus>("idle");
+  const [worshipSaveMessage, setWorshipSaveMessage] = useState("");
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementFormState>(emptyAnnouncementForm);
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
   const [announcementSaveStatus, setAnnouncementSaveStatus] = useState<LoginStatus>("idle");
@@ -681,28 +823,31 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageMembershipModule = canManageModuleCode("members");
   const canManageMembers = isTenantAdmin || isSecretariaAdmin || canManageMembershipModule;
   const canManageEvents = canManageModuleCode("calendar");
+  const canManageWorship = canManageModuleCode("worship");
   const canManageAnnouncements = canManageModuleCode("announcements");
 
   const visibleClientTabs = useMemo(() => {
-    if (isTenantAdmin) {
-      return clientTabs;
-    }
-
     return clientTabs.filter((tab) => {
       if (defaultClientTabs.has(tab.key)) {
         return true;
       }
 
-      if ((tab.key === "members" || tab.key === "families") && canManageMembers) {
-        return true;
-      }
-
       if (tenantAdminOnlyTabs.has(tab.key)) {
-        return false;
+        return isTenantAdmin;
       }
 
       const moduleCode = clientTabModuleCode[tab.key];
-      return Boolean(moduleCode && canManageModuleCode(moduleCode));
+      const isActiveModule = Boolean(moduleCode && activeModuleIdByCode[moduleCode]);
+
+      if ((tab.key === "members" || tab.key === "families") && canManageMembers && isActiveModule) {
+        return true;
+      }
+
+      if (!moduleCode || !isActiveModule) {
+        return false;
+      }
+
+      return isTenantAdmin || canManageModuleCode(moduleCode);
     });
   }, [activeModuleIdByCode, canManageMembers, currentUserModuleAdminIds, isTenantAdmin]);
 
@@ -768,6 +913,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const activeModules = clientData?.modules ?? [];
   const memberCount = clientData?.members.length ?? 0;
   const eventCount = clientData?.events.length ?? 0;
+  const worshipEventCount = clientData?.worshipEvents.length ?? 0;
+  const worshipAssignmentCount =
+    clientData?.worshipEvents.reduce((total, item) => total + (clientData.worshipAssignmentsByEventId[item.id]?.length ?? 0), 0) ?? 0;
   const announcementCount = clientData?.announcements.length ?? 0;
 
   useEffect(() => {
@@ -994,6 +1142,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       familyMembersResult,
       eventsResult,
       announcementsResult,
+      worshipRolesResult,
+      worshipEventsResult,
+      worshipAssignmentsResult,
       usersResult,
       modulesResult,
       moduleAdminsResult,
@@ -1049,6 +1200,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .order("published_at", { ascending: false })
           .returns<AnnouncementRecord[]>(),
         supabase
+          .from("worship_roles")
+          .select("id, tenant_id, name, role_type, sort_order, is_active")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .returns<WorshipRoleRecord[]>(),
+        supabase
+          .from("worship_events")
+          .select("id, tenant_id, title, event_type, starts_at, ends_at, location, notes, status, created_at")
+          .eq("tenant_id", tenantId)
+          .order("starts_at", { ascending: true })
+          .returns<WorshipEventRecord[]>(),
+        supabase
+          .from("worship_assignments")
+          .select("id, tenant_id, event_id, member_id, role_id, role_name, arrival_at, status, decline_reason, notes, members (name, email), worship_roles (name)")
+          .eq("tenant_id", tenantId)
+          .returns<WorshipAssignmentRecord[]>(),
+        supabase
           .from("profiles")
           .select("id, full_name, email, tenant_role, status")
           .eq("tenant_id", tenantId)
@@ -1086,6 +1255,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       familyMembersResult.error ||
       eventsResult.error ||
       announcementsResult.error ||
+      worshipRolesResult.error ||
+      worshipEventsResult.error ||
+      worshipAssignmentsResult.error ||
       usersResult.error ||
       modulesResult.error ||
       moduleAdminsResult.error ||
@@ -1169,6 +1341,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       {},
     );
 
+    const worshipAssignmentsByEventId = (worshipAssignmentsResult.data ?? []).reduce<
+      Record<string, WorshipAssignmentRecord[]>
+    >((acc, row) => {
+      acc[row.event_id] = [...(acc[row.event_id] ?? []), row];
+      return acc;
+    }, {});
+
     setClientData({
       profile: currentProfile,
       tenant: tenantResult.data,
@@ -1179,6 +1358,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       familyMembersByFamilyId,
       events: eventsResult.data ?? [],
       announcements: announcementsResult.data ?? [],
+      worshipRoles: worshipRolesResult.data ?? [],
+      worshipEvents: worshipEventsResult.data ?? [],
+      worshipAssignmentsByEventId,
       users: usersResult.data ?? [],
       modules,
       moduleAdminModuleIdsByProfileId,
@@ -2022,6 +2204,141 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
   }
 
+  async function handleWorshipEventSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!profile || !clientData || !canManageWorship) {
+      return;
+    }
+
+    if (!worshipEventForm.title.trim() || !worshipEventForm.starts_at) {
+      setWorshipSaveStatus("error");
+      setWorshipSaveMessage("Informe o nome e o inicio do evento de louvor.");
+      return;
+    }
+
+    setWorshipSaveStatus("loading");
+    setWorshipSaveMessage("");
+
+    if (demoMode) {
+      const row: WorshipEventRecord = {
+        id: `worship-event-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        title: worshipEventForm.title.trim(),
+        event_type: worshipEventForm.event_type,
+        starts_at: new Date(worshipEventForm.starts_at).toISOString(),
+        ends_at: worshipEventForm.ends_at ? new Date(worshipEventForm.ends_at).toISOString() : null,
+        location: worshipEventForm.location.trim() || null,
+        notes: worshipEventForm.notes.trim() || null,
+        status: worshipEventForm.status,
+        created_at: new Date().toISOString(),
+      };
+      setClientData((current) =>
+        current ? { ...current, worshipEvents: [...current.worshipEvents, row] } : current,
+      );
+      setWorshipEventForm(emptyWorshipEventForm);
+      setWorshipSaveStatus("success");
+      setWorshipSaveMessage("Evento de louvor criado.");
+      return;
+    }
+
+    const { error } = await supabase.from("worship_events").insert({
+      tenant_id: clientData.tenant.id,
+      title: worshipEventForm.title.trim(),
+      event_type: worshipEventForm.event_type,
+      starts_at: new Date(worshipEventForm.starts_at).toISOString(),
+      ends_at: worshipEventForm.ends_at ? new Date(worshipEventForm.ends_at).toISOString() : null,
+      location: worshipEventForm.location.trim() || null,
+      notes: worshipEventForm.notes.trim() || null,
+      status: worshipEventForm.status,
+      created_by: profile.id,
+    });
+
+    if (error) {
+      setWorshipSaveStatus("error");
+      setWorshipSaveMessage("Nao foi possivel criar o evento de louvor.");
+      return;
+    }
+
+    setWorshipEventForm(emptyWorshipEventForm);
+    setWorshipSaveStatus("success");
+    setWorshipSaveMessage("Evento de louvor criado.");
+    await loadClientData(profile.id);
+  }
+
+  async function handleWorshipAssignmentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!profile || !clientData || !canManageWorship) {
+      return;
+    }
+
+    const customRole = worshipAssignmentForm.role_name.trim();
+    if (!worshipAssignmentForm.event_id || !worshipAssignmentForm.member_id || (!worshipAssignmentForm.role_id && !customRole)) {
+      setWorshipSaveStatus("error");
+      setWorshipSaveMessage("Selecione evento, membro e funcao na escala.");
+      return;
+    }
+
+    setWorshipSaveStatus("loading");
+    setWorshipSaveMessage("");
+
+    if (demoMode) {
+      const selectedMember = clientData.members.find((item) => item.id === worshipAssignmentForm.member_id);
+      const selectedRole = clientData.worshipRoles.find((item) => item.id === worshipAssignmentForm.role_id);
+      const row: WorshipAssignmentRecord = {
+        id: `worship-assignment-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        event_id: worshipAssignmentForm.event_id,
+        member_id: worshipAssignmentForm.member_id,
+        role_id: worshipAssignmentForm.role_id || null,
+        role_name: customRole || null,
+        arrival_at: worshipAssignmentForm.arrival_at ? new Date(worshipAssignmentForm.arrival_at).toISOString() : null,
+        status: "pending",
+        decline_reason: null,
+        notes: worshipAssignmentForm.notes.trim() || null,
+        members: selectedMember ? { name: selectedMember.name, email: selectedMember.email } : null,
+        worship_roles: selectedRole ? { name: selectedRole.name } : null,
+      };
+      setClientData((current) =>
+        current
+          ? {
+              ...current,
+              worshipAssignmentsByEventId: {
+                ...current.worshipAssignmentsByEventId,
+                [row.event_id]: [...(current.worshipAssignmentsByEventId[row.event_id] ?? []), row],
+              },
+            }
+          : current,
+      );
+      setWorshipAssignmentForm({ ...emptyWorshipAssignmentForm, event_id: worshipAssignmentForm.event_id });
+      setWorshipSaveStatus("success");
+      setWorshipSaveMessage("Escalado adicionado.");
+      return;
+    }
+
+    const { error } = await supabase.from("worship_assignments").insert({
+      tenant_id: clientData.tenant.id,
+      event_id: worshipAssignmentForm.event_id,
+      member_id: worshipAssignmentForm.member_id,
+      role_id: worshipAssignmentForm.role_id || null,
+      role_name: customRole || null,
+      arrival_at: worshipAssignmentForm.arrival_at ? new Date(worshipAssignmentForm.arrival_at).toISOString() : null,
+      notes: worshipAssignmentForm.notes.trim() || null,
+    });
+
+    if (error) {
+      setWorshipSaveStatus("error");
+      setWorshipSaveMessage("Nao foi possivel adicionar o escalado.");
+      return;
+    }
+
+    setWorshipAssignmentForm({ ...emptyWorshipAssignmentForm, event_id: worshipAssignmentForm.event_id });
+    setWorshipSaveStatus("success");
+    setWorshipSaveMessage("Escalado adicionado.");
+    await loadClientData(profile.id);
+  }
+
   function openCreateAnnouncementForm() {
     if (!canManageAnnouncements) {
       return;
@@ -2830,6 +3147,225 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     ) : null}
                   </div>
                 ))}
+              </div>
+            </article>
+          ) : null}
+
+          {activeTab === "worship" ? (
+            <article className="panel full-width worship-panel">
+              <div className="panel-heading">
+                <div>
+                  <span>Louvor</span>
+                  <h4>Escalas de culto e ensaio</h4>
+                </div>
+                <Music size={20} />
+              </div>
+
+              {worshipSaveMessage ? (
+                <p className={`login-feedback ${worshipSaveStatus}`}>{worshipSaveMessage}</p>
+              ) : null}
+
+              <div className="worship-summary">
+                <article>
+                  <span>Eventos</span>
+                  <strong>{worshipEventCount}</strong>
+                  <small>Cultos, ensaios e encontros do louvor</small>
+                </article>
+                <article>
+                  <span>Escalados</span>
+                  <strong>{worshipAssignmentCount}</strong>
+                  <small>Participacoes planejadas</small>
+                </article>
+                <article>
+                  <span>Funcoes</span>
+                  <strong>{clientData.worshipRoles.length}</strong>
+                  <small>Instrumentos e responsabilidades ativas</small>
+                </article>
+              </div>
+
+              {canManageWorship ? (
+                <div className="worship-forms">
+                  <form className="worship-form" onSubmit={handleWorshipEventSubmit}>
+                    <div className="modal-section-header">
+                      <strong>Novo evento de louvor</strong>
+                      <small>Crie culto, ensaio ou reuniao operacional.</small>
+                    </div>
+                    <input
+                      className="catalog-input"
+                      placeholder="Nome do evento"
+                      value={worshipEventForm.title}
+                      onChange={(event) => setWorshipEventForm((current) => ({ ...current, title: event.target.value }))}
+                    />
+                    <div className="modal-grid">
+                      <select
+                        className="catalog-input"
+                        value={worshipEventForm.event_type}
+                        onChange={(event) =>
+                          setWorshipEventForm((current) => ({
+                            ...current,
+                            event_type: event.target.value as WorshipEventFormState["event_type"],
+                          }))
+                        }
+                      >
+                        <option value="service">Culto</option>
+                        <option value="rehearsal">Ensaio</option>
+                        <option value="meeting">Reuniao</option>
+                        <option value="other">Outro</option>
+                      </select>
+                      <select
+                        className="catalog-input"
+                        value={worshipEventForm.status}
+                        onChange={(event) =>
+                          setWorshipEventForm((current) => ({
+                            ...current,
+                            status: event.target.value as WorshipEventFormState["status"],
+                          }))
+                        }
+                      >
+                        <option value="published">Publicado</option>
+                        <option value="draft">Rascunho</option>
+                        <option value="completed">Concluido</option>
+                        <option value="cancelled">Cancelado</option>
+                      </select>
+                    </div>
+                    <div className="modal-grid">
+                      <input
+                        className="catalog-input"
+                        type="datetime-local"
+                        value={worshipEventForm.starts_at}
+                        onChange={(event) => setWorshipEventForm((current) => ({ ...current, starts_at: event.target.value }))}
+                      />
+                      <input
+                        className="catalog-input"
+                        type="datetime-local"
+                        value={worshipEventForm.ends_at}
+                        onChange={(event) => setWorshipEventForm((current) => ({ ...current, ends_at: event.target.value }))}
+                      />
+                    </div>
+                    <input
+                      className="catalog-input"
+                      placeholder="Local"
+                      value={worshipEventForm.location}
+                      onChange={(event) => setWorshipEventForm((current) => ({ ...current, location: event.target.value }))}
+                    />
+                    <textarea
+                      className="catalog-input catalog-textarea"
+                      placeholder="Observacoes da escala"
+                      value={worshipEventForm.notes}
+                      onChange={(event) => setWorshipEventForm((current) => ({ ...current, notes: event.target.value }))}
+                      rows={3}
+                    />
+                    <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<Plus size={18} />}>
+                      Criar evento
+                    </Button>
+                  </form>
+
+                  <form className="worship-form" onSubmit={handleWorshipAssignmentSubmit}>
+                    <div className="modal-section-header">
+                      <strong>Adicionar escalado</strong>
+                      <small>Vincule um membro a uma funcao do louvor.</small>
+                    </div>
+                    <select
+                      className="catalog-input"
+                      value={worshipAssignmentForm.event_id}
+                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, event_id: event.target.value }))}
+                    >
+                      <option value="">Selecionar evento</option>
+                      {clientData.worshipEvents.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="catalog-input"
+                      value={worshipAssignmentForm.member_id}
+                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, member_id: event.target.value }))}
+                    >
+                      <option value="">Selecionar membro</option>
+                      {clientData.members.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="modal-grid">
+                      <select
+                        className="catalog-input"
+                        value={worshipAssignmentForm.role_id}
+                        onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, role_id: event.target.value, role_name: "" }))}
+                      >
+                        <option value="">Funcao cadastrada</option>
+                        {clientData.worshipRoles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="catalog-input"
+                        placeholder="Ou funcao manual"
+                        value={worshipAssignmentForm.role_name}
+                        onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, role_name: event.target.value, role_id: "" }))}
+                      />
+                    </div>
+                    <input
+                      className="catalog-input"
+                      type="datetime-local"
+                      value={worshipAssignmentForm.arrival_at}
+                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, arrival_at: event.target.value }))}
+                    />
+                    <textarea
+                      className="catalog-input catalog-textarea"
+                      placeholder="Observacoes para este escalado"
+                      value={worshipAssignmentForm.notes}
+                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, notes: event.target.value }))}
+                      rows={3}
+                    />
+                    <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<UserPlus size={18} />}>
+                      Adicionar escalado
+                    </Button>
+                  </form>
+                </div>
+              ) : null}
+
+              <div className="worship-event-list">
+                {clientData.worshipEvents.length === 0 ? (
+                  <div className="catalog-empty">Nenhuma escala de louvor criada ainda.</div>
+                ) : null}
+
+                {clientData.worshipEvents.map((item) => {
+                  const assignments = clientData.worshipAssignmentsByEventId[item.id] ?? [];
+                  return (
+                    <section key={item.id} className="worship-event-card">
+                      <header>
+                        <div>
+                          <strong>{item.title}</strong>
+                          <small>
+                            {new Date(item.starts_at).toLocaleString("pt-BR")} {item.location ? `- ${item.location}` : ""}
+                          </small>
+                        </div>
+                        <em className={item.status === "published" ? "success" : "warning"}>{worshipStatusLabel(item.status)}</em>
+                      </header>
+                      <div className="worship-assignment-list">
+                        {assignments.length === 0 ? (
+                          <span className="catalog-empty compact">Nenhum escalado neste evento.</span>
+                        ) : null}
+                        {assignments.map((assignment) => (
+                          <div key={assignment.id} className="worship-assignment-row">
+                            <div>
+                              <strong>{assignment.members?.name ?? "Membro"}</strong>
+                              <small>{assignment.worship_roles?.name ?? assignment.role_name ?? "Funcao"}</small>
+                            </div>
+                            <em className={assignment.status === "confirmed" ? "success" : assignment.status === "declined" ? "danger" : "warning"}>
+                              {worshipAssignmentStatusLabel(assignment.status)}
+                            </em>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
             </article>
           ) : null}

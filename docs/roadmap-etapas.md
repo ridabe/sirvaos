@@ -86,6 +86,19 @@ Objetivo: primeiro módulo funcional base.
 Objetivo: primeiro módulo operacional com escala.
 Acesso: Apenas quem tiver cargo de lider do louvor, Admin geral do tenant
 Temos um sistema previamente criado na pasta C:\Projetos\ToNaEscalaWeb, analise o codigo dele e tente usar as mesmas fucnionalidades adaptando ao nosso projeto
+- Status: iniciado.
+- Base reutilizada do ToNaEscala: o admin cria o evento e a escala antes da resposta do participante; o participante confirma/recusa depois; dados sensiveis de outros escalados nao devem ficar expostos no portal do membro.
+- Primeiro corte no SirvaOS:
+  - tabelas operacionais para funcoes, eventos e escalados do louvor;
+  - RLS por tenant com escrita apenas para Admin global, Admin do tenant ou administrador do modulo `worship`;
+  - tela inicial no Admin Cliente para criar eventos de louvor e adicionar escalados;
+  - menu lateral deve exibir Louvor apenas quando o modulo estiver ativo e o usuario tiver permissao administrativa.
+- Proximos cortes:
+  - detalhe completo do evento com edicao/remocao;
+  - tela do membro para confirmar/recusar escala com justificativa;
+  - calendario mensal estilo Google;
+  - notificacoes app/WhatsApp;
+  - historico e indicadores por integrante.
 - Integrantes.
 - Funções/instrumentos.
 - Eventos de culto/ensaio.
