@@ -8,15 +8,17 @@ import {
   Church,
   Eye,
   Fingerprint,
+  Layers3,
   LockKeyhole,
   Mail,
+  MessageSquareText,
   Palette,
   ShieldCheck,
-  Smartphone,
   Sparkles,
-  UserPlus,
   UsersRound,
 } from "lucide-react";
+import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   FeatureItem,
@@ -32,10 +34,29 @@ import {
   notificationItems,
 } from "./data/clientDashboard";
 import { features, modules, tenantCards } from "./data/landing";
+import { supabase } from "./lib/supabase";
 import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 import { ClientAdmin } from "./pages/ClientAdmin";
 
+type LandingLoginStatus = "idle" | "loading" | "error";
+
+type LandingProfile = {
+  global_role: "super_admin" | "operations" | "support" | null;
+  tenant_id: string | null;
+  status: "active" | "invited" | "suspended";
+};
+
 export function App() {
+  const [loginStatus, setLoginStatus] = useState<LandingLoginStatus>("idle");
+  const [loginMessage, setLoginMessage] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("email") || params.has("password")) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   if (window.location.pathname === "/admin-global") {
     return <AdminGlobalAccess />;
   }
@@ -48,6 +69,67 @@ export function App() {
     return <ClientAdmin demoMode />;
   }
 
+  /* Faz login pelo Supabase sem enviar credenciais via query string. */
+  async function handleLandingLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoginStatus("loading");
+    setLoginMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      setLoginStatus("error");
+      setLoginMessage("Informe e-mail e senha.");
+      return;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError || !authData.user) {
+      setLoginStatus("error");
+      setLoginMessage("Falha no login. Verifique e-mail e senha.");
+      return;
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("global_role, tenant_id, status")
+      .eq("id", authData.user.id)
+      .single<LandingProfile>();
+
+    if (profileError || !profileData) {
+      setLoginStatus("error");
+      setLoginMessage("Login efetuado, mas não foi possível carregar o perfil do usuário.");
+      return;
+    }
+
+    if (profileData.status !== "active") {
+      await supabase.auth.signOut();
+      setLoginStatus("error");
+      setLoginMessage("Usuário inativo ou sem liberação.");
+      return;
+    }
+
+    if (profileData.global_role === "super_admin" || profileData.global_role === "operations") {
+      window.location.assign("/admin-global");
+      return;
+    }
+
+    if (!profileData.tenant_id) {
+      await supabase.auth.signOut();
+      setLoginStatus("error");
+      setLoginMessage("Usuário autenticado, mas sem tenant associado.");
+      return;
+    }
+
+    window.location.assign("/admin-cliente");
+  }
+
   return (
     <main>
       <section className="app-shell">
@@ -58,21 +140,18 @@ export function App() {
             </a>
 
             <div className="nav-actions" aria-label="Acesso rápido">
-              <a className="ghost-link" href="/admin-global">
-                <ShieldCheck size={17} />
-                Admin Global
+              <a className="ghost-link" href="#produto">
+                <Layers3 size={17} />
+                Produto
               </a>
-              <a className="ghost-link" href="/admin-cliente">
-                <Church size={17} />
-                Admin Cliente
+              <a className="ghost-link" href="#por-dentro">
+                <Eye size={17} />
+                Por dentro
               </a>
               <a className="ghost-link" href="/admin-cliente-demo">
-                <Eye size={17} />
-                Teste Cliente
-              </a>
-              <Button variant="ghost" icon={<Sparkles size={17} />}>
+                <Sparkles size={17} />
                 Demonstração
-              </Button>
+              </a>
               <IconButton ariaLabel="Selecionar idioma">
                 PT
                 <ChevronDown size={14} />
@@ -84,29 +163,30 @@ export function App() {
             <div className="hero-copy">
               <span className="eyebrow">
                 <ShieldCheck size={18} />
-                Plataforma SaaS para igrejas e ministérios
+                Plataforma operacional para igrejas e ministérios
               </span>
 
-              <h1>Organize a operação da igreja para servir melhor.</h1>
+              <h1>Gestão completa da igreja em um só lugar.</h1>
 
               <p>
-                O SirvaOS conecta liderança, ministérios, membros, escalas, eventos e
-                comunicação em uma plataforma moderna, modular e preparada para
-                white-label.
+                Cadastros, calendário, escalas e comunicados com modularidade real e
+                isolamento por tenant. Cada igreja opera com sua marca, seus módulos e
+                seus dados.
               </p>
 
               <div className="hero-actions">
-                <a className="ghost-link" href="/admin-cliente">
+                <a className="primary-button" href="#login">
                   <ArrowRight size={18} />
-                  Conhecer o painel
+                  Entrar no painel
                 </a>
-                <Button variant="secondary" icon={<Smartphone size={18} />}>
-                  Ver app do membro
-                </Button>
+                <a className="secondary-button" href="/admin-cliente-demo">
+                  <Sparkles size={18} />
+                  Ver demonstração
+                </a>
               </div>
 
               <div className="trust-row" aria-label="Pilares do SirvaOS">
-                {["Multi-tenant", "White-label", "Módulos ativos"].map((item) => (
+                {["Multi-tenant", "White-label por igreja", "Permissões por perfil"].map((item) => (
                   <span key={item}>
                     <Check size={16} />
                     {item}
@@ -127,9 +207,9 @@ export function App() {
                 <div className="preview-header">
                   <div>
                     <span>Admin Global</span>
-                    <strong>Clientes ativos</strong>
+                    <strong>Gestão do SaaS</strong>
                   </div>
-                  <button type="button">Novo tenant</button>
+                  <span className="preview-cta">Novo tenant</span>
                 </div>
 
                 <div className="module-strip">
@@ -159,7 +239,7 @@ export function App() {
           </div>
         </div>
 
-        <aside className="login-panel" aria-label="Login do sistema">
+        <aside className="login-panel" id="login" aria-label="Login do sistema">
           <div className="login-card">
             <div className="login-card-header">
               <img src="/img/icon-sirvaos.svg" alt="" />
@@ -169,7 +249,7 @@ export function App() {
               </div>
             </div>
 
-            <form className="login-form">
+            <form className="login-form" method="post" onSubmit={handleLandingLogin}>
               <TextField
                 autoComplete="email"
                 icon={<Mail size={18} />}
@@ -201,9 +281,16 @@ export function App() {
                 <a href="/">Esqueci a senha</a>
               </div>
 
-              <Button type="submit" className="submit-button" icon={<ArrowRight size={18} />}>
+              <Button
+                type="submit"
+                className="submit-button"
+                icon={<ArrowRight size={18} />}
+                disabled={loginStatus === "loading"}
+              >
                 Acessar painel da igreja
               </Button>
+
+              {loginMessage ? <p className={`login-feedback ${loginStatus}`}>{loginMessage}</p> : null}
             </form>
 
             <div className="divider">
@@ -223,156 +310,200 @@ export function App() {
         </aside>
       </section>
 
-      <section className="client-dashboard" aria-labelledby="client-dashboard-title">
+      <section className="marketing-section" id="produto" aria-labelledby="produto-title">
         <div className="section-heading">
           <span className="eyebrow">
-            <Church size={18} />
-            Etapa 3 · Admin Cliente/Igreja
+            <MessageSquareText size={18} />
+            Operação centralizada
           </span>
           <div>
-            <h2 id="client-dashboard-title">Painel operacional da igreja</h2>
+            <h2 id="produto-title">Menos planilhas. Mais visão e governança.</h2>
             <p>
-              Primeira base do ambiente onde cada cliente gerencia seus membros,
-              módulos, calendário, notificações e identidade visual própria.
+              O SirvaOS organiza membros, ministérios, agenda e comunicados em um
+              fluxo único. A liderança enxerga o todo e cada ministério opera apenas o
+              que precisa.
             </p>
           </div>
         </div>
 
-        <div className="dashboard-shell">
-          <aside className="dashboard-sidebar" aria-label="Navegação do Admin Cliente">
-            <div className="client-brand">
-              <span>PI</span>
-              <div>
-                <strong>Primeira Igreja</strong>
-                <small>Tema do cliente aplicado</small>
-              </div>
+        <div className="marketing-grid" id="por-dentro">
+          <div className="marketing-copy" aria-label="Destaques do produto">
+            <div className="marketing-points">
+              <article className="marketing-point">
+                <div className="point-icon">
+                  <UsersRound size={18} />
+                </div>
+                <div>
+                  <strong>Cadastro unificado</strong>
+                  <p>Um membro, um registro. Vínculos e históricos conectam módulos sem duplicação.</p>
+                </div>
+              </article>
+              <article className="marketing-point">
+                <div className="point-icon">
+                  <CalendarCheck size={18} />
+                </div>
+                <div>
+                  <strong>Agenda e escalas</strong>
+                  <p>Eventos e compromissos dos ministérios alimentam um calendário central, sem conflitos.</p>
+                </div>
+              </article>
+              <article className="marketing-point">
+                <div className="point-icon">
+                  <BellRing size={18} />
+                </div>
+                <div>
+                  <strong>Comunicação segmentada</strong>
+                  <p>Comunicados e notificações chegam às pessoas certas, no tempo certo, por perfil e módulo.</p>
+                </div>
+              </article>
+              <article className="marketing-point">
+                <div className="point-icon">
+                  <Palette size={18} />
+                </div>
+                <div>
+                  <strong>White-label por igreja</strong>
+                  <p>Logo, cores e identidade visual do cliente sem afetar o Admin Global da plataforma.</p>
+                </div>
+              </article>
             </div>
+          </div>
 
-            <nav>
-              {[
-                { icon: Activity, label: "Visão geral", active: true },
-                { icon: UsersRound, label: "Membros" },
-                { icon: CalendarCheck, label: "Calendário" },
-                { icon: BellRing, label: "Notificações" },
-                { icon: Palette, label: "Identidade" },
-              ].map(({ icon: Icon, label, active }) => (
-                <button className={active ? "active" : undefined} key={label} type="button">
-                  <Icon size={18} />
-                  {label}
-                </button>
-              ))}
-            </nav>
-          </aside>
+          <div className="marketing-preview" aria-label="Prévia ilustrativa do painel" aria-hidden="true">
+            <div className="dashboard-shell">
+              <aside className="dashboard-sidebar">
+                <div className="client-brand">
+                  <span>PI</span>
+                  <div>
+                    <strong>Primeira Igreja</strong>
+                    <small>Painel administrativo</small>
+                  </div>
+                </div>
 
-          <div className="dashboard-content">
-            <header className="dashboard-header">
-              <div>
-                <span>Admin Cliente</span>
-                <h3>Resumo desta semana</h3>
+                <nav>
+                  {[
+                    { icon: Activity, label: "Visão geral", active: true },
+                    { icon: UsersRound, label: "Membros" },
+                    { icon: CalendarCheck, label: "Calendário" },
+                    { icon: BellRing, label: "Comunicados" },
+                    { icon: Palette, label: "Identidade" },
+                  ].map(({ icon: Icon, label, active }) => (
+                    <div className={active ? "preview-nav-item active" : "preview-nav-item"} key={label}>
+                      <Icon size={18} />
+                      {label}
+                    </div>
+                  ))}
+                </nav>
+              </aside>
+
+              <div className="dashboard-content">
+                <header className="dashboard-header">
+                  <div>
+                    <span>Admin da Igreja</span>
+                    <h3>Resumo operacional</h3>
+                  </div>
+                  <span className="preview-cta">Novo membro</span>
+                </header>
+
+                <div className="client-stats">
+                  {clientStats.map((stat) => (
+                    <article key={stat.label}>
+                      <span>{stat.label}</span>
+                      <strong>{stat.value}</strong>
+                      <small>{stat.trend}</small>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="dashboard-grid">
+                  <article className="panel members-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span>Membresia</span>
+                        <h4>Cadastro unificado</h4>
+                      </div>
+                      <span className="preview-link">Ver todos</span>
+                    </div>
+
+                    <div className="member-list">
+                      {memberRows.map((member) => (
+                        <div key={member.name} className="member-row">
+                          <span>{member.name.slice(0, 1)}</span>
+                          <div>
+                            <strong>{member.name}</strong>
+                            <small>
+                              {member.group} · {member.detail}
+                            </small>
+                          </div>
+                          <em className={member.status === "Ativo" ? "success" : "warning"}>{member.status}</em>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span>Calendário</span>
+                        <h4>Próximos eventos</h4>
+                      </div>
+                      <CalendarCheck size={20} />
+                    </div>
+
+                    <div className="event-list">
+                      {calendarItems.map((item) => (
+                        <div key={item.title}>
+                          <time>{item.date}</time>
+                          <div>
+                            <strong>{item.title}</strong>
+                            <small>{item.meta}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span>Comunicados</span>
+                        <h4>Avisos do dia</h4>
+                      </div>
+                      <BellRing size={20} />
+                    </div>
+
+                    <div className="notification-list">
+                      {notificationItems.map((item) => (
+                        <div key={item.title}>
+                          <div>
+                            <strong>{item.title}</strong>
+                            <small>{item.channel}</small>
+                          </div>
+                          <em>{item.status}</em>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="panel theme-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span>White-label</span>
+                        <h4>Identidade do cliente</h4>
+                      </div>
+                      <Palette size={20} />
+                    </div>
+
+                    <div className="theme-preview">
+                      <span className="church-logo">PI</span>
+                      <div className="theme-swatches" aria-label="Cores do cliente">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    </div>
+                  </article>
+                </div>
               </div>
-              <Button icon={<UserPlus size={18} />}>Novo membro</Button>
-            </header>
-
-            <div className="client-stats">
-              {clientStats.map((stat) => (
-                <article key={stat.label}>
-                  <span>{stat.label}</span>
-                  <strong>{stat.value}</strong>
-                  <small>{stat.trend}</small>
-                </article>
-              ))}
-            </div>
-
-            <div className="dashboard-grid">
-              <article className="panel members-panel">
-                <div className="panel-heading">
-                  <div>
-                    <span>Membresia</span>
-                    <h4>Cadastro unificado</h4>
-                  </div>
-                  <button type="button">Ver todos</button>
-                </div>
-
-                <div className="member-list">
-                  {memberRows.map((member) => (
-                    <div key={member.name} className="member-row">
-                      <span>{member.name.slice(0, 1)}</span>
-                      <div>
-                        <strong>{member.name}</strong>
-                        <small>
-                          {member.group} · {member.detail}
-                        </small>
-                      </div>
-                      <em className={member.status === "Ativo" ? "success" : "warning"}>
-                        {member.status}
-                      </em>
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="panel">
-                <div className="panel-heading">
-                  <div>
-                    <span>Calendário central</span>
-                    <h4>Próximos eventos</h4>
-                  </div>
-                  <CalendarCheck size={20} />
-                </div>
-
-                <div className="event-list">
-                  {calendarItems.map((item) => (
-                    <div key={item.title}>
-                      <time>{item.date}</time>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <small>{item.meta}</small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="panel">
-                <div className="panel-heading">
-                  <div>
-                    <span>Notificações</span>
-                    <h4>Comunicação básica</h4>
-                  </div>
-                  <BellRing size={20} />
-                </div>
-
-                <div className="notification-list">
-                  {notificationItems.map((item) => (
-                    <div key={item.title}>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <small>{item.channel}</small>
-                      </div>
-                      <em>{item.status}</em>
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="panel theme-panel">
-                <div className="panel-heading">
-                  <div>
-                    <span>White-label</span>
-                    <h4>Logo e cores do cliente</h4>
-                  </div>
-                  <Palette size={20} />
-                </div>
-
-                <div className="theme-preview">
-                  <span className="church-logo">PI</span>
-                  <div className="theme-swatches" aria-label="Cores do cliente">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                </div>
-              </article>
             </div>
           </div>
         </div>

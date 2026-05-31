@@ -33,27 +33,27 @@ export const tenantCards = [
 export const features = [
   {
     icon: LayoutDashboard,
-    title: "Admin Global",
-    text: "Gerencie clientes, planos e módulos em um só lugar.",
+    title: "Operação do SaaS",
+    text: "Admin Global para gerir tenants, planos, catálogo de módulos e auditoria da plataforma.",
   },
   {
     icon: Network,
-    title: "White-label",
-    text: "Cada igreja usa sua logo, cores e módulos contratados.",
+    title: "White-label por igreja",
+    text: "Marca do cliente aplicada no painel: logo, cores e módulos ativos sem conflitar com a plataforma.",
   },
   {
     icon: Bell,
-    title: "Notificações",
-    text: "Escalas, eventos e comunicados chegam às pessoas certas.",
+    title: "Comunicados segmentados",
+    text: "Envios por perfil e módulo para reduzir ruído e garantir que cada time veja o que importa.",
   },
   {
     icon: CalendarDays,
-    title: "Calendário único",
-    text: "A liderança enxerga a agenda consolidada da igreja.",
+    title: "Calendário integrado",
+    text: "Agenda central com eventos dos ministérios para evitar conflitos e dar visão à liderança.",
   },
   {
     icon: UsersRound,
-    title: "Membros",
-    text: "Cadastro central para todos os ministérios e módulos.",
+    title: "Membresia unificada",
+    text: "Cadastro único de pessoas com vínculo a ministérios, histórico e visão consolidada do tenant.",
   },
 ];

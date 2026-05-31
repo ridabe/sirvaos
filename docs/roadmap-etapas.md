@@ -60,7 +60,13 @@ Objetivo: garantir isolamento e estrutura real de SaaS.
 - Logs.
 
 Esta etapa pode andar junto com backend e banco.
-
+## Etapa 4b - listagens
+ - Criar lista de cargos Ex: Membro, Lider de ministerio, Admin, Pastor, Diácono, Presbítero, Funcionário, Missionário...etc
+ - Criar lista de Ministerios EX: Ministerio de Louvor, Ministerio de dança, Ministerio de interecessao,(Busque referencias em outras igrejas de tipos de ministerios existentes)
+ - Adicionar na base de dados para ficar disponivel para as areas de cadastro do sistema.
+ - O usuario podera criar adicionar novos dados a lista porem nao devera ser adicionado na lista do sistema, o que ele adiciona sera apenas para seu tenant.
+ - O usuario podera editar os dados que ele adicionou.
+ - ao caregar a lista para os usuarios, devera trazer a lista do sistema adicionado com os dados do seu tenant.
 ## Etapa 5 - Módulo de Membresia
 
 Objetivo: primeiro módulo funcional base.
@@ -69,7 +75,7 @@ Objetivo: primeiro módulo funcional base.
 - Status: ativo, inativo, visitante, em processo.
 - Dados pessoais.
 - Família/dependentes.
-- Cargos vinculados. (Criar lista de cargos/ministerios;Ex: Membro, Lider de ministerio, Admin, Pastor, Diácono, Presbítero, Funcionário, Missionário...etc )
+- Cargos vinculados. 
 - Histórico.
 - Filtros e busca.
 - Importação futura.

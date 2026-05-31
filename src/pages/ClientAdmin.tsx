@@ -469,6 +469,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   async function handleSignOut() {
+    if (demoMode) {
+      window.location.assign("/");
+      return;
+    }
+
     await supabase.auth.signOut();
     setClientData(null);
     setProfile(null);
@@ -792,7 +797,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
   if (!tenant || dataStatus === "error") {
     return (
-      <main className="client-admin-page">
+      <main>
         <section className="admin-auth-page">
           <div className="admin-auth-brand">
             <a className="brand-mark" href="/" aria-label="SirvaOS">
