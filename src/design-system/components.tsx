@@ -15,6 +15,7 @@ type ButtonProps = {
   className?: string;
   disabled?: boolean;
   icon?: ReactNode;
+  onClick?: () => void;
   type?: "button" | "submit";
   variant?: ButtonVariant;
 };
@@ -25,6 +26,7 @@ export function Button({
   className = "",
   disabled,
   icon,
+  onClick,
   type = "button",
   variant = "primary",
 }: ButtonProps) {
@@ -33,6 +35,7 @@ export function Button({
       aria-label={ariaLabel}
       className={`${buttonClassByVariant[variant]} ${className}`.trim()}
       disabled={disabled}
+      onClick={onClick}
       type={type}
     >
       {icon}

@@ -5,13 +5,16 @@ import {
   CheckCircle2,
   CircleDashed,
   Clock3,
+  Edit3,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
   Mail,
   PackageCheck,
+  Plus,
   Search,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -30,10 +33,17 @@ type TenantStatus = "active" | "suspended" | "configuring";
 
 type TenantRecord = {
   id: string;
+  plan_id: string | null;
   name: string;
   slug: string;
+  legal_name: string | null;
+  document_number: string | null;
+  contact_name: string | null;
   status: TenantStatus;
   contact_email: string | null;
+  contact_phone: string | null;
+  primary_color: string;
+  accent_color: string;
   created_at: string;
   plans: {
     name: string;
@@ -55,9 +65,31 @@ type AuditLogRecord = {
   created_at: string;
 };
 
+type PlanRecord = {
+  id: string;
+  name: string;
+  code: string;
+};
+
+type TenantFormState = {
+  id: string | null;
+  name: string;
+  slug: string;
+  legal_name: string;
+  document_number: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  plan_id: string;
+  status: TenantStatus;
+  primary_color: string;
+  accent_color: string;
+};
+
 type AdminDashboardData = {
   tenants: TenantRecord[];
   auditLogs: AuditLogRecord[];
+  plans: PlanRecord[];
   counts: {
     tenants: number;
     activeTenants: number;
@@ -76,6 +108,30 @@ const statusLabels: Record<TenantStatus, string> = {
   configuring: "Em configuração",
 };
 
+const emptyTenantForm: TenantFormState = {
+  id: null,
+  name: "",
+  slug: "",
+  legal_name: "",
+  document_number: "",
+  contact_name: "",
+  contact_email: "",
+  contact_phone: "",
+  plan_id: "",
+  status: "configuring",
+  primary_color: "#087C7A",
+  accent_color: "#00A7C4",
+};
+
+function createSlug(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function AdminGlobalAccess() {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -83,6 +139,10 @@ export function AdminGlobalAccess() {
   const [dataStatus, setDataStatus] = useState<LoadStatus>("idle");
   const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
+  const [isTenantFormOpen, setIsTenantFormOpen] = useState(false);
+  const [tenantSaveStatus, setTenantSaveStatus] = useState<LoginStatus>("idle");
+  const [tenantSaveMessage, setTenantSaveMessage] = useState("");
 
   const filteredTenants = useMemo(() => {
     if (!dashboardData) {
@@ -214,6 +274,7 @@ export function AdminGlobalAccess() {
     const [
       tenantsResult,
       auditLogsResult,
+      plansResult,
       tenantCount,
       activeTenants,
       suspendedTenants,
@@ -226,10 +287,17 @@ export function AdminGlobalAccess() {
         .select(
           `
             id,
+            plan_id,
             name,
             slug,
+            legal_name,
+            document_number,
+            contact_name,
             status,
             contact_email,
+            contact_phone,
+            primary_color,
+            accent_color,
             created_at,
             plans (name, code),
             tenant_modules (
@@ -247,6 +315,12 @@ export function AdminGlobalAccess() {
         .order("created_at", { ascending: false })
         .limit(5)
         .returns<AuditLogRecord[]>(),
+      supabase
+        .from("plans")
+        .select("id, name, code")
+        .eq("status", "active")
+        .order("sort_order", { ascending: true })
+        .returns<PlanRecord[]>(),
       getTableCount("tenants"),
       getTenantStatusCount("active"),
       getTenantStatusCount("suspended"),
@@ -255,7 +329,7 @@ export function AdminGlobalAccess() {
       getTableCount("platform_modules"),
     ]);
 
-    if (tenantsResult.error || auditLogsResult.error) {
+    if (tenantsResult.error || auditLogsResult.error || plansResult.error) {
       setDataStatus("error");
       return;
     }
@@ -263,6 +337,7 @@ export function AdminGlobalAccess() {
     setDashboardData({
       tenants: tenantsResult.data ?? [],
       auditLogs: auditLogsResult.data ?? [],
+      plans: plansResult.data ?? [],
       counts: {
         tenants: tenantCount,
         activeTenants,
@@ -273,6 +348,112 @@ export function AdminGlobalAccess() {
       },
     });
     setDataStatus("ready");
+  }
+
+  function openCreateTenantForm() {
+    setTenantForm(emptyTenantForm);
+    setTenantSaveStatus("idle");
+    setTenantSaveMessage("");
+    setIsTenantFormOpen(true);
+  }
+
+  function openEditTenantForm(tenant: TenantRecord) {
+    setTenantForm({
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+      legal_name: tenant.legal_name ?? "",
+      document_number: tenant.document_number ?? "",
+      contact_name: tenant.contact_name ?? "",
+      contact_email: tenant.contact_email ?? "",
+      contact_phone: tenant.contact_phone ?? "",
+      plan_id: tenant.plan_id ?? "",
+      status: tenant.status,
+      primary_color: tenant.primary_color,
+      accent_color: tenant.accent_color,
+    });
+    setTenantSaveStatus("idle");
+    setTenantSaveMessage("");
+    setIsTenantFormOpen(true);
+  }
+
+  function updateTenantForm(field: keyof TenantFormState, value: string) {
+    setTenantForm((current) => {
+      if (field === "name" && !current.id) {
+        return {
+          ...current,
+          name: value,
+          slug: current.slug ? current.slug : createSlug(value),
+        };
+      }
+
+      if (field === "slug") {
+        return {
+          ...current,
+          slug: createSlug(value),
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value,
+      };
+    });
+  }
+
+  async function handleTenantSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTenantSaveStatus("loading");
+    setTenantSaveMessage("");
+
+    const payload = {
+      name: tenantForm.name.trim(),
+      slug: createSlug(tenantForm.slug || tenantForm.name),
+      legal_name: tenantForm.legal_name.trim() || null,
+      document_number: tenantForm.document_number.trim() || null,
+      contact_name: tenantForm.contact_name.trim() || null,
+      contact_email: tenantForm.contact_email.trim() || null,
+      contact_phone: tenantForm.contact_phone.trim() || null,
+      plan_id: tenantForm.plan_id || null,
+      status: tenantForm.status,
+      primary_color: tenantForm.primary_color,
+      accent_color: tenantForm.accent_color,
+    };
+
+    if (!payload.name || !payload.slug) {
+      setTenantSaveStatus("error");
+      setTenantSaveMessage("Informe nome e slug do tenant.");
+      return;
+    }
+
+    const tenantResult = tenantForm.id
+      ? await supabase.from("tenants").update(payload).eq("id", tenantForm.id).select("id").single()
+      : await supabase.from("tenants").insert(payload).select("id").single();
+
+    if (tenantResult.error) {
+      setTenantSaveStatus("error");
+      setTenantSaveMessage("Não foi possível salvar o tenant. Verifique slug, permissões e dados.");
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    await supabase.from("audit_logs").insert({
+      tenant_id: tenantResult.data.id,
+      actor_user_id: userData.user?.id ?? null,
+      action: tenantForm.id ? "tenant.updated" : "tenant.created",
+      entity_type: "tenant",
+      entity_id: tenantResult.data.id,
+      metadata: {
+        name: payload.name,
+        status: payload.status,
+      },
+    });
+
+    setTenantSaveStatus("success");
+    setTenantSaveMessage(tenantForm.id ? "Tenant atualizado." : "Tenant criado.");
+    setIsTenantFormOpen(false);
+    setTenantForm(emptyTenantForm);
+    await loadDashboardData();
   }
 
   if (profile) {
@@ -316,7 +497,9 @@ export function AdminGlobalAccess() {
               <h1>Operação da plataforma</h1>
               <p>Clientes, planos e módulos controlados em uma visão central.</p>
             </div>
-            <Button icon={<Building2 size={18} />}>Novo tenant</Button>
+            <Button icon={<Plus size={18} />} onClick={openCreateTenantForm}>
+              Novo tenant
+            </Button>
           </header>
 
           {dataStatus === "loading" ? (
@@ -335,6 +518,167 @@ export function AdminGlobalAccess() {
 
           {dashboardData ? (
             <>
+              {isTenantFormOpen ? (
+                <section className="global-panel tenant-form-panel" aria-label="Cadastro de tenant">
+                  <div className="global-panel-heading">
+                    <div>
+                      <span>{tenantForm.id ? "Editar tenant" : "Novo tenant"}</span>
+                      <h2>{tenantForm.id ? tenantForm.name : "Cadastrar igreja cliente"}</h2>
+                    </div>
+                    <button
+                      className="panel-icon-button"
+                      type="button"
+                      aria-label="Fechar formulário"
+                      onClick={() => setIsTenantFormOpen(false)}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <form className="tenant-form" onSubmit={handleTenantSubmit}>
+                    <label>
+                      <span>Nome da igreja</span>
+                      <input
+                        value={tenantForm.name}
+                        onChange={(event) => updateTenantForm("name", event.target.value)}
+                        placeholder="Primeira Igreja"
+                      />
+                    </label>
+                    <label>
+                      <span>Slug</span>
+                      <input
+                        value={tenantForm.slug}
+                        onChange={(event) => updateTenantForm("slug", event.target.value)}
+                        placeholder="primeira-igreja"
+                      />
+                    </label>
+                    <label>
+                      <span>Razão social</span>
+                      <input
+                        value={tenantForm.legal_name}
+                        onChange={(event) => updateTenantForm("legal_name", event.target.value)}
+                        placeholder="Nome jurídico, se houver"
+                      />
+                    </label>
+                    <label>
+                      <span>Documento</span>
+                      <input
+                        value={tenantForm.document_number}
+                        onChange={(event) =>
+                          updateTenantForm("document_number", event.target.value)
+                        }
+                        placeholder="CNPJ ou documento"
+                      />
+                    </label>
+                    <label>
+                      <span>Contato</span>
+                      <input
+                        value={tenantForm.contact_name}
+                        onChange={(event) => updateTenantForm("contact_name", event.target.value)}
+                        placeholder="Responsável"
+                      />
+                    </label>
+                    <label>
+                      <span>E-mail</span>
+                      <input
+                        value={tenantForm.contact_email}
+                        onChange={(event) => updateTenantForm("contact_email", event.target.value)}
+                        placeholder="contato@igreja.org"
+                        type="email"
+                      />
+                    </label>
+                    <label>
+                      <span>Telefone</span>
+                      <input
+                        value={tenantForm.contact_phone}
+                        onChange={(event) => updateTenantForm("contact_phone", event.target.value)}
+                        placeholder="(00) 00000-0000"
+                      />
+                    </label>
+                    <label>
+                      <span>Plano</span>
+                      <select
+                        value={tenantForm.plan_id}
+                        onChange={(event) => updateTenantForm("plan_id", event.target.value)}
+                      >
+                        <option value="">Sem plano</option>
+                        {dashboardData.plans.map((plan) => (
+                          <option value={plan.id} key={plan.id}>
+                            {plan.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Status</span>
+                      <select
+                        value={tenantForm.status}
+                        onChange={(event) =>
+                          updateTenantForm("status", event.target.value as TenantStatus)
+                        }
+                      >
+                        <option value="configuring">Em configuração</option>
+                        <option value="active">Ativo</option>
+                        <option value="suspended">Suspenso</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Cor primária</span>
+                      <input
+                        value={tenantForm.primary_color}
+                        onChange={(event) => updateTenantForm("primary_color", event.target.value)}
+                        type="color"
+                      />
+                    </label>
+                    <label>
+                      <span>Cor de destaque</span>
+                      <input
+                        value={tenantForm.accent_color}
+                        onChange={(event) => updateTenantForm("accent_color", event.target.value)}
+                        type="color"
+                      />
+                    </label>
+
+                    <div className="tenant-theme-sample">
+                      <span
+                        style={{
+                          background: tenantForm.primary_color,
+                        }}
+                      />
+                      <span
+                        style={{
+                          background: tenantForm.accent_color,
+                        }}
+                      />
+                      <strong>{tenantForm.name || "Preview do tenant"}</strong>
+                    </div>
+
+                    {tenantSaveMessage ? (
+                      <p className={`login-feedback ${tenantSaveStatus}`}>
+                        {tenantSaveMessage}
+                      </p>
+                    ) : null}
+
+                    <div className="tenant-form-actions">
+                      <Button
+                        type="submit"
+                        disabled={tenantSaveStatus === "loading"}
+                        icon={<ArrowRight size={18} />}
+                      >
+                        {tenantSaveStatus === "loading" ? "Salvando..." : "Salvar tenant"}
+                      </Button>
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        onClick={() => setIsTenantFormOpen(false)}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              ) : null}
+
               <div className="global-stats">
                 <article>
                   <Building2 size={20} />
@@ -399,7 +743,16 @@ export function AdminGlobalAccess() {
                             {tenant.tenant_modules.filter((module) => module.status === "active")
                               .length || 0}
                           </span>
-                          <em className={tenant.status}>{statusLabels[tenant.status]}</em>
+                          <div className="tenant-row-actions">
+                            <em className={tenant.status}>{statusLabels[tenant.status]}</em>
+                            <button
+                              type="button"
+                              aria-label={`Editar ${tenant.name}`}
+                              onClick={() => openEditTenantForm(tenant)}
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                          </div>
                         </article>
                       ))
                     ) : (
