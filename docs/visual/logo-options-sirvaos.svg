@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1400" viewBox="0 0 1920 1400">
+  <defs>
+    <style>
+      .title { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 58px; font-weight: 800; fill: #162423; }
+      .subtitle { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 24px; font-weight: 400; fill: #6B7774; }
+      .card-title { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 28px; font-weight: 800; fill: #162423; }
+      .body { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 18px; font-weight: 400; fill: #6B7774; }
+      .word { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 42px; font-weight: 800; fill: #162423; letter-spacing: -0.2px; }
+      .tag { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 16px; font-weight: 600; fill: #087C7A; }
+      .primary { fill: #087C7A; }
+      .dark { fill: #075452; }
+      .accent { fill: #00A7C4; }
+      .soft { fill: #E0F6F4; }
+      .accent-soft { fill: #DDF7FC; }
+      .text { fill: #162423; }
+      .muted { fill: #6B7774; }
+      .border { stroke: #D9E3E0; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1400" fill="#FAFCFC"/>
+
+  <text x="80" y="105" class="title">SirvaOS — Opcoes de Logo</text>
+  <text x="80" y="150" class="subtitle">Conceitos modernos para uma plataforma que organiza a igreja para servir melhor.</text>
+
+  <!-- Card backgrounds -->
+  <g>
+    <rect x="80" y="220" width="540" height="330" rx="28" fill="#FFFFFF" stroke="#D9E3E0"/>
+    <rect x="690" y="220" width="540" height="330" rx="28" fill="#FFFFFF" stroke="#D9E3E0"/>
+    <rect x="1300" y="220" width="540" height="330" rx="28" fill="#FFFFFF" stroke="#D9E3E0"/>
+    <rect x="80" y="620" width="540" height="330" rx="28" fill="#FFFFFF" stroke="#D9E3E0"/>
+    <rect x="690" y="620" width="540" height="330" rx="28" fill="#FFFFFF" stroke="#D9E3E0"/>
+    <rect x="1300" y="620" width="540" height="330" rx="28" fill="#FFFFFF" stroke="#D9E3E0"/>
+  </g>
+
+  <!-- Option 01 -->
+  <g transform="translate(120 260)">
+    <text x="0" y="0" class="card-title">01. Fluxo do Servir</text>
+    <text x="0" y="32" class="body">Movimento, conexao e cuidado continuo.</text>
+    <g transform="translate(0 78)">
+      <rect x="0" y="0" width="130" height="130" rx="34" fill="#E0F6F4"/>
+      <path d="M89 35 C58 18 25 36 28 66 C31 91 66 89 65 65 C64 44 99 45 102 69 C105 100 69 119 36 101" class="line" stroke="#087C7A" stroke-width="14"/>
+      <circle cx="32" cy="66" r="8" fill="#00A7C4"/>
+      <circle cx="101" cy="68" r="8" fill="#00A7C4"/>
+    </g>
+    <text x="165" y="145" class="word">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="168" y="178" class="tag">organize para servir melhor</text>
+  </g>
+
+  <!-- Option 02 -->
+  <g transform="translate(730 260)">
+    <text x="0" y="0" class="card-title">02. Modulos Vivos</text>
+    <text x="0" y="32" class="body">Sistema modular, ministerios conectados.</text>
+    <g transform="translate(0 78)">
+      <rect x="0" y="0" width="130" height="130" rx="32" fill="#075452"/>
+      <rect x="28" y="26" width="34" height="34" rx="10" fill="#00A7C4"/>
+      <rect x="68" y="26" width="34" height="34" rx="10" fill="#E0F6F4"/>
+      <rect x="28" y="68" width="34" height="34" rx="10" fill="#E0F6F4"/>
+      <path d="M77 89 L101 65" class="line" stroke="#00A7C4" stroke-width="9"/>
+      <path d="M44 43 H86 M45 85 H74" class="line" stroke="#FFFFFF" stroke-width="5" opacity="0.65"/>
+    </g>
+    <text x="165" y="145" class="word">Sirva<tspan fill="#087C7A">OS</tspan></text>
+    <text x="168" y="178" class="tag">um sistema para cada ministerio</text>
+  </g>
+
+  <!-- Option 03 -->
+  <g transform="translate(1340 260)">
+    <text x="0" y="0" class="card-title">03. Ponte Ministerial</text>
+    <text x="0" y="32" class="body">Une lideranca, membros e ministerios.</text>
+    <g transform="translate(0 78)">
+      <circle cx="65" cy="65" r="62" fill="#DDF7FC"/>
+      <path d="M30 72 C42 44 88 44 100 72" class="line" stroke="#075452" stroke-width="12"/>
+      <path d="M30 72 C43 100 87 100 100 72" class="line" stroke="#087C7A" stroke-width="12"/>
+      <circle cx="29" cy="72" r="10" fill="#00A7C4"/>
+      <circle cx="100" cy="72" r="10" fill="#00A7C4"/>
+      <circle cx="65" cy="48" r="8" fill="#087C7A"/>
+      <circle cx="65" cy="96" r="8" fill="#087C7A"/>
+    </g>
+    <text x="165" y="145" class="word">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="168" y="178" class="tag">conecte para cuidar melhor</text>
+  </g>
+
+  <!-- Option 04 -->
+  <g transform="translate(120 660)">
+    <text x="0" y="0" class="card-title">04. Sinal de Ordem</text>
+    <text x="0" y="32" class="body">Clareza, gestao e confirmacao.</text>
+    <g transform="translate(0 78)">
+      <rect x="0" y="0" width="130" height="130" rx="65" fill="#E0F6F4"/>
+      <path d="M38 66 L58 86 L96 45" class="line" stroke="#087C7A" stroke-width="14"/>
+      <path d="M36 36 H94 M36 103 H94" class="line" stroke="#00A7C4" stroke-width="7" opacity="0.7"/>
+    </g>
+    <text x="165" y="145" class="word">Sirva<tspan fill="#087C7A">OS</tspan></text>
+    <text x="168" y="178" class="tag">tudo em ordem para servir</text>
+  </g>
+
+  <!-- Option 05 -->
+  <g transform="translate(730 660)">
+    <text x="0" y="0" class="card-title">05. Monograma S/OS</text>
+    <text x="0" y="32" class="body">Marca mais jovem, simples e memoravel.</text>
+    <g transform="translate(0 78)">
+      <rect x="0" y="0" width="130" height="130" rx="34" fill="#075452"/>
+      <path d="M85 35 C70 24 38 28 38 51 C38 75 91 59 91 87 C91 111 54 109 35 94" class="line" stroke="#FFFFFF" stroke-width="13"/>
+      <circle cx="94" cy="38" r="10" fill="#00A7C4"/>
+      <text x="75" y="105" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="900" fill="#00A7C4">OS</text>
+    </g>
+    <text x="165" y="145" class="word">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="168" y="178" class="tag">o sistema operacional do servir</text>
+  </g>
+
+  <!-- Option 06 -->
+  <g transform="translate(1340 660)">
+    <text x="0" y="0" class="card-title">06. Janela do Membro</text>
+    <text x="0" y="32" class="body">App, portal e acesso simples ao membro.</text>
+    <g transform="translate(0 78)">
+      <rect x="0" y="0" width="130" height="130" rx="32" fill="#E0F6F4"/>
+      <rect x="27" y="22" width="76" height="92" rx="18" fill="#FFFFFF" stroke="#087C7A" stroke-width="8"/>
+      <rect x="44" y="40" width="42" height="8" rx="4" fill="#00A7C4"/>
+      <rect x="44" y="60" width="42" height="8" rx="4" fill="#D9E3E0"/>
+      <rect x="44" y="80" width="28" height="8" rx="4" fill="#D9E3E0"/>
+      <circle cx="65" cy="101" r="5" fill="#087C7A"/>
+    </g>
+    <text x="165" y="145" class="word">Sirva<tspan fill="#087C7A">OS</tspan></text>
+    <text x="168" y="178" class="tag">a igreja na palma da mao</text>
+  </g>
+
+  <!-- Bottom recommendation -->
+  <g transform="translate(80 1040)">
+    <rect x="0" y="0" width="1760" height="250" rx="28" fill="#075452"/>
+    <text x="44" y="68" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#FFFFFF">Leitura recomendada</text>
+    <text x="44" y="112" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" fill="#CDEDEA">
+      As melhores direcoes para o SirvaOS sao 01, 02 e 05. Elas comunicam tecnologia, sistema e servico sem ficar com aparencia religiosa generica.
+    </text>
+    <text x="44" y="164" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" fill="#CDEDEA">
+      Para evoluir: escolher uma direcao, refinar proporcoes, testar em favicon, app icon, sidebar, tela de login e materiais comerciais.
+    </text>
+    <rect x="1320" y="58" width="330" height="96" rx="24" fill="#E0F6F4"/>
+    <text x="1360" y="118" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="36" font-weight="900" fill="#075452">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+  </g>
+</svg>

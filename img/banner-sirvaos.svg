@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="640" viewBox="0 0 1920 640">
+  <defs>
+    <style>
+      .word { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 132px; font-weight: 850; fill: #FFFFFF; letter-spacing: -1px; }
+      .headline { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 54px; font-weight: 800; fill: #FFFFFF; }
+      .sub { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 28px; font-weight: 500; fill: #CDEDEA; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect width="1920" height="640" fill="#075452"/>
+  <circle cx="1690" cy="120" r="260" fill="#087C7A" opacity="0.36"/>
+  <circle cx="1600" cy="540" r="360" fill="#00A7C4" opacity="0.12"/>
+  <g transform="translate(110 110)">
+    <rect x="0" y="0" width="240" height="240" rx="64" fill="#E0F6F4"/>
+    <path d="M165 63 C107 32 46 66 52 122 C58 169 122 165 120 120 C117 82 182 85 188 128 C194 185 128 220 67 187"
+          class="line" stroke="#087C7A" stroke-width="25"/>
+    <circle cx="52" cy="122" r="15" fill="#00A7C4"/>
+    <circle cx="188" cy="128" r="15" fill="#00A7C4"/>
+  </g>
+  <text x="400" y="228" class="word">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+  <text x="406" y="314" class="headline">organize para servir melhor</text>
+  <text x="408" y="370" class="sub">Gestao de igrejas, ministerios, membros, escalas e comunicacao em um so lugar.</text>
+  <g transform="translate(410 430)">
+    <rect x="0" y="0" width="210" height="58" rx="16" fill="#00A7C4"/>
+    <text x="28" y="38" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="800" fill="#FFFFFF">Admin Global</text>
+    <rect x="232" y="0" width="220" height="58" rx="16" fill="#E0F6F4"/>
+    <text x="260" y="38" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="800" fill="#075452">White-label</text>
+    <rect x="474" y="0" width="220" height="58" rx="16" fill="#DDF7FC"/>
+    <text x="502" y="38" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="800" fill="#075452">Apps mobile</text>
+  </g>
+</svg>

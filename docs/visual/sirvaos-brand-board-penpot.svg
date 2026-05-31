@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1400" viewBox="0 0 1920 1400">
+<rect x="0" y="0" width="1920" height="1400" rx="0" fill="#FAFCFC" stroke="none" stroke-width="1"/>
+<rect x="0" y="0" width="1920" height="260" rx="0" fill="#075452" stroke="none" stroke-width="1"/>
+<text x="80" y="105" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="64" font-weight="800" fill="#FFFFFF">SirvaOS</text>
+<text x="80" y="158" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="32" font-weight="600" fill="#DDF7FC">Design System - Brand Board inicial</text>
+<text x="80" y="204" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="400" fill="#CDEDEA">Paleta oficial Clear Digital, tipografia, tokens e componentes base para desenvolvimento.</text>
+<rect x="1560" y="62" width="180" height="120" rx="24" fill="none" stroke="#A6E8EA" stroke-width="2"/>
+<text x="1595" y="138" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#FFFFFF">Sirva</text>
+<text x="1688" y="138" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#00A7C4">OS</text>
+<text x="1578" y="172" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="400" fill="#CDEDEA">organize para servir melhor</text>
+<text x="80" y="330" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#162423">1. Paleta oficial</text>
+<rect x="80" y="370" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="102" y="394" width="96" height="96" rx="14" fill="#075452" stroke="#D9E3E0" stroke-width="1"/>
+<text x="118" y="450" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">#075452</text>
+<text x="220" y="428" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">brand.primary.dark</text>
+<text x="220" y="462" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#075452</text>
+<text x="220" y="494" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Sidebar, header global, hover</text>
+<rect x="520" y="370" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="542" y="394" width="96" height="96" rx="14" fill="#087C7A" stroke="#D9E3E0" stroke-width="1"/>
+<text x="558" y="450" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">#087C7A</text>
+<text x="660" y="428" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">brand.primary</text>
+<text x="660" y="462" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#087C7A</text>
+<text x="660" y="494" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Acoes principais e links ativos</text>
+<rect x="960" y="370" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="982" y="394" width="96" height="96" rx="14" fill="#E0F6F4" stroke="#D9E3E0" stroke-width="1"/>
+<text x="998" y="450" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#162423">#E0F6F4</text>
+<text x="1100" y="428" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">brand.primary.soft</text>
+<text x="1100" y="462" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#E0F6F4</text>
+<text x="1100" y="494" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Badges, areas sutis, backgrounds</text>
+<rect x="1400" y="370" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="1422" y="394" width="96" height="96" rx="14" fill="#00A7C4" stroke="#D9E3E0" stroke-width="1"/>
+<text x="1438" y="450" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">#00A7C4</text>
+<text x="1540" y="428" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">brand.accent</text>
+<text x="1540" y="462" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#00A7C4</text>
+<text x="1540" y="494" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Foco, graficos, destaque digital</text>
+<rect x="80" y="560" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="102" y="584" width="96" height="96" rx="14" fill="#DDF7FC" stroke="#D9E3E0" stroke-width="1"/>
+<text x="118" y="640" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#162423">#DDF7FC</text>
+<text x="220" y="618" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">brand.accent.soft</text>
+<text x="220" y="652" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#DDF7FC</text>
+<text x="220" y="684" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Callouts e feedback leve</text>
+<rect x="520" y="560" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="542" y="584" width="96" height="96" rx="14" fill="#162423" stroke="#D9E3E0" stroke-width="1"/>
+<text x="558" y="640" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">#162423</text>
+<text x="660" y="618" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">neutral.950</text>
+<text x="660" y="652" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#162423</text>
+<text x="660" y="684" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Texto principal e titulos</text>
+<rect x="960" y="560" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="982" y="584" width="96" height="96" rx="14" fill="#FAFCFC" stroke="#D9E3E0" stroke-width="1"/>
+<text x="998" y="640" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#162423">#FAFCFC</text>
+<text x="1100" y="618" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">neutral.50</text>
+<text x="1100" y="652" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#FAFCFC</text>
+<text x="1100" y="684" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Fundo geral da aplicacao</text>
+<rect x="1400" y="560" width="390" height="150" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="1422" y="584" width="96" height="96" rx="14" fill="#D9E3E0" stroke="#D9E3E0" stroke-width="1"/>
+<text x="1438" y="640" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#162423">#D9E3E0</text>
+<text x="1540" y="618" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">border</text>
+<text x="1540" y="652" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#087C7A">#D9E3E0</text>
+<text x="1540" y="684" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#6B7774">Bordas, divisores e tabelas</text>
+<text x="80" y="790" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#162423">2. Tipografia</text>
+<rect x="80" y="830" width="820" height="220" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<text x="116" y="888" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#162423">Fonte principal: Inter</text>
+<text x="116" y="936" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="400" fill="#6B7774">Fallback: Segoe UI, Arial, sans-serif</text>
+<text x="116" y="1000" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="42" font-weight="800" fill="#087C7A">Aa Bb Cc Dd 1234567890</text>
+<text x="116" y="1032" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#6B7774">Use Inter para painel web, app mobile, dashboards, tabelas e formularios.</text>
+<text x="980" y="790" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#162423">3. Componentes base</text>
+<rect x="980" y="830" width="820" height="390" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="1020" y="880" width="190" height="54" rx="10" fill="#087C7A" stroke="none" stroke-width="1"/>
+<text x="1052" y="914" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">Botao primario</text>
+<rect x="1230" y="880" width="180" height="54" rx="10" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<text x="1264" y="914" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#162423">Secundario</text>
+<rect x="1430" y="880" width="150" height="54" rx="10" fill="#E0F6F4" stroke="none" stroke-width="1"/>
+<text x="1460" y="914" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#075452">Badge</text>
+<rect x="1020" y="970" width="340" height="58" rx="10" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<text x="1044" y="1006" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#6B7774">Campo de formulario</text>
+<rect x="1388" y="970" width="190" height="58" rx="10" fill="#DDF7FC" stroke="none" stroke-width="1"/>
+<text x="1418" y="1006" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#3578A8">Informativo</text>
+<rect x="1020" y="1070" width="720" height="92" rx="12" fill="#FAFCFC" stroke="#D9E3E0" stroke-width="1"/>
+<text x="1048" y="1110" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#162423">Tenant ativo</text>
+<text x="1048" y="1142" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17" font-weight="400" fill="#6B7774">Primeira Igreja - modulos: Membresia, Louvor, Financeiro</text>
+<rect x="1588" y="1090" width="110" height="34" rx="17" fill="#E0F6F4" stroke="none" stroke-width="1"/>
+<text x="1618" y="1113" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#075452">Online</text>
+<text x="80" y="1130" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="800" fill="#162423">4. Aplicacao visual em produto</text>
+<rect x="80" y="1170" width="820" height="160" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="110" y="1200" width="150" height="100" rx="14" fill="#075452" stroke="none" stroke-width="1"/>
+<text x="138" y="1240" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" fill="#FFFFFF">Admin</text>
+<text x="138" y="1268" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#DDF7FC">Global</text>
+<text x="300" y="1228" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800" fill="#162423">Admin Global SirvaOS</text>
+<text x="300" y="1268" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="400" fill="#6B7774">Identidade propria SirvaOS para gestao de clientes, planos, modulos e suporte.</text>
+<rect x="980" y="1170" width="820" height="160" rx="18" fill="#FFFFFF" stroke="#D9E3E0" stroke-width="1"/>
+<rect x="1010" y="1200" width="150" height="100" rx="14" fill="#E0F6F4" stroke="none" stroke-width="1"/>
+<text x="1036" y="1240" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" fill="#075452">Cliente</text>
+<text x="1036" y="1268" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#087C7A">White-label</text>
+<text x="1200" y="1228" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800" fill="#162423">Admin da Igreja</text>
+<text x="1200" y="1268" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="400" fill="#6B7774">Logo e cores do cliente aplicados sobre a estrutura visual do SirvaOS.</text>
+<text x="80" y="1360" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#6B7774">Tokens principais: --color-brand-primary #087C7A | --color-brand-primary-dark #075452 | --color-brand-accent #00A7C4 | --color-neutral-950 #162423 | --color-neutral-50 #FAFCFC</text>
+</svg>
