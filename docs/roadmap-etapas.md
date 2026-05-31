@@ -69,7 +69,7 @@ Objetivo: primeiro módulo funcional base.
 - Status: ativo, inativo, visitante, em processo.
 - Dados pessoais.
 - Família/dependentes.
-- Ministérios vinculados.
+- Cargos vinculados. (Criar lista de cargos/ministerios;Ex: Membro, Lider de ministerio, Admin, Pastor, Diácono, Presbítero, Funcionário, Missionário...etc )
 - Histórico.
 - Filtros e busca.
 - Importação futura.
@@ -88,26 +88,8 @@ Objetivo: primeiro módulo operacional com escala.
 
 Este módulo valida o fluxo operacional real.
 
-## Etapa 7 - App Mobile / Portal do Membro
 
-Objetivo: entregar valor para membros.
-
-Com React Native + Expo:
-
-- Login.
-- Seleção/acesso ao tenant.
-- Home do membro.
-- Meus módulos.
-- Minhas escalas.
-- Eventos.
-- Comunicados.
-- Perfil.
-- Confirmação de presença.
-- Push notifications.
-
-Começa como app único modular. A arquitetura deve ficar preparada para separar apps por módulo depois.
-
-## Etapa 8 - Financeiro, Kids e Escola Bíblica
+## Etapa 7 - Financeiro, Kids e Escola Bíblica
 
 Objetivo: expandir os módulos prioritários.
 
@@ -135,7 +117,7 @@ Objetivo: expandir os módulos prioritários.
 - Frequência.
 - Materiais.
 
-## Etapa 9 - Relatórios e Auditoria
+## Etapa 8 - Relatórios e Auditoria
 
 Objetivo: maturidade administrativa.
 
@@ -146,20 +128,33 @@ Objetivo: maturidade administrativa.
 - Auditoria de dados sensíveis.
 - Métricas de engajamento.
 
-## Etapa 10 - Produção e Escala
+## Etapa 9 - Produção e Escala
 
 Objetivo: preparar para clientes reais.
 
-- Deploy.
-- CI/CD.
-- Backup.
-- Observabilidade.
 - Monitoramento de erros.
 - LGPD.
 - Termos/política por tenant.
-- Domínio/subdomínio.
-- Testes automatizados.
 - Documentação técnica.
+
+## Etapa 10 - App Mobile / Portal do Membro
+
+Objetivo: entregar valor para membros.
+
+Com React Native + Expo:
+
+- Login.
+- Seleção/acesso ao tenant.
+- Home do membro.
+- Meus módulos.
+- Minhas escalas.
+- Eventos.
+- Comunicados.
+- Perfil.
+- Confirmação de presença.
+- Push notifications.
+
+Começa como app único modular. A arquitetura deve ficar preparada para separar apps por módulo depois.
 
 ## Primeira Entrega Real
 
