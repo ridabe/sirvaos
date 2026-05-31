@@ -185,7 +185,7 @@ Objetivo: preparar para clientes reais.
 ### Concluído ou iniciado
 
 - Etapa 1 está parcialmente concluída: documentação, identidade visual, assets de marca, base React/Vite, design system inicial, tela inicial/login e push para o repositório.
-- Etapa 2 está em andamento: existe uma prévia visual do Admin Global com cards de tenants, a rota exclusiva `/admin-global` já usa Supabase Auth com validação de papel global, a base Supabase inicial foi criada, o primeiro dashboard interno com métricas, auditoria e listagem de tenants já consulta dados reais do Supabase, e o cadastro/edição básico de tenant já salva no Supabase.
+- Etapa 2 está em andamento: existe uma prévia visual do Admin Global com cards de tenants, a rota exclusiva `/admin-global` já usa Supabase Auth com validação de papel global, a base Supabase inicial foi criada, o primeiro dashboard interno com métricas, auditoria e listagem de tenants já consulta dados reais do Supabase, o cadastro/edição básico de tenant já salva no Supabase, e a ativação de módulos por tenant já persiste em `tenant_modules`.
 - Etapa 3 foi iniciada antes da Etapa 2 completa: existe uma primeira fundação visual do Admin Cliente/Igreja com dashboard, membros, calendário, notificações e preview white-label.
 
 ### Próxima etapa lógica
@@ -198,6 +198,6 @@ A próxima etapa continua sendo a **Etapa 2 - Admin Global SirvaOS**, agora avan
 2. Refinar dashboard global com métricas SaaS reais adicionais.
 3. Evoluir listagem de tenants/clientes usando Supabase.
 4. Melhorar cadastro/edição de tenant com validações e feedbacks detalhados.
-5. Criar tela de módulos ativos por tenant.
+5. Melhorar ativação de módulos por tenant com filtros, resumo e validações.
 6. Criar gestão de planos.
 7. Criar gestão do catálogo global de módulos.

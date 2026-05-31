@@ -904,7 +904,8 @@ h1 {
   padding: 20px;
 }
 
-.tenant-form-panel {
+.tenant-form-panel,
+.tenant-modules-panel {
   margin-top: 24px;
 }
 
@@ -1164,6 +1165,62 @@ h1 {
   background: var(--color-white);
   border: 1px solid var(--color-neutral-200);
   border-radius: 10px;
+}
+
+.tenant-modules-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.tenant-module-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 12px;
+}
+
+.tenant-module-card span,
+.tenant-module-card strong,
+.tenant-module-card small {
+  display: block;
+}
+
+.tenant-module-card span {
+  font-size: 0.78rem;
+  font-weight: 850;
+  color: var(--color-brand-primary);
+}
+
+.tenant-module-card strong {
+  margin-top: 5px;
+}
+
+.tenant-module-card small {
+  margin-top: 4px;
+  line-height: 1.35;
+  color: var(--color-neutral-500);
+}
+
+.tenant-module-card select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  color: var(--color-neutral-950);
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  outline: 0;
+}
+
+.tenant-modules-form .login-feedback,
+.tenant-modules-form .tenant-form-actions {
+  grid-column: 1 / -1;
 }
 
 .client-dashboard {
@@ -1607,7 +1664,8 @@ h1 {
   .client-stats,
   .dashboard-grid,
   .global-stats,
-  .tenant-form {
+  .tenant-form,
+  .tenant-modules-form {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1708,7 +1766,9 @@ h1 {
   .global-admin-sidebar nav,
   .global-stats,
   .tenant-table-row,
-  .tenant-form {
+  .tenant-form,
+  .tenant-modules-form,
+  .tenant-module-card {
     grid-template-columns: 1fr;
   }
 

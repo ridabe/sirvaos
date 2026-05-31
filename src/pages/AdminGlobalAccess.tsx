@@ -13,6 +13,7 @@ import {
   PackageCheck,
   Plus,
   Search,
+  Settings2,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ type GlobalProfile = {
 };
 
 type TenantStatus = "active" | "suspended" | "configuring";
+type TenantModuleStatus = "active" | "inactive" | "suspended" | "configuring";
 
 type TenantRecord = {
   id: string;
@@ -50,7 +52,8 @@ type TenantRecord = {
     code: string;
   } | null;
   tenant_modules: Array<{
-    status: "active" | "inactive" | "suspended" | "configuring";
+    module_id: string;
+    status: TenantModuleStatus;
     platform_modules: {
       name: string;
       code: string;
@@ -71,6 +74,14 @@ type PlanRecord = {
   code: string;
 };
 
+type PlatformModuleRecord = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  status: "active" | "beta" | "deprecated";
+};
+
 type TenantFormState = {
   id: string | null;
   name: string;
@@ -86,10 +97,13 @@ type TenantFormState = {
   accent_color: string;
 };
 
+type ModuleConfigState = Record<string, TenantModuleStatus>;
+
 type AdminDashboardData = {
   tenants: TenantRecord[];
   auditLogs: AuditLogRecord[];
   plans: PlanRecord[];
+  modules: PlatformModuleRecord[];
   counts: {
     tenants: number;
     activeTenants: number;
@@ -143,6 +157,18 @@ export function AdminGlobalAccess() {
   const [isTenantFormOpen, setIsTenantFormOpen] = useState(false);
   const [tenantSaveStatus, setTenantSaveStatus] = useState<LoginStatus>("idle");
   const [tenantSaveMessage, setTenantSaveMessage] = useState("");
+  const [selectedModulesTenantId, setSelectedModulesTenantId] = useState<string | null>(null);
+  const [moduleConfig, setModuleConfig] = useState<ModuleConfigState>({});
+  const [moduleSaveStatus, setModuleSaveStatus] = useState<LoginStatus>("idle");
+  const [moduleSaveMessage, setModuleSaveMessage] = useState("");
+
+  const selectedModulesTenant = useMemo(() => {
+    if (!dashboardData || !selectedModulesTenantId) {
+      return null;
+    }
+
+    return dashboardData.tenants.find((tenant) => tenant.id === selectedModulesTenantId) ?? null;
+  }, [dashboardData, selectedModulesTenantId]);
 
   const filteredTenants = useMemo(() => {
     if (!dashboardData) {
@@ -275,6 +301,7 @@ export function AdminGlobalAccess() {
       tenantsResult,
       auditLogsResult,
       plansResult,
+      modulesResult,
       tenantCount,
       activeTenants,
       suspendedTenants,
@@ -301,6 +328,7 @@ export function AdminGlobalAccess() {
             created_at,
             plans (name, code),
             tenant_modules (
+              module_id,
               status,
               platform_modules (name, code)
             )
@@ -321,6 +349,11 @@ export function AdminGlobalAccess() {
         .eq("status", "active")
         .order("sort_order", { ascending: true })
         .returns<PlanRecord[]>(),
+      supabase
+        .from("platform_modules")
+        .select("id, code, name, description, status")
+        .order("sort_order", { ascending: true })
+        .returns<PlatformModuleRecord[]>(),
       getTableCount("tenants"),
       getTenantStatusCount("active"),
       getTenantStatusCount("suspended"),
@@ -329,7 +362,7 @@ export function AdminGlobalAccess() {
       getTableCount("platform_modules"),
     ]);
 
-    if (tenantsResult.error || auditLogsResult.error || plansResult.error) {
+    if (tenantsResult.error || auditLogsResult.error || plansResult.error || modulesResult.error) {
       setDataStatus("error");
       return;
     }
@@ -338,6 +371,7 @@ export function AdminGlobalAccess() {
       tenants: tenantsResult.data ?? [],
       auditLogs: auditLogsResult.data ?? [],
       plans: plansResult.data ?? [],
+      modules: modulesResult.data ?? [],
       counts: {
         tenants: tenantCount,
         activeTenants,
@@ -453,6 +487,76 @@ export function AdminGlobalAccess() {
     setTenantSaveMessage(tenantForm.id ? "Tenant atualizado." : "Tenant criado.");
     setIsTenantFormOpen(false);
     setTenantForm(emptyTenantForm);
+    await loadDashboardData();
+  }
+
+  function openModulesPanel(tenant: TenantRecord) {
+    const currentConfig = tenant.tenant_modules.reduce<ModuleConfigState>((config, module) => {
+      config[module.module_id] = module.status;
+      return config;
+    }, {});
+
+    setSelectedModulesTenantId(tenant.id);
+    setModuleConfig(currentConfig);
+    setModuleSaveStatus("idle");
+    setModuleSaveMessage("");
+  }
+
+  function updateModuleStatus(moduleId: string, status: TenantModuleStatus) {
+    setModuleConfig((current) => ({
+      ...current,
+      [moduleId]: status,
+    }));
+  }
+
+  async function handleModulesSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedModulesTenant || !dashboardData) {
+      return;
+    }
+
+    setModuleSaveStatus("loading");
+    setModuleSaveMessage("");
+
+    const now = new Date().toISOString();
+    const rows = dashboardData.modules.map((module) => {
+      const status = moduleConfig[module.id] ?? "inactive";
+
+      return {
+        tenant_id: selectedModulesTenant.id,
+        module_id: module.id,
+        status,
+        enabled_at: status === "active" ? now : null,
+        configured_at: status === "configuring" || status === "active" ? now : null,
+      };
+    });
+
+    const { error } = await supabase.from("tenant_modules").upsert(rows, {
+      onConflict: "tenant_id,module_id",
+    });
+
+    if (error) {
+      setModuleSaveStatus("error");
+      setModuleSaveMessage("Não foi possível salvar os módulos deste tenant.");
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    await supabase.from("audit_logs").insert({
+      tenant_id: selectedModulesTenant.id,
+      actor_user_id: userData.user?.id ?? null,
+      action: "tenant.modules.updated",
+      entity_type: "tenant_modules",
+      entity_id: selectedModulesTenant.id,
+      metadata: {
+        tenant: selectedModulesTenant.name,
+        active_modules: rows.filter((row) => row.status === "active").length,
+      },
+    });
+
+    setModuleSaveStatus("success");
+    setModuleSaveMessage("Módulos atualizados.");
     await loadDashboardData();
   }
 
@@ -679,6 +783,65 @@ export function AdminGlobalAccess() {
                 </section>
               ) : null}
 
+              {selectedModulesTenant ? (
+                <section
+                  className="global-panel tenant-modules-panel"
+                  aria-label="Ativação de módulos por tenant"
+                >
+                  <div className="global-panel-heading">
+                    <div>
+                      <span>Módulos por tenant</span>
+                      <h2>{selectedModulesTenant.name}</h2>
+                    </div>
+                    <button
+                      className="panel-icon-button"
+                      type="button"
+                      aria-label="Fechar módulos"
+                      onClick={() => setSelectedModulesTenantId(null)}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <form className="tenant-modules-form" onSubmit={handleModulesSubmit}>
+                    {dashboardData.modules.map((module) => (
+                      <article key={module.id} className="tenant-module-card">
+                        <div>
+                          <span>{module.status === "beta" ? "Beta" : "Catálogo"}</span>
+                          <strong>{module.name}</strong>
+                          <small>{module.description ?? module.code}</small>
+                        </div>
+                        <select
+                          value={moduleConfig[module.id] ?? "inactive"}
+                          onChange={(event) =>
+                            updateModuleStatus(module.id, event.target.value as TenantModuleStatus)
+                          }
+                        >
+                          <option value="inactive">Inativo</option>
+                          <option value="configuring">Em configuração</option>
+                          <option value="active">Ativo</option>
+                          <option value="suspended">Suspenso</option>
+                        </select>
+                      </article>
+                    ))}
+
+                    {moduleSaveMessage ? (
+                      <p className={`login-feedback ${moduleSaveStatus}`}>{moduleSaveMessage}</p>
+                    ) : null}
+
+                    <div className="tenant-form-actions">
+                      <Button
+                        type="submit"
+                        disabled={moduleSaveStatus === "loading"}
+                        icon={<ArrowRight size={18} />}
+                      >
+                        {moduleSaveStatus === "loading" ? "Salvando..." : "Salvar módulos"}
+                      </Button>
+                    </div>
+                  </form>
+                </section>
+              ) : null}
+
               <div className="global-stats">
                 <article>
                   <Building2 size={20} />
@@ -745,6 +908,13 @@ export function AdminGlobalAccess() {
                           </span>
                           <div className="tenant-row-actions">
                             <em className={tenant.status}>{statusLabels[tenant.status]}</em>
+                            <button
+                              type="button"
+                              aria-label={`Configurar módulos de ${tenant.name}`}
+                              onClick={() => openModulesPanel(tenant)}
+                            >
+                              <Settings2 size={16} />
+                            </button>
                             <button
                               type="button"
                               aria-label={`Editar ${tenant.name}`}
