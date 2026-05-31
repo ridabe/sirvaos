@@ -113,7 +113,7 @@ type ThemeFormState = {
 
 type UserEditState = {
   full_name: string | null;
-  tenant_role: TenantRole | null;
+  tenant_role: TenantRole;
   status: "active" | "invited" | "suspended";
 };
 
@@ -412,7 +412,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return null;
     }
 
-    const modules = (modulesResult.data ?? []).map((item) => item.platform_modules) as TenantModuleRecord[];
+    const modules = (modulesResult.data ?? [])
+      .flatMap((item) => {
+        const embedded = (item as { platform_modules?: unknown }).platform_modules;
+        if (!embedded) {
+          return [];
+        }
+        return Array.isArray(embedded) ? (embedded as TenantModuleRecord[]) : ([embedded] as TenantModuleRecord[]);
+      })
+      .filter((module): module is TenantModuleRecord => Boolean(module?.id && module?.code));
 
     setClientData({
       profile: currentProfile,
@@ -1201,7 +1209,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       </div>
                       <div className="user-edit-row">
                         <select
-                          value={edit.tenant_role}
+                          value={edit.tenant_role ?? "member"}
                           onChange={(event) => handleUserFieldChange(user.id, "tenant_role", event.target.value)}
                         >
                           <option value="owner">Owner</option>
