@@ -96,6 +96,12 @@ type TenantModuleRecord = {
   status: "active" | "beta" | "deprecated";
 };
 
+type ModuleAdminAccessRecord = {
+  module_id: string;
+  profile_id: string | null;
+  member_id: string | null;
+};
+
 type CatalogItemRecord = {
   id: string;
   tenant_id: string | null;
@@ -164,6 +170,8 @@ type ClientDashboardData = {
   announcements: AnnouncementRecord[];
   users: TenantUserRecord[];
   modules: TenantModuleRecord[];
+  moduleAdminModuleIdsByProfileId: Record<string, string[]>;
+  moduleAdminModuleIdsByMemberId: Record<string, string[]>;
   catalogRoles: CatalogItemRecord[];
   catalogMinistries: CatalogItemRecord[];
 };
@@ -184,6 +192,7 @@ type MemberFormState = {
   notes: string;
   roleIds: string[];
   ministries: Array<{ ministry_id: string; is_admin: boolean }>;
+  moduleAdminModuleIds: string[];
 };
 
 type FamilyFormState = {
@@ -208,6 +217,7 @@ type UserEditState = {
   full_name: string | null;
   tenant_role: TenantRole;
   status: "active" | "invited" | "suspended";
+  moduleAdminModuleIds: string[];
 };
 
 const emptyMemberForm: MemberFormState = {
@@ -226,6 +236,7 @@ const emptyMemberForm: MemberFormState = {
   tenant_id: "",
   roleIds: [],
   ministries: [],
+  moduleAdminModuleIds: [],
 };
 
 const emptyFamilyForm: FamilyFormState = {
@@ -394,6 +405,12 @@ const sampleClientDashboardData: ClientDashboardData = {
       status: "beta",
     },
   ],
+  moduleAdminModuleIdsByProfileId: {
+    "user-1": ["module-1", "module-2"],
+  },
+  moduleAdminModuleIdsByMemberId: {
+    "member-1": ["module-1"],
+  },
   catalogRoles: [
     { id: "role-sys-1", tenant_id: null, name: "Membro" },
     { id: "role-sys-2", tenant_id: null, name: "Líder de ministério" },
@@ -418,6 +435,17 @@ const clientTabs = [
 ] as const;
 
 type ClientTab = (typeof clientTabs)[number]["key"];
+
+const defaultClientTabs = new Set<ClientTab>(["overview"]);
+
+const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
+  members: "members",
+  families: "members",
+  events: "calendar",
+  notices: "announcements",
+};
+
+const tenantAdminOnlyTabs = new Set<ClientTab>(["lists", "theme", "users"]);
 
 type ClientAdminProps = {
   demoMode?: boolean;
@@ -482,6 +510,14 @@ function pickReadableTextColor(backgroundHex: string) {
   return luminance > 0.58 ? "#162423" : "#ffffff";
 }
 
+function normalizePermissionLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
   if (!storedLogoUrl) {
     return null;
@@ -510,6 +546,26 @@ function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
   } catch {
     return match[1];
   }
+}
+
+function getTenantLogoPublicUrl(storedLogoUrl: string | null | undefined, tenantId: string) {
+  const rawLogo = storedLogoUrl?.trim() ?? "";
+  if (!rawLogo) {
+    return null;
+  }
+
+  if (rawLogo.startsWith("/") || rawLogo.startsWith("data:")) {
+    return rawLogo;
+  }
+
+  const objectKey = getTenantLogoObjectKey(rawLogo);
+  if (!objectKey && rawLogo.startsWith("http")) {
+    return rawLogo;
+  }
+
+  const resolvedObjectKey = objectKey ?? `${tenantId}/logo`;
+  const { data } = supabase.storage.from("tenant-logos").getPublicUrl(resolvedObjectKey);
+  return data.publicUrl ? `${data.publicUrl}?v=${encodeURIComponent(rawLogo)}` : null;
 }
 
 export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
@@ -577,10 +633,73 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     const memberships = clientData.memberMinistriesByMemberId[profile.member_id] ?? [];
-    return memberships.some((item) => item.is_admin && item.name.toLowerCase().startsWith("secretaria"));
+    const hasSecretariaMinistryAccess = memberships.some(
+      (item) => item.is_admin && normalizePermissionLabel(item.name).startsWith("secretari"),
+    );
+
+    const roleIds = clientData.memberRoleIdsByMemberId[profile.member_id] ?? [];
+    const hasSecretaryRole = roleIds.some((roleId) => {
+      const role = clientData.catalogRoles.find((item) => item.id === roleId);
+      return role ? normalizePermissionLabel(role.name).startsWith("secretari") : false;
+    });
+
+    return hasSecretariaMinistryAccess || hasSecretaryRole;
   }, [clientData, profile?.member_id]);
 
-  const canManageMembers = isTenantAdmin || isSecretariaAdmin;
+  const activeModuleIdByCode = useMemo(() => {
+    const modules = clientData?.modules ?? [];
+    return modules.reduce<Record<string, string>>((acc, item) => {
+      acc[item.code] = item.id;
+      return acc;
+    }, {});
+  }, [clientData?.modules]);
+
+  const currentUserModuleAdminIds = useMemo(() => {
+    if (!profile || !clientData) {
+      return [];
+    }
+
+    const directAccess = clientData.moduleAdminModuleIdsByProfileId[profile.id] ?? [];
+    const memberAccess = profile.member_id ? clientData.moduleAdminModuleIdsByMemberId[profile.member_id] ?? [] : [];
+    return Array.from(new Set([...directAccess, ...memberAccess]));
+  }, [clientData, profile]);
+
+  const canManageModuleCode = (moduleCode: string) => {
+    if (isTenantAdmin) {
+      return true;
+    }
+
+    const moduleId = activeModuleIdByCode[moduleCode];
+    return Boolean(moduleId && currentUserModuleAdminIds.includes(moduleId));
+  };
+
+  const canManageMembershipModule = canManageModuleCode("members");
+  const canManageMembers = isTenantAdmin || isSecretariaAdmin || canManageMembershipModule;
+  const canManageEvents = canManageModuleCode("calendar");
+  const canManageAnnouncements = canManageModuleCode("announcements");
+
+  const visibleClientTabs = useMemo(() => {
+    if (isTenantAdmin) {
+      return clientTabs;
+    }
+
+    return clientTabs.filter((tab) => {
+      if (defaultClientTabs.has(tab.key)) {
+        return true;
+      }
+
+      if ((tab.key === "members" || tab.key === "families") && canManageMembers) {
+        return true;
+      }
+
+      if (tenantAdminOnlyTabs.has(tab.key)) {
+        return false;
+      }
+
+      const moduleCode = clientTabModuleCode[tab.key];
+      return Boolean(moduleCode && canManageModuleCode(moduleCode));
+    });
+  }, [activeModuleIdByCode, canManageMembers, currentUserModuleAdminIds, isTenantAdmin]);
 
   const catalogRoleNameById = useMemo(() => {
     const items = clientData?.catalogRoles ?? [];
@@ -655,8 +774,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     const primary = normalizeHexColor(tenant.primary_color, "#087c7a");
     const accent = normalizeHexColor(tenant.accent_color, "#00a7c4");
     const primaryDark = darkenHex(primary, 0.32);
+    const primaryDarker = darkenHex(primary, 0.48);
     const primarySoft = lightenHex(primary, 0.86);
+    const primaryWash = lightenHex(primary, 0.94);
     const accentSoft = lightenHex(accent, 0.86);
+    const accentWash = lightenHex(accent, 0.94);
 
     const headerBg = normalizeHexColor(tenant.header_color || primary, primary);
     const sidebarBg = normalizeHexColor(tenant.sidebar_color || primary, primaryDark);
@@ -677,6 +799,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     root.style.setProperty("--color-brand-accent-soft", accentSoft);
     root.style.setProperty("--color-brand-primary-rgb", primaryRgb.join(", "));
     root.style.setProperty("--color-brand-accent-rgb", accentRgb.join(", "));
+    root.style.setProperty("--tenant-page-bg", `linear-gradient(180deg, ${primaryWash}, ${accentWash} 42%, #f7faf9)`);
+    root.style.setProperty("--tenant-card-border", `rgba(${primaryRgb.join(", ")}, 0.16)`);
+    root.style.setProperty("--tenant-accent-border", `rgba(${accentRgb.join(", ")}, 0.36)`);
+    root.style.setProperty("--tenant-accent-ring", `rgba(${accentRgb.join(", ")}, 0.18)`);
+    root.style.setProperty("--tenant-primary-darker", primaryDarker);
 
     root.style.setProperty("--tenant-header-bg", headerBg);
     root.style.setProperty("--tenant-header-fg", headerFg);
@@ -686,10 +813,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     root.style.setProperty("--tenant-footer-fg", footerFg);
 
     const isSidebarTextWhite = sidebarFg.toLowerCase() === "#ffffff";
+    const sidebarLogoBg = isSidebarTextWhite ? "rgba(255,255,255,0.94)" : "rgba(255,255,255,0.72)";
     root.style.setProperty("--tenant-sidebar-muted-fg", isSidebarTextWhite ? "rgba(255,255,255,0.82)" : "rgba(0,0,0,0.72)");
     root.style.setProperty("--tenant-sidebar-hover-bg", isSidebarTextWhite ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)");
     root.style.setProperty("--tenant-sidebar-hover-border", isSidebarTextWhite ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.14)");
     root.style.setProperty("--tenant-sidebar-divider", isSidebarTextWhite ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)");
+    root.style.setProperty("--tenant-sidebar-logo-bg", sidebarLogoBg);
   }, [
     clientData?.tenant.id,
     clientData?.tenant.primary_color,
@@ -714,9 +843,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    if (rawLogo.startsWith("http") || rawLogo.startsWith("/") || rawLogo.startsWith("data:")) {
-      setResolvedTenantLogoUrl(rawLogo);
-      setThemeLogoPreviewUrl(rawLogo);
+    const publicLogoUrl = getTenantLogoPublicUrl(rawLogo, tenant.id);
+    if (publicLogoUrl) {
+      setResolvedTenantLogoUrl(publicLogoUrl);
+      setThemeLogoPreviewUrl(publicLogoUrl);
       return;
     }
 
@@ -763,6 +893,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       }
     });
   }, [demoMode]);
+
+  useEffect(() => {
+    if (!visibleClientTabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab(visibleClientTabs[0]?.key ?? "overview");
+    }
+  }, [activeTab, visibleClientTabs]);
 
   async function handleForcePasswordChangeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -855,6 +991,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       announcementsResult,
       usersResult,
       modulesResult,
+      moduleAdminsResult,
       catalogRolesResult,
       catalogMinistriesResult,
     ] = await Promise.all([
@@ -917,6 +1054,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .eq("tenant_id", tenantId)
           .eq("status", "active"),
         supabase
+          .from("tenant_module_admins")
+          .select("module_id, profile_id, member_id")
+          .eq("tenant_id", tenantId)
+          .returns<ModuleAdminAccessRecord[]>(),
+        supabase
           .from("catalog_roles")
           .select("id, tenant_id, name")
           .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
@@ -941,6 +1083,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       announcementsResult.error ||
       usersResult.error ||
       modulesResult.error ||
+      moduleAdminsResult.error ||
       catalogRolesResult.error ||
       catalogMinistriesResult.error
     ) {
@@ -999,6 +1142,28 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return acc;
     }, {});
 
+    const moduleAdminModuleIdsByProfileId = (moduleAdminsResult.data ?? []).reduce<Record<string, string[]>>(
+      (acc, row) => {
+        if (!row.profile_id) {
+          return acc;
+        }
+        acc[row.profile_id] = [...(acc[row.profile_id] ?? []), row.module_id];
+        return acc;
+      },
+      {},
+    );
+
+    const moduleAdminModuleIdsByMemberId = (moduleAdminsResult.data ?? []).reduce<Record<string, string[]>>(
+      (acc, row) => {
+        if (!row.member_id) {
+          return acc;
+        }
+        acc[row.member_id] = [...(acc[row.member_id] ?? []), row.module_id];
+        return acc;
+      },
+      {},
+    );
+
     setClientData({
       profile: currentProfile,
       tenant: tenantResult.data,
@@ -1011,6 +1176,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       announcements: announcementsResult.data ?? [],
       users: usersResult.data ?? [],
       modules,
+      moduleAdminModuleIdsByProfileId,
+      moduleAdminModuleIdsByMemberId,
       catalogRoles: catalogRolesResult.data ?? [],
       catalogMinistries: catalogMinistriesResult.data ?? [],
     });
@@ -1245,6 +1412,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       notes: member.notes ?? "",
       roleIds,
       ministries,
+      moduleAdminModuleIds: clientData?.moduleAdminModuleIdsByMemberId[memberId] ?? [],
     });
     setMemberSaveStatus("idle");
     setMemberSaveMessage("");
@@ -1267,6 +1435,18 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return {
         ...current,
         roleIds: exists ? current.roleIds.filter((id) => id !== roleId) : [...current.roleIds, roleId],
+      };
+    });
+  }
+
+  function toggleMemberModuleAdmin(moduleId: string) {
+    setMemberForm((current) => {
+      const exists = current.moduleAdminModuleIds.includes(moduleId);
+      return {
+        ...current,
+        moduleAdminModuleIds: exists
+          ? current.moduleAdminModuleIds.filter((id) => id !== moduleId)
+          : [...current.moduleAdminModuleIds, moduleId],
       };
     });
   }
@@ -1450,6 +1630,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               is_admin: item.is_admin,
             })),
           },
+          moduleAdminModuleIdsByMemberId: {
+            ...current.moduleAdminModuleIdsByMemberId,
+            [memberId]: [...memberForm.moduleAdminModuleIds],
+          },
         };
       });
 
@@ -1472,14 +1656,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     const memberId = memberResult.data.id;
 
-    const [deleteRolesResult, deleteMinistriesResult] = await Promise.all([
+    const [deleteRolesResult, deleteMinistriesResult, deleteModuleAdminsResult] = await Promise.all([
       supabase.from("member_roles").delete().eq("member_id", memberId),
       supabase.from("member_ministries").delete().eq("member_id", memberId),
+      supabase.from("tenant_module_admins").delete().eq("tenant_id", clientData.tenant.id).eq("member_id", memberId),
     ]);
 
-    if (deleteRolesResult.error || deleteMinistriesResult.error) {
+    if (deleteRolesResult.error || deleteMinistriesResult.error || deleteModuleAdminsResult.error) {
       setMemberSaveStatus("error");
-      setMemberSaveMessage("Membro salvo, mas não foi possível atualizar cargos/ministérios.");
+      setMemberSaveMessage("Membro salvo, mas não foi possível atualizar cargos, ministérios ou módulos.");
       return;
     }
 
@@ -1496,9 +1681,18 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       is_admin: item.is_admin,
     }));
 
-    const [insertRolesResult, insertMinistriesResult] = await Promise.all([
+    const moduleAdminRows = memberForm.moduleAdminModuleIds.map((moduleId) => ({
+      tenant_id: clientData.tenant.id,
+      member_id: memberId,
+      module_id: moduleId,
+    }));
+
+    const [insertRolesResult, insertMinistriesResult, insertModuleAdminsResult] = await Promise.all([
       roleRows.length ? supabase.from("member_roles").insert(roleRows) : Promise.resolve({ error: null }),
       ministryRows.length ? supabase.from("member_ministries").insert(ministryRows) : Promise.resolve({ error: null }),
+      moduleAdminRows.length
+        ? supabase.from("tenant_module_admins").insert(moduleAdminRows)
+        : Promise.resolve({ error: null }),
     ]);
 
     if ("error" in insertRolesResult && insertRolesResult.error) {
@@ -1510,6 +1704,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     if ("error" in insertMinistriesResult && insertMinistriesResult.error) {
       setMemberSaveStatus("error");
       setMemberSaveMessage("Membro salvo, mas não foi possível vincular ministérios.");
+      return;
+    }
+
+    if ("error" in insertModuleAdminsResult && insertModuleAdminsResult.error) {
+      setMemberSaveStatus("error");
+      setMemberSaveMessage("Membro salvo, mas não foi possível liberar módulos administrativos.");
       return;
     }
 
@@ -1736,6 +1936,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function openCreateEventForm() {
+    if (!canManageEvents) {
+      return;
+    }
+
     setEventForm({ ...emptyEventForm, tenant_id: clientData?.tenant.id ?? "" });
     setEventSaveStatus("idle");
     setEventSaveMessage("");
@@ -1743,6 +1947,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function openEditEventForm(eventRecord: EventRecord) {
+    if (!canManageEvents) {
+      return;
+    }
+
     setEventForm({ ...eventRecord, tenant_id: clientData?.tenant.id ?? "" });
     setEventSaveStatus("idle");
     setEventSaveMessage("");
@@ -1757,6 +1965,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     event.preventDefault();
     setEventSaveStatus("loading");
     setEventSaveMessage("");
+
+    if (!canManageEvents) {
+      setEventSaveStatus("error");
+      setEventSaveMessage("Seu usuário não tem permissão para administrar o calendário.");
+      return;
+    }
 
     if (!eventForm.title.trim() || !eventForm.event_date.trim()) {
       setEventSaveStatus("error");
@@ -1793,7 +2007,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   async function handleDeleteEvent(eventId: string) {
-    if (!eventId || !profile) {
+    if (!eventId || !profile || !canManageEvents) {
       return;
     }
 
@@ -1804,6 +2018,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function openCreateAnnouncementForm() {
+    if (!canManageAnnouncements) {
+      return;
+    }
+
     setAnnouncementForm({
       ...emptyAnnouncementForm,
       tenant_id: clientData?.tenant.id ?? "",
@@ -1815,6 +2033,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function openEditAnnouncementForm(announcement: AnnouncementRecord) {
+    if (!canManageAnnouncements) {
+      return;
+    }
+
     setAnnouncementForm({
       ...announcement,
       tenant_id: clientData?.tenant.id ?? "",
@@ -1832,6 +2054,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     event.preventDefault();
     setAnnouncementSaveStatus("loading");
     setAnnouncementSaveMessage("");
+
+    if (!canManageAnnouncements) {
+      setAnnouncementSaveStatus("error");
+      setAnnouncementSaveMessage("Seu usuário não tem permissão para administrar comunicados.");
+      return;
+    }
 
     if (!announcementForm.title.trim() || !announcementForm.message.trim()) {
       setAnnouncementSaveStatus("error");
@@ -1941,8 +2169,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const signedLogo = await supabase.storage.from("tenant-logos").createSignedUrl(objectKey, 60 * 60);
-    const logoPreviewUrl = signedLogo.data?.signedUrl ?? null;
+    const logoPreviewUrl = getTenantLogoPublicUrl(objectKey, clientData.tenant.id);
     if (!logoPreviewUrl) {
       setLogoUploadStatus("error");
       setLogoUploadMessage("Logo enviada, mas não foi possível obter a URL da imagem.");
@@ -1967,18 +2194,50 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function handleUserFieldChange(userId: string, field: keyof UserEditState, value: string) {
-    setUserEdits((current) => ({
-      ...current,
-      [userId]: {
-        ...current[userId],
-        [field]: value,
-      } as UserEditState,
-    }));
+    const user = clientData?.users.find((item) => item.id === userId);
+    setUserEdits((current) => {
+      const currentEdit = current[userId] ?? {
+        full_name: user?.full_name ?? null,
+        tenant_role: user?.tenant_role ?? "member",
+        status: user?.status ?? "active",
+        moduleAdminModuleIds: clientData?.moduleAdminModuleIdsByProfileId[userId] ?? [],
+      };
+
+      return {
+        ...current,
+        [userId]: {
+          ...currentEdit,
+          [field]: value,
+        } as UserEditState,
+      };
+    });
+  }
+
+  function toggleUserModuleAdmin(userId: string, moduleId: string) {
+    const user = clientData?.users.find((item) => item.id === userId);
+    setUserEdits((current) => {
+      const currentEdit = current[userId] ?? {
+        full_name: user?.full_name ?? null,
+        tenant_role: user?.tenant_role ?? "member",
+        status: user?.status ?? "active",
+        moduleAdminModuleIds: clientData?.moduleAdminModuleIdsByProfileId[userId] ?? [],
+      };
+      const exists = currentEdit.moduleAdminModuleIds.includes(moduleId);
+      return {
+        ...current,
+        [userId]: {
+          ...currentEdit,
+          moduleAdminModuleIds: exists
+            ? currentEdit.moduleAdminModuleIds.filter((id) => id !== moduleId)
+            : [...currentEdit.moduleAdminModuleIds, moduleId],
+        },
+      };
+    });
   }
 
   async function handleSaveUser(userId: string) {
     const edit = userEdits[userId];
-    if (!edit || !profile) {
+    if (!edit || !profile || !clientData) {
       return;
     }
 
@@ -1998,6 +2257,40 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setUserSaveMessage((current) => ({
         ...current,
         [userId]: "Não foi possível atualizar o usuário.",
+      }));
+      return;
+    }
+
+    const deleteModuleAccessResult = await supabase
+      .from("tenant_module_admins")
+      .delete()
+      .eq("tenant_id", clientData.tenant.id)
+      .eq("profile_id", userId);
+
+    if (deleteModuleAccessResult.error) {
+      setUserSaveStatus((current) => ({ ...current, [userId]: "error" }));
+      setUserSaveMessage((current) => ({
+        ...current,
+        [userId]: "Usuário salvo, mas não foi possível atualizar os módulos.",
+      }));
+      return;
+    }
+
+    const moduleRows = (edit.moduleAdminModuleIds ?? []).map((moduleId) => ({
+      tenant_id: clientData.tenant.id,
+      profile_id: userId,
+      module_id: moduleId,
+    }));
+
+    const insertModuleAccessResult = moduleRows.length
+      ? await supabase.from("tenant_module_admins").insert(moduleRows)
+      : { error: null };
+
+    if (insertModuleAccessResult.error) {
+      setUserSaveStatus((current) => ({ ...current, [userId]: "error" }));
+      setUserSaveMessage((current) => ({
+        ...current,
+        [userId]: "Usuário salvo, mas não foi possível liberar os módulos.",
       }));
       return;
     }
@@ -2122,7 +2415,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         <div className="client-brand">
           <div className="tenant-sidebar-logo" aria-label="Logo do tenant">
             {resolvedTenantLogoUrl ? (
-              <img src={resolvedTenantLogoUrl} alt={`Logo ${tenant.name}`} />
+              <img
+                src={resolvedTenantLogoUrl}
+                alt={`Logo ${tenant.name}`}
+                onError={() => setResolvedTenantLogoUrl(null)}
+              />
             ) : (
               <span className="tenant-sidebar-logo-fallback">{tenant.name.slice(0, 2).toUpperCase()}</span>
             )}
@@ -2134,7 +2431,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         </div>
 
         <nav>
-          {clientTabs.map(({ key, label, icon: Icon }) => (
+          {visibleClientTabs.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               type="button"
@@ -2155,42 +2452,51 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
       <section className="global-admin-content">
         <header className="global-admin-header">
-          <div>
-            <span>Seja bem-vindo {tenant.name}</span>
-            <h1>
-              {activeTab === "overview"
-                ? "Painel da igreja"
-                : activeTab === "members"
-                ? "Gestão de membros"
-                : activeTab === "families"
-                ? "Famílias e dependentes"
-                : activeTab === "events"
-                ? "Calendário central"
-                : activeTab === "notices"
-                ? "Comunicados gerais"
-                : activeTab === "lists"
-                ? "Listagens do tenant"
-                : activeTab === "theme"
-                ? "Identidade visual"
-                : "Gestão de usuários"}
-            </h1>
-            <p>
-              {activeTab === "overview"
-                ? "Acompanhe membros, eventos, módulos ativos e o tema white-label do tenant."
-                : activeTab === "members"
-                ? "Gerencie o cadastro básico dos membros da igreja." 
-                : activeTab === "families"
-                ? "Organize famílias, dependentes e vínculos principais para atendimento e acompanhamento."
-                : activeTab === "events"
-                ? "Planeje os eventos e cultos do calendário central." 
-                : activeTab === "notices"
-                ? "Publique comunicados gerais para o tenant." 
-                : activeTab === "lists"
-                ? "Gerencie cargos e ministérios visíveis no seu tenant, mantendo a lista base do sistema."
-                : activeTab === "theme"
-                ? "Atualize logo, cores e visual do painel da igreja." 
-                : "Gerencie usuários e permissões do tenant."}
-            </p>
+          <div className="client-header-brand">
+            <div className="client-header-logo" aria-label={`Logo ${tenant.name}`}>
+              {resolvedTenantLogoUrl ? (
+                <img src={resolvedTenantLogoUrl} alt="" onError={() => setResolvedTenantLogoUrl(null)} />
+              ) : (
+                <span>{tenant.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </div>
+            <div>
+              <span>
+                {activeTab === "overview"
+                  ? "Ambiente administrativo"
+                  : activeTab === "members"
+                  ? "Gestão de membros"
+                  : activeTab === "families"
+                  ? "Famílias e dependentes"
+                  : activeTab === "events"
+                  ? "Calendário central"
+                  : activeTab === "notices"
+                  ? "Comunicados gerais"
+                  : activeTab === "lists"
+                  ? "Listagens do tenant"
+                  : activeTab === "theme"
+                  ? "Identidade visual"
+                  : "Gestão de usuários"}
+              </span>
+              <h1>{tenant.name}</h1>
+              <p>
+                {activeTab === "overview"
+                  ? "Acompanhe membros, eventos, módulos ativos e a identidade visual da igreja."
+                  : activeTab === "members"
+                  ? "Gerencie o cadastro básico dos membros da igreja."
+                  : activeTab === "families"
+                  ? "Organize famílias, dependentes e vínculos principais para atendimento e acompanhamento."
+                  : activeTab === "events"
+                  ? "Planeje os eventos e cultos do calendário central."
+                  : activeTab === "notices"
+                  ? "Publique comunicados gerais para a comunidade."
+                  : activeTab === "lists"
+                  ? "Gerencie cargos e ministérios visíveis neste ambiente."
+                  : activeTab === "theme"
+                  ? "Atualize logo, cores e visual usado nas páginas da igreja."
+                  : "Gerencie usuários e permissões do ambiente da igreja."}
+              </p>
+            </div>
           </div>
           {activeTab === "members" || activeTab === "families" || activeTab === "events" || activeTab === "notices" ? (
             <Button
@@ -2201,7 +2507,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 if (activeTab === "events") openCreateEventForm();
                 if (activeTab === "notices") openCreateAnnouncementForm();
               }}
-              disabled={activeTab === "members" || activeTab === "families" ? !canManageMembers : !isTenantAdmin}
+              disabled={
+                activeTab === "members" || activeTab === "families"
+                  ? !canManageMembers
+                  : activeTab === "events"
+                  ? !canManageEvents
+                  : !canManageAnnouncements
+              }
             >
               {activeTab === "members"
                 ? "Novo membro"
@@ -2462,7 +2774,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <strong>{item.title}</strong>
                       <small>{item.location || item.description || "Sem local definido"}</small>
                     </div>
-                    {isTenantAdmin ? (
+                    {canManageEvents ? (
                       <div className="member-actions">
                         <button type="button" onClick={() => openEditEventForm(item)}>
                           <Edit3 size={16} />
@@ -2497,7 +2809,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <strong>{item.title}</strong>
                       <small>{new Date(item.published_at).toLocaleDateString("pt-BR")}</small>
                     </div>
-                    {isTenantAdmin ? (
+                    {canManageAnnouncements ? (
                       <div className="member-actions">
                         <button type="button" onClick={() => openEditAnnouncementForm(item)}>
                           <Edit3 size={16} />
@@ -2760,6 +3072,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     full_name: user.full_name,
                     tenant_role: user.tenant_role ?? "member",
                     status: user.status,
+                    moduleAdminModuleIds: clientData.moduleAdminModuleIdsByProfileId[user.id] ?? [],
                   };
                   return (
                     <div key={user.id} className="member-row">
@@ -2794,6 +3107,18 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           Salvar
                         </Button>
                       </div>
+                      <div className="module-access-row" aria-label="Módulos administrativos liberados">
+                        {clientData.modules.map((module) => (
+                          <label key={module.id} className="check-row compact">
+                            <input
+                              type="checkbox"
+                              checked={edit.moduleAdminModuleIds.includes(module.id)}
+                              onChange={() => toggleUserModuleAdmin(user.id, module.id)}
+                            />
+                            <span>{module.name}</span>
+                          </label>
+                        ))}
+                      </div>
                       {userSaveMessage[user.id] ? (
                         <small className={`login-feedback ${userSaveStatus[user.id]}`}>
                           {userSaveMessage[user.id]}
@@ -2806,6 +3131,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
             </article>
           ) : null}
         </div>
+
+        <footer className="client-admin-footer">
+          <strong>{tenant.name}</strong>
+          <span>Ambiente administrativo do cliente</span>
+        </footer>
       </section>
 
       {isFamilyFormOpen ? (
@@ -3153,6 +3483,27 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ))}
                 </div>
               </div>
+
+              {isTenantAdmin ? (
+                <div className="modal-section">
+                  <div className="modal-section-header">
+                    <strong>Acesso administrativo por módulo</strong>
+                    <small>Libere um ou mais módulos ativos para este membro administrar ao entrar com usuário e senha.</small>
+                  </div>
+                  <div className="check-grid">
+                    {clientData.modules.map((module) => (
+                      <label key={module.id} className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={memberForm.moduleAdminModuleIds.includes(module.id)}
+                          onChange={() => toggleMemberModuleAdmin(module.id)}
+                        />
+                        <span>{module.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {memberForm.id ? (
                 <div className="modal-section">
