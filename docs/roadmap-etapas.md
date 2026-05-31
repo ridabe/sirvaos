@@ -111,12 +111,11 @@ Temos um sistema previamente criado na pasta C:\Projetos\ToNaEscalaWeb, analise 
 Este módulo valida o fluxo operacional real.
 
 
-## Etapa 7 - Financeiro, Kids e Escola Bíblica
+## Etapa 7 - Financeiro
 
 Objetivo: expandir os módulos prioritários.
 
 ### Financeiro
-
 - Dízimos/ofertas.
 - Receitas/despesas.
 - Categorias.
@@ -124,16 +123,21 @@ Objetivo: expandir os módulos prioritários.
 - Comprovantes para membros.
 - Dash completo financeiro
 
+## Etapa 8 -Kids
+
 ### Kids
-A ideia desta area/modulo e que o Lider do ministerio Infantil tenha acesso a esta area como admi. O modulo fucnionara da seguinte forma:
+A ideia desta area/modulo e que o Lider do ministerio Infantil tenha acesso a esta area como admin. O modulo fucnionara da seguinte forma:
 Quando os pais forem deixar suas criancas na escolinha/area infantil durante o culto, a crianca devra ter um cadastro(vinculado ao cadastro de embro, caso os pais nao sejam membros criar apenas o cadastro da clranca sem vinculo de membro). Os pais irao ter o aplicativo no seu celular(Modulo futuro), sempre que os proefessores da escooinha precisarm chamar o pai da crianca, pelo sistema eles conseguirao enviar uma mensagem para os responsveis que deixaram a crianca, Essa comunicação podera ser feita entre comunicação entre o sistema e o app que estaralogado com os responsaveis pela crianca, ou caso nao te ham o app, podera ter a opçao de enviar uma mensagem para o whatzapp do responsavel cadastrado na hora que deixou a crianca.
-O moduloDevera ter estas funcionalidades:
-- Crianças (Cadastro).
+O moduloDevera tera estas funcionalidades:
+- Crianças (Cadastro). Podera usar o cadastro de FAmiliares que ja temos, caso utilize esta funcionalidade, adicione uma instrução aos administradres.
 - Responsáveis.
 - Turmas.
 - Presença.
 - Comunicados aos pais.
 - Atividades
+- Tias/tios na escala do dia(ADionar quem estara dando a aula para as criaçãs com data, este nome pode vir da lista de mebros que tem o cargo referente a area infantil)
+
+## Etapa 9 - Escola Bíblica
 
 ### Escola Bíblica
 
@@ -143,19 +147,20 @@ O moduloDevera ter estas funcionalidades:
 - Frequência.
 - Materiais.
 - Notas
+- Links de materias de apoio, como Videos, apostilas
 
-## Etapa 8 - Relatórios e Auditoria
+## Etapa 10 - Relatórios e Auditoria
 
 Objetivo: maturidade administrativa.
 
 - Dashboard executivo.
 - Relatórios por módulo.
 - Exportação CSV/PDF.
-- Logs de atividade.
+- Logs de atividade com dados e nomes humizados e nao nome de funcoes, tambelas e permissoes.
 - Auditoria de dados sensíveis.
 - Métricas de engajamento.
 
-## Etapa 9 - Produção e Escala
+## Etapa 11 - Produção e Escala
 
 Objetivo: preparar para clientes reais.
 
@@ -164,7 +169,7 @@ Objetivo: preparar para clientes reais.
 - Termos/política por tenant.
 - Documentação técnica.
 
-## Etapa 10 - App Mobile / Portal do Membro
+## Etapa 12 - Portal do Membro APP mobile
 
 Objetivo: entregar valor para membros.
 
@@ -173,12 +178,11 @@ Com React Native + Expo:
 - Login.
 - Seleção/acesso ao tenant.
 - Home do membro.
-- Meus módulos.
+- Meus módulos. (que fornecerem dados para o publico geral)
 - Minhas escalas.
 - Eventos.
 - Comunicados.
 - Perfil.
-- Confirmação de presença.
 - Push notifications.
 
 Começa como app único modular. A arquitetura deve ficar preparada para separar apps por módulo depois.
@@ -207,3 +211,6 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 ### Concluído ou iniciado
 
 - Etapa 5 está concluída: Módulo de Membresia básico.
+- Etapa 6 Primeiro Corte concluído: tabelas, RLS, tela Admin Cliente (eventos/escalas/e-mail via Resend).
+- Etapa 6 Próximos Cortes concluídos (2026-05-31): edição/remoção de eventos e escalados no admin; calendário mensal estilo Google com cores por tipo de evento; portal do membro (/membro) com login, confirmação/recusa com justificativa e histórico; links WhatsApp por escalado no modal de notificação; indicadores de participação por integrante com taxa de confirmação.
+- Pendente: notificações push no app mobile (Etapa 10), integração WhatsApp Business API (melhoria futura).

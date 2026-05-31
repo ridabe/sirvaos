@@ -37,6 +37,7 @@ import { features, modules, tenantCards } from "./data/landing";
 import { supabase } from "./lib/supabase";
 import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 import { ClientAdmin } from "./pages/ClientAdmin";
+import { MemberPortal } from "./pages/MemberPortal";
 
 type LandingLoginStatus = "idle" | "loading" | "error";
 
@@ -67,6 +68,10 @@ export function App() {
 
   if (window.location.pathname === "/admin-cliente-demo") {
     return <ClientAdmin demoMode />;
+  }
+
+  if (window.location.pathname === "/membro") {
+    return <MemberPortal />;
   }
 
   /* Faz login pelo Supabase sem enviar credenciais via query string. */

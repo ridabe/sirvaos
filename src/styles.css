@@ -15,7 +15,11 @@
   --color-neutral-50: #fafcfc;
   --color-white: #ffffff;
   --color-success: #2f8a5f;
+  --color-success-soft: #e0f7ed;
   --color-warning: #c98a13;
+  --color-warning-soft: #fef3da;
+  --color-danger: #c23b3b;
+  --color-danger-soft: #fde8e8;
   --tenant-header-bg: var(--color-neutral-50);
   --tenant-header-fg: var(--color-neutral-950);
   --tenant-sidebar-bg: var(--color-brand-primary-dark);
@@ -2390,6 +2394,746 @@ h1 {
   display: block;
   padding: 10px 12px;
   font-size: 0.88rem;
+}
+
+.worship-event-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.worship-email-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-brand-primary);
+  background: var(--color-brand-primary-soft);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.worship-email-btn:hover {
+  background: var(--color-brand-accent-soft);
+}
+
+.worship-email-last-campaign {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: var(--color-neutral-500);
+  background: var(--color-neutral-100);
+  border-radius: 8px;
+}
+
+.worship-email-modal {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.worship-email-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 14px;
+  background: var(--color-neutral-50);
+  border-radius: 10px;
+  border: 1px solid var(--tenant-card-border);
+}
+
+.worship-email-summary > div {
+  display: grid;
+  gap: 4px;
+}
+
+.worship-email-summary span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--color-brand-primary);
+}
+
+.worship-email-summary strong {
+  font-size: 1.4rem;
+  color: var(--color-neutral-900);
+}
+
+.worship-email-hint {
+  font-size: 0.84rem;
+  color: var(--color-neutral-500);
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── Worship: view toggle ───────────────────────────── */
+.worship-view-toggle {
+  display: flex;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.worship-view-toggle button {
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.worship-view-toggle button.active {
+  background: var(--color-white);
+  color: var(--color-brand-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Worship: form actions row ──────────────────────── */
+.worship-form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── Worship: event card action buttons ─────────────── */
+.worship-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-neutral-500);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.worship-action-btn:hover {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+}
+
+.worship-action-btn.danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger-soft);
+}
+
+.worship-action-btn.danger:hover {
+  background: var(--color-danger-soft);
+}
+
+.worship-action-btn.small {
+  width: 24px;
+  height: 24px;
+}
+
+/* ── Worship: assignment row actions ────────────────── */
+.worship-assignment-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.worship-decline-reason {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--color-neutral-500);
+  font-style: italic;
+}
+
+/* ── Worship: Google-style calendar ─────────────────── */
+.worship-calendar {
+  display: grid;
+  gap: 12px;
+}
+
+.worship-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.worship-calendar-nav strong {
+  flex: 1;
+  text-align: center;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+  color: var(--color-neutral-950);
+}
+
+.worship-calendar-nav button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 8px;
+  background: var(--color-white);
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.worship-calendar-nav button:hover {
+  background: var(--color-brand-primary-soft);
+}
+
+.worship-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.worship-calendar-weekday {
+  padding: 8px 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--color-neutral-500);
+  background: var(--color-neutral-50);
+}
+
+.worship-calendar-cell {
+  min-height: 80px;
+  padding: 6px;
+  background: var(--color-white);
+  border-top: 1px solid var(--tenant-card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.worship-calendar-cell.empty {
+  background: var(--color-neutral-50);
+}
+
+.worship-calendar-cell.today .worship-calendar-day {
+  background: var(--color-brand-primary);
+  color: var(--color-white);
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.worship-calendar-day {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-neutral-700);
+  margin-bottom: 2px;
+  display: block;
+}
+
+.worship-calendar-event {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.worship-calendar-event.service {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-dark);
+}
+
+.worship-calendar-event.rehearsal {
+  background: var(--color-brand-accent-soft);
+  color: #007a96;
+}
+
+.worship-calendar-event.meeting {
+  background: #fff3cd;
+  color: #8a6200;
+}
+
+.worship-calendar-event.other {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+}
+
+/* ── Worship: WhatsApp list in modal ────────────────── */
+.worship-whatsapp-list {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 10px;
+}
+
+.worship-whatsapp-list-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--color-brand-primary);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.worship-whatsapp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.worship-whatsapp-row strong {
+  display: block;
+  font-size: 0.88rem;
+}
+
+.worship-whatsapp-row small {
+  font-size: 0.74rem;
+  color: var(--color-neutral-500);
+}
+
+.worship-whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #1a7a2a;
+  background: #e6f9ea;
+  border: 1px solid #a8e6b0;
+  border-radius: 999px;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.worship-whatsapp-btn:hover {
+  background: #cdf0d4;
+}
+
+/* ── Worship: member stats ───────────────────────────── */
+.worship-member-stats {
+  padding: 16px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 14px;
+}
+
+.worship-member-stats-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.worship-member-stats-header strong {
+  font-size: 0.9rem;
+  color: var(--color-neutral-950);
+}
+
+.worship-member-stats-header small {
+  font-size: 0.78rem;
+  color: var(--color-neutral-500);
+}
+
+.worship-member-stats-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.worship-member-stat-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(80px, 120px) 36px;
+  align-items: center;
+  gap: 12px;
+}
+
+.worship-member-stat-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.worship-member-avatar {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-dark);
+  font-size: 0.8rem;
+  font-weight: 900;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.worship-member-stat-name strong {
+  font-size: 0.86rem;
+}
+
+.worship-member-stat-counts {
+  display: flex;
+  gap: 8px;
+}
+
+.worship-member-stat-counts span {
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.worship-member-stat-counts span.success {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.worship-member-stat-counts span.danger {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.worship-member-stat-counts span.warning {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.worship-member-stat-bar {
+  height: 6px;
+  background: var(--color-neutral-200);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.worship-member-stat-bar > div {
+  height: 100%;
+  background: var(--color-brand-primary);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.worship-member-stat-row small {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  text-align: right;
+}
+
+/* ── Member portal shell ─────────────────────────────── */
+.member-portal-shell {
+  min-height: 100vh;
+  background: var(--color-neutral-50);
+  display: flex;
+  flex-direction: column;
+}
+
+.member-portal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-neutral-200);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.member-portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-brand-primary);
+}
+
+.member-portal-brand strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--color-neutral-950);
+}
+
+.member-portal-brand span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-neutral-500);
+}
+
+.member-portal-signout {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  background: transparent;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.member-portal-signout:hover {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+}
+
+.member-portal-main {
+  flex: 1;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+  display: grid;
+  gap: 32px;
+}
+
+.member-portal-section h2 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-neutral-950);
+  margin: 0 0 16px;
+}
+
+.member-portal-cards {
+  display: grid;
+  gap: 14px;
+}
+
+.member-portal-card {
+  padding: 20px;
+  background: var(--color-white);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  transition: box-shadow 0.15s;
+}
+
+.member-portal-card.confirmed {
+  border-left: 4px solid var(--color-success);
+}
+
+.member-portal-card.declined {
+  border-left: 4px solid var(--color-danger);
+  opacity: 0.8;
+}
+
+.member-portal-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-portal-event-type {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--color-brand-primary);
+  margin-bottom: 4px;
+}
+
+.member-portal-card-head strong {
+  font-size: 1rem;
+  color: var(--color-neutral-950);
+}
+
+.member-portal-status {
+  padding: 5px 11px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  border-radius: 999px;
+  font-style: normal;
+  flex-shrink: 0;
+}
+
+.member-portal-status.confirmed {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.member-portal-status.declined {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.member-portal-status.pending,
+.member-portal-status.standby {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.member-portal-card-meta {
+  display: grid;
+  gap: 5px;
+}
+
+.member-portal-card-meta > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  color: var(--color-neutral-700);
+}
+
+.member-portal-card-meta svg {
+  color: var(--color-neutral-500);
+  flex-shrink: 0;
+}
+
+.member-portal-card-role {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  color: var(--color-brand-primary-dark);
+  background: var(--color-brand-primary-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.member-portal-card-role strong {
+  font-weight: 700;
+}
+
+.member-portal-card-notes {
+  font-size: 0.82rem;
+  color: var(--color-neutral-500);
+  margin: 0;
+  font-style: italic;
+}
+
+.member-portal-card-notes.muted {
+  opacity: 0.75;
+}
+
+.member-portal-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.member-portal-decline-form {
+  display: grid;
+  gap: 10px;
+}
+
+.member-portal-decline-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.member-portal-history {
+  display: grid;
+  gap: 8px;
+}
+
+.member-portal-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-white);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 12px;
+}
+
+.member-portal-history-row strong {
+  display: block;
+  font-size: 0.88rem;
+}
+
+.member-portal-history-row small {
+  font-size: 0.78rem;
+  color: var(--color-neutral-500);
+}
+
+.member-portal-login-card {
+  max-width: 400px;
+  width: 100%;
+  margin: auto;
+  padding: 32px 28px;
+  background: var(--color-white);
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 20px;
+  display: grid;
+  gap: 24px;
+}
+
+.member-portal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.member-portal-password-wrap {
+  position: relative;
+}
+
+.member-portal-loading {
+  margin: auto;
+  padding: 40px;
+  font-size: 0.9rem;
+  color: var(--color-neutral-500);
+}
+
+.member-portal-empty {
+  margin: auto;
+  padding: 48px 20px;
+  text-align: center;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  color: var(--color-neutral-500);
+}
+
+.member-portal-empty svg {
+  color: var(--color-neutral-300);
+}
+
+.member-portal-empty strong {
+  font-size: 1rem;
+  color: var(--color-neutral-700);
 }
 
 .theme-panel {
