@@ -84,6 +84,12 @@ type TenantModuleRecord = {
   status: "active" | "beta" | "deprecated";
 };
 
+type CatalogItemRecord = {
+  id: string;
+  tenant_id: string | null;
+  name: string;
+};
+
 type TenantUserRecord = {
   id: string;
   full_name: string | null;
@@ -100,6 +106,8 @@ type ClientDashboardData = {
   announcements: AnnouncementRecord[];
   users: TenantUserRecord[];
   modules: TenantModuleRecord[];
+  catalogRoles: CatalogItemRecord[];
+  catalogMinistries: CatalogItemRecord[];
 };
 
 type MemberFormState = Omit<MemberRecord, "created_at"> & { tenant_id: string };
@@ -257,6 +265,16 @@ const sampleClientDashboardData: ClientDashboardData = {
       status: "beta",
     },
   ],
+  catalogRoles: [
+    { id: "role-sys-1", tenant_id: null, name: "Membro" },
+    { id: "role-sys-2", tenant_id: null, name: "Líder de ministério" },
+    { id: "role-tenant-1", tenant_id: "demo-tenant", name: "Líder de célula" },
+  ],
+  catalogMinistries: [
+    { id: "min-sys-1", tenant_id: null, name: "Ministério de Louvor" },
+    { id: "min-sys-2", tenant_id: null, name: "Intercessão / Oração" },
+    { id: "min-tenant-1", tenant_id: "demo-tenant", name: "Ministério de Artes" },
+  ],
 };
 
 const clientTabs = [
@@ -264,6 +282,7 @@ const clientTabs = [
   { key: "members", label: "Membros", icon: UsersRound },
   { key: "events", label: "Calendário", icon: CalendarCheck },
   { key: "notices", label: "Comunicados", icon: Bell },
+  { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
   { key: "users", label: "Usuários", icon: ShieldCheck },
 ] as const;
@@ -301,6 +320,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [userSaveStatus, setUserSaveStatus] = useState<Record<string, LoginStatus>>({});
   const [userSaveMessage, setUserSaveMessage] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<TenantProfile | null>(null);
+  const [catalogRoleDraft, setCatalogRoleDraft] = useState("");
+  const [catalogMinistryDraft, setCatalogMinistryDraft] = useState("");
+  const [catalogEdits, setCatalogEdits] = useState<Record<string, string>>({});
+  const [catalogSaveStatus, setCatalogSaveStatus] = useState<LoginStatus>("idle");
+  const [catalogSaveMessage, setCatalogSaveMessage] = useState("");
 
   const isTenantAdmin = useMemo(() => {
     if (!profile) return false;
@@ -362,8 +386,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     const tenantId = currentProfile.tenant_id;
 
-    const [tenantResult, membersResult, eventsResult, announcementsResult, usersResult, modulesResult] =
-      await Promise.all([
+    const [
+      tenantResult,
+      membersResult,
+      eventsResult,
+      announcementsResult,
+      usersResult,
+      modulesResult,
+      catalogRolesResult,
+      catalogMinistriesResult,
+    ] = await Promise.all([
         supabase
           .from("tenants")
           .select("id, name, slug, logo_url, primary_color, accent_color")
@@ -397,6 +429,18 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .select("status, platform_modules (id, code, name, description, status)")
           .eq("tenant_id", tenantId)
           .eq("status", "active"),
+        supabase
+          .from("catalog_roles")
+          .select("id, tenant_id, name")
+          .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+          .order("name", { ascending: true })
+          .returns<CatalogItemRecord[]>(),
+        supabase
+          .from("catalog_ministries")
+          .select("id, tenant_id, name")
+          .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+          .order("name", { ascending: true })
+          .returns<CatalogItemRecord[]>(),
       ]);
 
     if (
@@ -405,7 +449,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       eventsResult.error ||
       announcementsResult.error ||
       usersResult.error ||
-      modulesResult.error
+      modulesResult.error ||
+      catalogRolesResult.error ||
+      catalogMinistriesResult.error
     ) {
       setDataStatus("error");
       setLoginMessage("Erro ao carregar dados do tenant.");
@@ -430,6 +476,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       announcements: announcementsResult.data ?? [],
       users: usersResult.data ?? [],
       modules,
+      catalogRoles: catalogRolesResult.data ?? [],
+      catalogMinistries: catalogMinistriesResult.data ?? [],
     });
 
     setThemeForm({
@@ -440,6 +488,139 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     setDataStatus("ready");
     return currentProfile;
+  }
+
+  function handleCatalogEditChange(itemId: string, value: string) {
+    setCatalogEdits((current) => ({ ...current, [itemId]: value }));
+  }
+
+  async function handleAddCatalogItem(kind: "roles" | "ministries") {
+    if (!clientData || !profile || !isTenantAdmin) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const draft = kind === "roles" ? catalogRoleDraft : catalogMinistryDraft;
+    const name = draft.trim();
+
+    if (name.length < 2) {
+      setCatalogSaveStatus("error");
+      setCatalogSaveMessage("Informe um nome válido.");
+      return;
+    }
+
+    setCatalogSaveStatus("loading");
+    setCatalogSaveMessage("");
+
+    if (demoMode) {
+      const newItem: CatalogItemRecord = {
+        id: `${kind}-${Date.now()}`,
+        tenant_id: tenantId,
+        name,
+      };
+
+      setClientData((current) => {
+        if (!current) return current;
+        if (kind === "roles") {
+          return { ...current, catalogRoles: [...current.catalogRoles, newItem].sort((a, b) => a.name.localeCompare(b.name)) };
+        }
+        return {
+          ...current,
+          catalogMinistries: [...current.catalogMinistries, newItem].sort((a, b) => a.name.localeCompare(b.name)),
+        };
+      });
+
+      if (kind === "roles") {
+        setCatalogRoleDraft("");
+      } else {
+        setCatalogMinistryDraft("");
+      }
+
+      setCatalogSaveStatus("success");
+      setCatalogSaveMessage("Item adicionado ao seu tenant.");
+      return;
+    }
+
+    const table = kind === "roles" ? "catalog_roles" : "catalog_ministries";
+    const { error } = await supabase.from(table).insert({ tenant_id: tenantId, name });
+
+    if (error) {
+      setCatalogSaveStatus("error");
+      setCatalogSaveMessage("Não foi possível adicionar o item.");
+      return;
+    }
+
+    if (kind === "roles") {
+      setCatalogRoleDraft("");
+    } else {
+      setCatalogMinistryDraft("");
+    }
+
+    setCatalogSaveStatus("success");
+    setCatalogSaveMessage("Item adicionado ao seu tenant.");
+    await loadClientData(profile.id);
+  }
+
+  async function handleSaveCatalogItem(kind: "roles" | "ministries", item: CatalogItemRecord) {
+    if (!clientData || !profile || !isTenantAdmin) {
+      return;
+    }
+
+    if (!item.tenant_id) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    if (item.tenant_id !== tenantId) {
+      return;
+    }
+
+    const name = String(catalogEdits[item.id] ?? item.name).trim();
+    if (name.length < 2) {
+      setCatalogSaveStatus("error");
+      setCatalogSaveMessage("Informe um nome válido.");
+      return;
+    }
+
+    setCatalogSaveStatus("loading");
+    setCatalogSaveMessage("");
+
+    if (demoMode) {
+      setClientData((current) => {
+        if (!current) return current;
+        if (kind === "roles") {
+          return {
+            ...current,
+            catalogRoles: current.catalogRoles
+              .map((row) => (row.id === item.id ? { ...row, name } : row))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          };
+        }
+        return {
+          ...current,
+          catalogMinistries: current.catalogMinistries
+            .map((row) => (row.id === item.id ? { ...row, name } : row))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        };
+      });
+
+      setCatalogSaveStatus("success");
+      setCatalogSaveMessage("Item atualizado.");
+      return;
+    }
+
+    const table = kind === "roles" ? "catalog_roles" : "catalog_ministries";
+    const { error } = await supabase.from(table).update({ name }).eq("id", item.id);
+
+    if (error) {
+      setCatalogSaveStatus("error");
+      setCatalogSaveMessage("Não foi possível atualizar o item.");
+      return;
+    }
+
+    setCatalogSaveStatus("success");
+    setCatalogSaveMessage("Item atualizado.");
+    await loadClientData(profile.id);
   }
 
   async function handleClientLogin(event: FormEvent<HTMLFormElement>) {
@@ -882,7 +1063,21 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         <header className="global-admin-header">
           <div>
             <span>Etapa 3 · Admin Cliente/Igreja</span>
-            <h1>{activeTab === "overview" ? "Painel da igreja" : activeTab === "members" ? "Gestão de membros" : activeTab === "events" ? "Calendário central" : activeTab === "notices" ? "Comunicados gerais" : activeTab === "theme" ? "Identidade visual" : "Gestão de usuários"}</h1>
+            <h1>
+              {activeTab === "overview"
+                ? "Painel da igreja"
+                : activeTab === "members"
+                ? "Gestão de membros"
+                : activeTab === "events"
+                ? "Calendário central"
+                : activeTab === "notices"
+                ? "Comunicados gerais"
+                : activeTab === "lists"
+                ? "Listagens do tenant"
+                : activeTab === "theme"
+                ? "Identidade visual"
+                : "Gestão de usuários"}
+            </h1>
             <p>
               {activeTab === "overview"
                 ? "Acompanhe membros, eventos, módulos ativos e o tema white-label do tenant."
@@ -892,28 +1087,30 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 ? "Planeje os eventos e cultos do calendário central." 
                 : activeTab === "notices"
                 ? "Publique comunicados gerais para o tenant." 
+                : activeTab === "lists"
+                ? "Gerencie cargos e ministérios visíveis no seu tenant, mantendo a lista base do sistema."
                 : activeTab === "theme"
                 ? "Atualize logo, cores e visual do painel da igreja." 
                 : "Gerencie usuários e permissões do tenant."}
             </p>
           </div>
-          <Button
-            icon={<Plus size={18} />}
-            onClick={() => {
-              if (activeTab === "members") openCreateMemberForm();
-              if (activeTab === "events") openCreateEventForm();
-              if (activeTab === "notices") openCreateAnnouncementForm();
-            }}
-            disabled={!isTenantAdmin || !(activeTab === "members" || activeTab === "events" || activeTab === "notices")}
-          >
-            {activeTab === "members"
-              ? "Novo membro"
-              : activeTab === "events"
-              ? "Novo evento"
-              : activeTab === "notices"
-              ? "Novo comunicado"
-              : ""}
-          </Button>
+          {activeTab === "members" || activeTab === "events" || activeTab === "notices" ? (
+            <Button
+              icon={<Plus size={18} />}
+              onClick={() => {
+                if (activeTab === "members") openCreateMemberForm();
+                if (activeTab === "events") openCreateEventForm();
+                if (activeTab === "notices") openCreateAnnouncementForm();
+              }}
+              disabled={!isTenantAdmin}
+            >
+              {activeTab === "members"
+                ? "Novo membro"
+                : activeTab === "events"
+                ? "Novo evento"
+                : "Novo comunicado"}
+            </Button>
+          ) : null}
         </header>
 
         <div className="client-stats">
@@ -1131,6 +1328,163 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     ) : null}
                   </div>
                 ))}
+              </div>
+            </article>
+          ) : null}
+
+          {activeTab === "lists" ? (
+            <article className="panel full-width">
+              <div className="panel-heading">
+                <div>
+                  <span>Listagens</span>
+                  <h4>Cargos e ministérios</h4>
+                </div>
+              </div>
+
+              {catalogSaveMessage ? (
+                <p className={`login-feedback ${catalogSaveStatus}`}>{catalogSaveMessage}</p>
+              ) : null}
+
+              <div className="catalog-grid">
+                <section className="catalog-panel" aria-label="Lista de cargos">
+                  <div className="catalog-header">
+                    <strong>Cargos</strong>
+                    <small>Use nos cadastros do seu tenant. A base do sistema é compartilhada.</small>
+                  </div>
+
+                  {isTenantAdmin ? (
+                    <div className="catalog-add">
+                      <input
+                        className="catalog-input"
+                        placeholder="Adicionar cargo do tenant"
+                        value={catalogRoleDraft}
+                        onChange={(event) => setCatalogRoleDraft(event.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={catalogSaveStatus === "loading"}
+                        onClick={() => handleAddCatalogItem("roles")}
+                      >
+                        Adicionar
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <div className="catalog-group">
+                    <span className="catalog-label">Base do sistema</span>
+                    <div className="catalog-list">
+                      {clientData.catalogRoles
+                        .filter((item) => item.tenant_id === null)
+                        .map((item) => (
+                          <div key={item.id} className="catalog-row system">
+                            <span>{item.name}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="catalog-group">
+                    <span className="catalog-label">Do seu tenant</span>
+                    <div className="catalog-list">
+                      {clientData.catalogRoles.filter((item) => item.tenant_id !== null).length === 0 ? (
+                        <div className="catalog-empty">Nenhum cargo personalizado ainda.</div>
+                      ) : null}
+                      {clientData.catalogRoles
+                        .filter((item) => item.tenant_id !== null)
+                        .map((item) => (
+                          <div key={item.id} className="catalog-row">
+                            <input
+                              className="catalog-input"
+                              value={catalogEdits[item.id] ?? item.name}
+                              onChange={(event) => handleCatalogEditChange(item.id, event.target.value)}
+                              disabled={!isTenantAdmin}
+                            />
+                            {isTenantAdmin ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={catalogSaveStatus === "loading"}
+                                onClick={() => handleSaveCatalogItem("roles", item)}
+                              >
+                                Salvar
+                              </Button>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="catalog-panel" aria-label="Lista de ministérios">
+                  <div className="catalog-header">
+                    <strong>Ministérios</strong>
+                    <small>Base de referência + itens do seu tenant para manter a nomenclatura local.</small>
+                  </div>
+
+                  {isTenantAdmin ? (
+                    <div className="catalog-add">
+                      <input
+                        className="catalog-input"
+                        placeholder="Adicionar ministério do tenant"
+                        value={catalogMinistryDraft}
+                        onChange={(event) => setCatalogMinistryDraft(event.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={catalogSaveStatus === "loading"}
+                        onClick={() => handleAddCatalogItem("ministries")}
+                      >
+                        Adicionar
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <div className="catalog-group">
+                    <span className="catalog-label">Base do sistema</span>
+                    <div className="catalog-list">
+                      {clientData.catalogMinistries
+                        .filter((item) => item.tenant_id === null)
+                        .map((item) => (
+                          <div key={item.id} className="catalog-row system">
+                            <span>{item.name}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="catalog-group">
+                    <span className="catalog-label">Do seu tenant</span>
+                    <div className="catalog-list">
+                      {clientData.catalogMinistries.filter((item) => item.tenant_id !== null).length === 0 ? (
+                        <div className="catalog-empty">Nenhum ministério personalizado ainda.</div>
+                      ) : null}
+                      {clientData.catalogMinistries
+                        .filter((item) => item.tenant_id !== null)
+                        .map((item) => (
+                          <div key={item.id} className="catalog-row">
+                            <input
+                              className="catalog-input"
+                              value={catalogEdits[item.id] ?? item.name}
+                              onChange={(event) => handleCatalogEditChange(item.id, event.target.value)}
+                              disabled={!isTenantAdmin}
+                            />
+                            {isTenantAdmin ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={catalogSaveStatus === "loading"}
+                                onClick={() => handleSaveCatalogItem("ministries", item)}
+                              >
+                                Salvar
+                              </Button>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </section>
               </div>
             </article>
           ) : null}

@@ -75,7 +75,8 @@ Objetivo: primeiro módulo funcional base.
 - Status: ativo, inativo, visitante, em processo.
 - Dados pessoais.
 - Família/dependentes.
-- Cargos vinculados. 
+- Cargos vinculados. (Caso ele seja um cargo diferente de Membro, deve abrir a opção de adicionar de qual ministerio ele pertence)
+- Deve ter a opção de adicionar o membro com admin para ter acesso as areas adminitrativas do ministerio que ele pertence caso este ministerio tenha um modulo criado no sistema. EX.: Se ele for maracado como admin e faça parte do minsterio de Louvor, ele tera acesso a are admin deste modulo e semre que acessar o sistema nao sera logado como membro comum para tera acesso ao menu de admin da area ao qual ele pertença.
 - Histórico.
 - Filtros e busca.
 - Importação futura.
