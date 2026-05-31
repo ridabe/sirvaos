@@ -134,6 +134,21 @@ a {
   padding: 0 15px;
 }
 
+.ghost-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 15px;
+  font-weight: 800;
+  color: var(--color-neutral-950);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+}
+
 .ghost-icon {
   min-width: 56px;
   min-height: 42px;
@@ -632,6 +647,99 @@ h1 {
   color: var(--color-neutral-500);
 }
 
+.admin-auth-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 0.58fr);
+  min-height: 100vh;
+  background:
+    linear-gradient(120deg, rgba(224, 246, 244, 0.76), transparent 34%),
+    var(--color-neutral-50);
+}
+
+.admin-auth-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100vh;
+  padding: 34px 54px 54px;
+  overflow: hidden;
+}
+
+.admin-auth-brand::after {
+  position: absolute;
+  right: -180px;
+  bottom: -180px;
+  width: 520px;
+  height: 520px;
+  content: "";
+  background: rgba(0, 167, 196, 0.12);
+  border-radius: 50%;
+}
+
+.admin-auth-copy {
+  z-index: 1;
+  max-width: 760px;
+}
+
+.admin-auth-copy h1 {
+  max-width: 820px;
+}
+
+.admin-auth-copy p {
+  max-width: 660px;
+  margin: 28px 0 0;
+  font-size: 1.18rem;
+  line-height: 1.68;
+  color: var(--color-neutral-700);
+}
+
+.admin-auth-metrics {
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 720px;
+}
+
+.admin-auth-metrics article {
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 14px;
+}
+
+.admin-auth-metrics svg {
+  color: var(--color-brand-primary);
+}
+
+.admin-auth-metrics strong,
+.admin-auth-metrics span {
+  display: block;
+}
+
+.admin-auth-metrics strong {
+  margin-top: 12px;
+}
+
+.admin-auth-metrics span {
+  margin-top: 5px;
+  color: var(--color-neutral-500);
+}
+
+.admin-auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 44px;
+  background: var(--color-white);
+  border-left: 1px solid var(--color-neutral-200);
+}
+
+.admin-login-card {
+  max-width: 520px;
+}
+
 .client-dashboard {
   padding: 72px 44px;
   background: var(--color-white);
@@ -986,6 +1094,20 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .admin-auth-page {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-auth-brand {
+    min-height: auto;
+    gap: 72px;
+  }
+
+  .admin-auth-panel {
+    border-top: 1px solid var(--color-neutral-200);
+    border-left: 0;
+  }
+
   .login-panel {
     border-top: 1px solid var(--color-neutral-200);
     border-left: 0;
@@ -1008,7 +1130,9 @@ h1 {
 @media (max-width: 860px) {
   .brand-panel,
   .login-panel,
-  .client-dashboard {
+  .client-dashboard,
+  .admin-auth-brand,
+  .admin-auth-panel {
     padding: 24px;
   }
 
@@ -1047,7 +1171,9 @@ h1 {
 @media (max-width: 620px) {
   .brand-panel,
   .login-panel,
-  .client-dashboard {
+  .client-dashboard,
+  .admin-auth-brand,
+  .admin-auth-panel {
     padding: 18px;
   }
 
@@ -1093,6 +1219,14 @@ h1 {
   .tenant-list em {
     grid-column: 2;
     width: max-content;
+  }
+
+  .admin-auth-copy h1 {
+    font-size: 3rem;
+  }
+
+  .admin-auth-metrics {
+    grid-template-columns: 1fr;
   }
 
   .section-heading h2 {

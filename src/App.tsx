@@ -17,7 +17,6 @@ import {
   UserPlus,
   UsersRound,
 } from "lucide-react";
-import { FormEvent, useState } from "react";
 import {
   Button,
   FeatureItem,
@@ -26,7 +25,6 @@ import {
   StatusBadge,
   TextField,
 } from "./design-system/components";
-import { supabase } from "./lib/supabase";
 import {
   calendarItems,
   clientStats,
@@ -34,36 +32,11 @@ import {
   notificationItems,
 } from "./data/clientDashboard";
 import { features, modules, tenantCards } from "./data/landing";
+import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 
 export function App() {
-  const [loginStatus, setLoginStatus] = useState<"idle" | "loading" | "success" | "error">(
-    "idle",
-  );
-  const [loginMessage, setLoginMessage] = useState("");
-
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-
-    setLoginStatus("loading");
-    setLoginMessage("");
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setLoginStatus("error");
-      setLoginMessage("Não foi possível entrar. Confira e-mail, senha e acesso liberado.");
-      return;
-    }
-
-    setLoginStatus("success");
-    setLoginMessage("Login realizado. Próximo passo: carregar o Admin Global.");
+  if (window.location.pathname === "/admin-global") {
+    return <AdminGlobalAccess />;
   }
 
   return (
@@ -76,6 +49,10 @@ export function App() {
             </a>
 
             <div className="nav-actions" aria-label="Acesso rápido">
+              <a className="ghost-link" href="/admin-global">
+                <ShieldCheck size={17} />
+                Admin Global
+              </a>
               <Button variant="ghost" icon={<Sparkles size={17} />}>
                 Demonstração
               </Button>
@@ -167,12 +144,12 @@ export function App() {
             <div className="login-card-header">
               <img src="/img/icon-sirvaos.svg" alt="" />
               <div>
-                <span>Acesso seguro</span>
+                <span>Acesso da igreja</span>
                 <h2>Entrar no SirvaOS</h2>
               </div>
             </div>
 
-            <form className="login-form" onSubmit={handleLogin}>
+            <form className="login-form">
               <TextField
                 autoComplete="email"
                 icon={<Mail size={18} />}
@@ -204,17 +181,8 @@ export function App() {
                 <a href="/">Esqueci a senha</a>
               </div>
 
-              {loginMessage ? (
-                <p className={`login-feedback ${loginStatus}`}>{loginMessage}</p>
-              ) : null}
-
-              <Button
-                type="submit"
-                className="submit-button"
-                disabled={loginStatus === "loading"}
-                icon={<ArrowRight size={18} />}
-              >
-                {loginStatus === "loading" ? "Entrando..." : "Acessar painel"}
+              <Button type="submit" className="submit-button" icon={<ArrowRight size={18} />}>
+                Acessar painel da igreja
               </Button>
             </form>
 

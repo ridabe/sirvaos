@@ -65,7 +65,29 @@ Usuários sem papel global não acessam dados administrativos globais.
 
 ## Bootstrap do Primeiro Super Admin
 
-Depois de criar o primeiro usuário pelo Supabase Auth, promova esse usuário no banco com uma operação controlada:
+O Admin Global não deve ser criado por tela pública.
+
+A estratégia oficial do projeto é criar o usuário por processo controlado server-side/local, usando a Admin API do Supabase com `service_role`, e depois promover o perfil para `super_admin`.
+
+Script disponível:
+
+```bash
+npm run admin:create-global
+```
+
+Variáveis necessárias para executar o script:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+GLOBAL_ADMIN_EMAIL=admin@sirvaos.com
+GLOBAL_ADMIN_PASSWORD=senha-forte
+GLOBAL_ADMIN_NAME=Admin Global SirvaOS
+```
+
+O `SUPABASE_SERVICE_ROLE_KEY` nunca deve ir para o frontend, GitHub, bundle Vite ou variáveis `NEXT_PUBLIC_*`.
+
+Como alternativa, depois de criar o primeiro usuário pelo painel de Auth do Supabase, promova esse usuário no banco com uma operação controlada:
 
 ```sql
 update public.profiles
@@ -74,7 +96,26 @@ set global_role = 'super_admin',
 where email = 'email-do-admin@dominio.com';
 ```
 
-Essa operação deve ser feita no SQL Editor do Supabase ou por uma conexão administrativa segura. Não deve existir fluxo público para um usuário se promover a super admin.
+Essa operação deve ser feita no SQL Editor do Supabase ou por uma conexão administrativa segura.
+
+Evite inserir diretamente na tabela `auth.users`, porque o Supabase Auth gerencia hash de senha, confirmação, identidades e metadados próprios. Para criação programática, use a Admin API em ambiente confiável.
+
+## Rota do Admin Global
+
+A rota web exclusiva do Admin Global é:
+
+```text
+/admin-global
+```
+
+Ela autentica pelo Supabase Auth e, após o login, consulta `profiles.global_role`.
+
+Papéis aceitos:
+
+- `super_admin`
+- `operations`
+
+Usuários autenticados sem papel global ativo são desconectados e não acessam o Admin Global.
 
 ## Validações Executadas
 
