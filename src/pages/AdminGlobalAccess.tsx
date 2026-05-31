@@ -934,8 +934,9 @@ export function AdminGlobalAccess() {
 
     if (uploadError) {
       setTenantLogoUploadStatus("error");
+      const details = uploadError.message ? ` Detalhes: ${uploadError.message}` : "";
       setTenantLogoUploadMessage(
-        "Falha ao enviar logo. Verifique se o bucket `tenant-logos` existe e se há políticas de acesso para upload.",
+        `Falha ao enviar logo. Verifique se o bucket \`tenant-logos\` existe e se há políticas de acesso para upload.${details}`,
       );
       return;
     }
@@ -954,7 +955,10 @@ export function AdminGlobalAccess() {
 
     if (tenantUpdateError) {
       setTenantLogoUploadStatus("error");
-      setTenantLogoUploadMessage("Logo enviada, mas não foi possível atualizar o cadastro do tenant.");
+      const details = tenantUpdateError.message ? ` Detalhes: ${tenantUpdateError.message}` : "";
+      setTenantLogoUploadMessage(
+        `Logo enviada, mas não foi possível atualizar o cadastro do tenant.${details}`,
+      );
       return;
     }
 
@@ -1039,8 +1043,11 @@ export function AdminGlobalAccess() {
 
     if (error || !data?.temporary_password) {
       setTenantAdminProvisionStatus("error");
+      const functionErrorMessage = error?.message ? ` Detalhes: ${error.message}` : "";
+      const apiErrorMessage =
+        !error && data?.error ? ` Detalhes: ${String(data.error)}` : "";
       setTenantAdminProvisionMessage(
-        "Não foi possível provisionar o acesso. Verifique permissões, e-mail e configuração da função.",
+        `Não foi possível provisionar o acesso. Verifique permissões, e-mail e configuração da função.${functionErrorMessage}${apiErrorMessage}`,
       );
       return;
     }

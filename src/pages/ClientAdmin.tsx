@@ -1715,8 +1715,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     if (uploadError) {
       setLogoUploadStatus("error");
+      const details = uploadError.message ? ` Detalhes: ${uploadError.message}` : "";
       setLogoUploadMessage(
-        "Falha ao enviar logo. Verifique se o bucket `tenant-logos` existe no Supabase Storage.",
+        `Falha ao enviar logo. Verifique se o bucket \`tenant-logos\` existe no Supabase Storage.${details}`,
       );
       return;
     }
