@@ -1,35 +1,66 @@
-# Documentação — SirvaOS
+# SirvaOS
 
-> **Projeto:** SirvaOS  
-> **Igreja:** Primeira Igreja  
-> **Última atualização:** Maio de 2026
+**SirvaOS: organize para servir melhor.**
 
----
+Plataforma SaaS para gestão de igrejas, ministérios, membros, escalas, eventos e comunicação.
 
-## Índice da Documentação
+## Desenvolvimento
 
-| Documento | Descrição | Público |
-|---|---|---|
-| [Apresentação à Diretoria](./apresentacao-diretoria.md) | Resumo executivo com proposta, benefícios e próximos passos | Diretoria e Liderança |
-| [Visão Geral do Sistema](./visao-geral.md) | Contexto, conceito, sugestões de nome e visão de futuro | Todos |
-| [SPEC do Produto](./spec-sirvaos.md) | Especificação funcional e arquitetura do SaaS SirvaOS | Produto e Equipe Técnica |
-| [Identidade Visual](./identidade-visual.md) | Paleta inicial, tokens de cor e direção visual do produto | Produto, Design e Equipe Técnica |
-| [Catálogo de Módulos](./modulos.md) | Lista detalhada de todos os módulos previstos por fase | Líderes e Equipe Técnica |
-| [Arquitetura de Integração](./integracao.md) | Como os módulos se conectam, perfis de acesso e app mobile | Líderes e Equipe Técnica |
+```bash
+npm install
+npm run dev
+```
 
----
+Aplicação local:
 
-## Início rápido
+```text
+http://127.0.0.1:5173
+```
 
-Se você está preparando a **apresentação para a diretoria**, comece por:
-1. [Apresentação à Diretoria](./apresentacao-diretoria.md) — resumo executivo
-2. [Visão Geral](./visao-geral.md) — contexto completo e nomes sugeridos
+Build de produção:
 
-Se você quer entender **o que o sistema fará**, leia:
-1. [SPEC do Produto](./spec-sirvaos.md) — estrutura funcional e arquitetura do SaaS
-2. [Catálogo de Módulos](./modulos.md) — todos os módulos detalhados
-3. [Arquitetura de Integração](./integracao.md) — como tudo se conecta
+```bash
+npm run build
+```
 
----
+## Stack Inicial
 
-*Esta documentação é um rascunho inicial, sujeito a revisão e aprovação da diretoria.*
+- React
+- TypeScript
+- Vite
+- Lucide React
+- CSS com tokens da identidade visual SirvaOS
+
+## Estrutura
+
+```text
+src/
+  App.tsx
+  main.tsx
+  styles.css
+
+img/
+  logo-horizontal-sirvaos.svg
+  logo-vertical-sirvaos.svg
+  icon-sirvaos.svg
+  app-icon-sirvaos.svg
+  favicon-sirvaos.svg
+  banner-sirvaos.svg
+
+docs/
+  spec-sirvaos.md
+  identidade-visual.md
+  modulos.md
+  integracao.md
+```
+
+## Documentação
+
+| Documento | Descrição |
+|---|---|
+| [SPEC do Produto](./docs/spec-sirvaos.md) | Especificação funcional e arquitetura do SaaS |
+| [Identidade Visual](./docs/identidade-visual.md) | Paleta, tokens e direção visual |
+| [Catálogo de Módulos](./docs/modulos.md) | Módulos previstos por fase |
+| [Arquitetura de Integração](./docs/integracao.md) | Integração entre módulos, perfis e app |
+| [Visão Geral](./docs/visao-geral.md) | Contexto e visão do produto |
+
