@@ -286,6 +286,14 @@ export function AdminGlobalAccess() {
     return dashboardData.tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
   }, [dashboardData, selectedTenantId]);
 
+  const tenantFormLogoUrl = useMemo(() => {
+    if (!dashboardData || !tenantForm.id) {
+      return null;
+    }
+
+    return dashboardData.tenants.find((tenant) => tenant.id === tenantForm.id)?.logo_url ?? null;
+  }, [dashboardData, tenantForm.id]);
+
   const filteredTenants = useMemo(() => {
     if (!dashboardData) {
       return [];
@@ -927,7 +935,8 @@ export function AdminGlobalAccess() {
     setTenantLogoUploadStatus("loading");
     setTenantLogoUploadMessage("");
 
-    const filePath = `tenant-logos/${selectedTenantId}/${file.name}`;
+    const directory = `tenant-logos/${selectedTenantId}`;
+    const filePath = `${directory}/logo`;
     const { error: uploadError } = await supabase.storage.from("tenant-logos").upload(filePath, file, {
       upsert: true,
     });
@@ -946,6 +955,17 @@ export function AdminGlobalAccess() {
       setTenantLogoUploadStatus("error");
       setTenantLogoUploadMessage("Logo enviada, mas não foi possível obter a URL pública.");
       return;
+    }
+
+    const { data: existingFiles } = await supabase.storage.from("tenant-logos").list(directory, { limit: 100 });
+    const extraPaths =
+      (existingFiles ?? [])
+        .map((item) => item.name)
+        .filter((name) => name && name !== "logo")
+        .map((name) => `${directory}/${name}`);
+
+    if (extraPaths.length) {
+      await supabase.storage.from("tenant-logos").remove(extraPaths);
     }
 
     const { error: tenantUpdateError } = await supabase
@@ -1263,6 +1283,11 @@ export function AdminGlobalAccess() {
                   </div>
 
                   <form className="tenant-form" onSubmit={handleTenantSubmit}>
+                    {tenantFormLogoUrl ? (
+                      <div className="tenant-logo-preview">
+                        <img src={tenantFormLogoUrl} alt="Logo do tenant" />
+                      </div>
+                    ) : null}
                     <label>
                       <span>Nome da igreja</span>
                       <input
