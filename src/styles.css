@@ -59,12 +59,30 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
 button {
   cursor: pointer;
+}
+
+/* ── Focus ring — applies to every form element globally ─────────────────────
+   Uses :focus-visible so the ring only appears on keyboard navigation,
+   not on mouse clicks. Works automatically on all current and future forms. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 1px;
+  border-color: var(--color-brand-primary) !important;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
 }
 
 a {
@@ -2122,6 +2140,101 @@ h1 {
   width: 16px;
   height: 16px;
   accent-color: var(--color-brand-primary);
+}
+
+/* ── Documento (CPF / RG) ────────────────────────────── */
+.doc-type-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 1.8;
+}
+
+.doc-type-badge.cpf {
+  background: var(--color-brand-primary-soft, #e0f6f4);
+  color: var(--color-brand-primary);
+}
+
+.doc-type-badge.rg {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+}
+
+.input-error {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 2px rgba(194, 59, 59, 0.12);
+}
+
+.field-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.76rem;
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+/* ── CEP lookup ──────────────────────────────────────── */
+.cep-field-wrap {}
+
+.cep-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.cep-input-row .catalog-input {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.cep-status {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.cep-status.loading {
+  color: var(--color-brand-primary);
+  animation: cep-pulse 1s ease-in-out infinite;
+}
+
+.cep-status.error {
+  color: var(--color-danger);
+}
+
+@keyframes cep-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.check-row-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.check-row-disabled input {
+  cursor: not-allowed;
+}
+
+.check-row-tag {
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+  background: var(--color-neutral-100);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .ministry-row {

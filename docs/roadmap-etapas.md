@@ -211,6 +211,6 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 ### Concluído ou iniciado
 
 - Etapa 5 está concluída: Módulo de Membresia básico.
-- Etapa 6 Primeiro Corte concluído: tabelas, RLS, tela Admin Cliente (eventos/escalas/e-mail via Resend).
-- Etapa 6 Próximos Cortes concluídos (2026-05-31): edição/remoção de eventos e escalados no admin; calendário mensal estilo Google com cores por tipo de evento; portal do membro (/membro) com login, confirmação/recusa com justificativa e histórico; links WhatsApp por escalado no modal de notificação; indicadores de participação por integrante com taxa de confirmação.
-- Pendente: notificações push no app mobile (Etapa 10), integração WhatsApp Business API (melhoria futura).
+- Etapa 6 concluída (2026-05-31): Módulo de Louvor completo — tabelas, RLS, escalas, calendário Google, portal do membro (/membro) com confirmação/recusa, links WhatsApp, indicadores por integrante.
+- Etapa 7 concluída (2026-05-31): Módulo Financeiro — tabelas `financial_categories` e `financial_transactions`, RLS por tenant, dashboard, CRUD de lançamentos, categorias, relatórios por período/categoria, comprovantes para membros. Módulos `worship` e `financial` marcados como ativos no catálogo global. Admin Global atualizado com badges de status e filtro de módulos depreciados.
+- Pendente: notificações push no app mobile (Etapa 12), integração WhatsApp Business API (melhoria futura).

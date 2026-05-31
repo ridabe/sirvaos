@@ -259,6 +259,7 @@ type ClientDashboardData = {
   catalogMinistries: CatalogItemRecord[];
   financialCategories: FinancialCategoryRecord[];
   financialTransactions: FinancialTransactionRecord[];
+  allPlatformModules: TenantModuleRecord[];
 };
 
 type MemberFormState = {
@@ -630,6 +631,13 @@ const sampleClientDashboardData: ClientDashboardData = {
     { id: "min-sys-2", tenant_id: null, name: "Intercessão / Oração" },
     { id: "min-tenant-1", tenant_id: "demo-tenant", name: "Ministério de Artes" },
   ],
+  allPlatformModules: [
+    { id: "module-1", code: "members",       name: "Membresia",          description: "Cadastro de membros, famílias e ministérios.", status: "active" },
+    { id: "module-2", code: "calendar",      name: "Calendário Central", description: "Agenda de cultos e eventos.",                  status: "active" },
+    { id: "module-3", code: "announcements", name: "Comunicados",        description: "Comunicados gerais para membros.",              status: "active" },
+    { id: "module-4", code: "worship",       name: "Louvor",             description: "Escalas e confirmação de presença.",            status: "active" },
+    { id: "module-5", code: "financial",     name: "Financeiro",         description: "Dízimos, ofertas e relatórios.",                status: "active" },
+  ],
   financialCategories: [
     { id: "fin-cat-1", tenant_id: null, name: "Dízimos", type: "income", color: "#2f8a5f", is_system: true, sort_order: 10 },
     { id: "fin-cat-2", tenant_id: null, name: "Ofertas", type: "income", color: "#087c7a", is_system: true, sort_order: 20 },
@@ -866,6 +874,48 @@ function getTenantLogoPublicUrl(storedLogoUrl: string | null | undefined, tenant
   return data.publicUrl ? `${data.publicUrl}?v=${encodeURIComponent(rawLogo)}` : null;
 }
 
+type DocInfo = { formatted: string; type: "cpf" | "rg" | "unknown"; error: string | null };
+
+function formatDocument(raw: string): DocInfo {
+  // Keep digits and letters (RG may end in X)
+  const clean = raw.replace(/[^0-9a-zA-Z]/g, "").toUpperCase().slice(0, 11);
+  const digits = clean.replace(/[^0-9]/g, "");
+
+  // 10-11 numeric chars → CPF
+  if (digits.length >= 10 && clean === digits) {
+    const d = digits.slice(0, 11);
+    let formatted = d;
+    if (d.length > 9) formatted = `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+    else if (d.length > 6) formatted = `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+    else if (d.length > 3) formatted = `${d.slice(0,3)}.${d.slice(3)}`;
+
+    let error: string | null = null;
+    if (d.length === 11) {
+      if (/^(\d)\1{10}$/.test(d)) {
+        error = "CPF inválido";
+      } else {
+        const calc = (len: number) => {
+          let sum = 0;
+          for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
+          const r = (sum * 10) % 11;
+          return r >= 10 ? 0 : r;
+        };
+        if (calc(9) !== parseInt(d[9]) || calc(10) !== parseInt(d[10])) error = "CPF inválido";
+      }
+    }
+    return { formatted, type: "cpf", error };
+  }
+
+  // ≤ 9 chars → RG (format: 00.000.000-X)
+  const rg = clean.slice(0, 9);
+  let formatted = rg;
+  if (rg.length > 8) formatted = `${rg.slice(0,2)}.${rg.slice(2,5)}.${rg.slice(5,8)}-${rg.slice(8)}`;
+  else if (rg.length > 5) formatted = `${rg.slice(0,2)}.${rg.slice(2,5)}.${rg.slice(5)}`;
+  else if (rg.length > 2) formatted = `${rg.slice(0,2)}.${rg.slice(2)}`;
+  const type = rg.length >= 5 ? "rg" : "unknown";
+  return { formatted, type, error: null };
+}
+
 function worshipStatusLabel(status: WorshipEventRecord["status"]) {
   if (status === "published") return "Publicado";
   if (status === "completed") return "Concluido";
@@ -950,6 +1000,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [catalogSaveStatus, setCatalogSaveStatus] = useState<LoginStatus>("idle");
   const [catalogSaveMessage, setCatalogSaveMessage] = useState("");
   const [ministryPickerId, setMinistryPickerId] = useState("");
+  const [cepLookupStatus, setCepLookupStatus] = useState<"idle" | "loading" | "notfound" | "error">("idle");
+  const [cepError, setCepError] = useState<string | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
   const [financialTransactionForm, setFinancialTransactionForm] = useState<FinancialTransactionFormState>(emptyFinancialTransactionForm);
   const [financialCategoryForm, setFinancialCategoryForm] = useState<FinancialCategoryFormState>(emptyFinancialCategoryForm);
   const [isFinancialTransactionFormOpen, setIsFinancialTransactionFormOpen] = useState(false);
@@ -1347,6 +1400,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       catalogMinistriesResult,
       financialCategoriesResult,
       financialTransactionsResult,
+      allPlatformModulesResult,
     ] = await Promise.all([
         supabase
           .from("tenants")
@@ -1454,6 +1508,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .order("date", { ascending: false })
           .limit(300)
           .returns<FinancialTransactionRecord[]>(),
+        supabase
+          .from("platform_modules")
+          .select("id, code, name, description, status")
+          .eq("status", "active")
+          .order("sort_order", { ascending: true })
+          .returns<TenantModuleRecord[]>(),
       ]);
 
     if (
@@ -1474,7 +1534,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       catalogRolesResult.error ||
       catalogMinistriesResult.error ||
       financialCategoriesResult.error ||
-      financialTransactionsResult.error
+      financialTransactionsResult.error ||
+      allPlatformModulesResult.error
     ) {
       setDataStatus("error");
       setLoginMessage("Erro ao carregar dados do tenant.");
@@ -1581,6 +1642,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       catalogMinistries: catalogMinistriesResult.data ?? [],
       financialCategories: financialCategoriesResult.data ?? [],
       financialTransactions: financialTransactionsResult.data ?? [],
+      allPlatformModules: allPlatformModulesResult.data ?? [],
     });
 
     setThemeForm({
@@ -1774,6 +1836,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     setMemberForm({ ...emptyMemberForm, tenant_id: clientData?.tenant.id ?? "" });
+    setCepLookupStatus("idle");
+    setCepError(null);
+    setDocError(null);
     setMemberSaveStatus("idle");
     setMemberSaveMessage("");
     setMemberHistory([]);
@@ -1789,6 +1854,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
+    setCepLookupStatus("idle");
+    setCepError(null);
+    setDocError(null);
     const memberId = member.id;
     const roleIds = clientData?.memberRoleIdsByMemberId[memberId] ?? [];
     const ministries =
@@ -2999,6 +3067,44 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       [userId]: "Usuário atualizado.",
     }));
     await loadClientData(profile.id);
+  }
+
+  async function handleCepLookup() {
+    const raw = memberForm.address_postal_code.replace(/\D/g, "");
+    if (raw.length === 0) return;
+    if (raw.length !== 8) {
+      setCepError("CEP deve ter 8 dígitos");
+      return;
+    }
+    setCepError(null);
+    setCepLookupStatus("loading");
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+      if (!res.ok) throw new Error("HTTP error");
+      const data = (await res.json()) as {
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+        erro?: boolean;
+      };
+      if (data.erro) {
+        setCepLookupStatus("notfound");
+        setCepError("CEP não encontrado");
+        return;
+      }
+      const line1Parts = [data.logradouro, data.bairro].filter(Boolean);
+      setMemberForm((current) => ({
+        ...current,
+        address_line1: current.address_line1 || line1Parts.join(", "),
+        address_city: current.address_city || (data.localidade ?? ""),
+        address_state: current.address_state || (data.uf ?? ""),
+      }));
+      setCepLookupStatus("idle");
+    } catch {
+      setCepLookupStatus("error");
+      setCepError("Falha na consulta ao ViaCEP");
+    }
   }
 
   async function handleFinancialTransactionSubmit(event: FormEvent<HTMLFormElement>) {
@@ -5142,16 +5248,25 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </Button>
                       </div>
                       <div className="module-access-row" aria-label="Módulos administrativos liberados">
-                        {clientData.modules.map((module) => (
-                          <label key={module.id} className="check-row compact">
+                        {clientData.allPlatformModules.map((module) => {
+                          const isActiveForTenant = Boolean(activeModuleIdByCode[module.code]);
+                          return (
+                          <label
+                            key={module.id}
+                            className={`check-row compact${!isActiveForTenant ? " check-row-disabled" : ""}`}
+                            title={!isActiveForTenant ? "Módulo não ativado para este tenant" : undefined}
+                          >
                             <input
                               type="checkbox"
                               checked={edit.moduleAdminModuleIds.includes(module.id)}
                               onChange={() => toggleUserModuleAdmin(user.id, module.id)}
+                              disabled={!isActiveForTenant}
                             />
                             <span>{module.name}</span>
+                            {!isActiveForTenant ? <em className="check-row-tag">inativo</em> : null}
                           </label>
-                        ))}
+                        );
+                        })}
                       </div>
                       {userSaveMessage[user.id] ? (
                         <small className={`login-feedback ${userSaveStatus[user.id]}`}>
@@ -5385,13 +5500,56 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     />
                   </label>
                   <label>
-                    <span>Documento</span>
+                    <span>
+                      Documento
+                      {(() => {
+                        const info = formatDocument(memberForm.document_number);
+                        if (info.type === "cpf") return <em className="doc-type-badge cpf">CPF</em>;
+                        if (info.type === "rg")  return <em className="doc-type-badge rg">RG</em>;
+                        return null;
+                      })()}
+                    </span>
                     <input
-                      className="catalog-input"
-                      placeholder="CPF/RG (opcional)"
+                      className={`catalog-input${docError ? " input-error" : ""}`}
+                      placeholder="CPF ou RG"
                       value={memberForm.document_number}
-                      onChange={(event) => updateMemberForm("document_number", event.target.value)}
+                      onChange={(event) => {
+                        const info = formatDocument(event.target.value);
+                        updateMemberForm("document_number", info.formatted);
+                        setDocError(info.error);
+                      }}
                     />
+                    {docError ? <small className="field-error">{docError}</small> : null}
+                  </label>
+                </div>
+
+                <div className="cep-field-wrap">
+                  <label>
+                    <span>CEP</span>
+                    <div className="cep-input-row">
+                      <input
+                        className={`catalog-input${cepError ? " input-error" : ""}`}
+                        placeholder="00000-000"
+                        value={memberForm.address_postal_code}
+                        maxLength={9}
+                        onChange={(event) => {
+                          const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+                          const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+                          updateMemberForm("address_postal_code", formatted);
+                          setCepLookupStatus("idle");
+                          if (digits.length > 0 && digits.length < 8) {
+                            setCepError("CEP deve ter 8 dígitos");
+                          } else {
+                            setCepError(null);
+                          }
+                        }}
+                        onBlur={handleCepLookup}
+                      />
+                      {cepLookupStatus === "loading" ? (
+                        <span className="cep-status loading">Buscando...</span>
+                      ) : null}
+                    </div>
+                    {cepError ? <small className="field-error">{cepError}</small> : null}
                   </label>
                 </div>
 
@@ -5416,25 +5574,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     />
                   </label>
                   <label>
-                    <span>Estado</span>
+                    <span>Estado (UF)</span>
                     <input
                       className="catalog-input"
                       placeholder="UF"
+                      maxLength={2}
                       value={memberForm.address_state}
-                      onChange={(event) => updateMemberForm("address_state", event.target.value)}
+                      onChange={(event) => updateMemberForm("address_state", event.target.value.toUpperCase())}
                     />
                   </label>
                 </div>
-
-                <label>
-                  <span>CEP</span>
-                  <input
-                    className="catalog-input"
-                    placeholder="00000-000"
-                    value={memberForm.address_postal_code}
-                    onChange={(event) => updateMemberForm("address_postal_code", event.target.value)}
-                  />
-                </label>
               </div>
 
               <label>
@@ -5522,19 +5671,28 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <div className="modal-section">
                   <div className="modal-section-header">
                     <strong>Acesso administrativo por módulo</strong>
-                    <small>Libere um ou mais módulos ativos para este membro administrar ao entrar com usuário e senha.</small>
+                    <small>Libere módulos para este membro administrar. Apenas módulos ativos no tenant aparecerão no menu do membro.</small>
                   </div>
                   <div className="check-grid">
-                    {clientData.modules.map((module) => (
-                      <label key={module.id} className="check-row">
-                        <input
-                          type="checkbox"
-                          checked={memberForm.moduleAdminModuleIds.includes(module.id)}
-                          onChange={() => toggleMemberModuleAdmin(module.id)}
-                        />
-                        <span>{module.name}</span>
-                      </label>
-                    ))}
+                    {clientData.allPlatformModules.map((module) => {
+                      const isActiveForTenant = Boolean(activeModuleIdByCode[module.code]);
+                      return (
+                        <label
+                          key={module.id}
+                          className={`check-row${!isActiveForTenant ? " check-row-disabled" : ""}`}
+                          title={!isActiveForTenant ? "Módulo não ativado para este tenant" : undefined}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={memberForm.moduleAdminModuleIds.includes(module.id)}
+                            onChange={() => toggleMemberModuleAdmin(module.id)}
+                            disabled={!isActiveForTenant}
+                          />
+                          <span>{module.name}</span>
+                          {!isActiveForTenant ? <em className="check-row-tag">inativo</em> : null}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
