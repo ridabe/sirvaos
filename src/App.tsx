@@ -17,6 +17,7 @@ import {
   UserPlus,
   UsersRound,
 } from "lucide-react";
+import { FormEvent, useState } from "react";
 import {
   Button,
   FeatureItem,
@@ -25,6 +26,7 @@ import {
   StatusBadge,
   TextField,
 } from "./design-system/components";
+import { supabase } from "./lib/supabase";
 import {
   calendarItems,
   clientStats,
@@ -34,6 +36,36 @@ import {
 import { features, modules, tenantCards } from "./data/landing";
 
 export function App() {
+  const [loginStatus, setLoginStatus] = useState<"idle" | "loading" | "success" | "error">(
+    "idle",
+  );
+  const [loginMessage, setLoginMessage] = useState("");
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    setLoginStatus("loading");
+    setLoginMessage("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setLoginStatus("error");
+      setLoginMessage("Não foi possível entrar. Confira e-mail, senha e acesso liberado.");
+      return;
+    }
+
+    setLoginStatus("success");
+    setLoginMessage("Login realizado. Próximo passo: carregar o Admin Global.");
+  }
+
   return (
     <main>
       <section className="app-shell">
@@ -140,11 +172,12 @@ export function App() {
               </div>
             </div>
 
-            <form className="login-form">
+            <form className="login-form" onSubmit={handleLogin}>
               <TextField
                 autoComplete="email"
                 icon={<Mail size={18} />}
                 label="E-mail"
+                name="email"
                 placeholder="admin@suaigreja.org"
                 type="email"
               />
@@ -158,6 +191,7 @@ export function App() {
                 }
                 icon={<LockKeyhole size={18} />}
                 label="Senha"
+                name="password"
                 placeholder="Sua senha"
                 type="password"
               />
@@ -170,8 +204,17 @@ export function App() {
                 <a href="/">Esqueci a senha</a>
               </div>
 
-              <Button type="submit" className="submit-button" icon={<ArrowRight size={18} />}>
-                Acessar painel
+              {loginMessage ? (
+                <p className={`login-feedback ${loginStatus}`}>{loginMessage}</p>
+              ) : null}
+
+              <Button
+                type="submit"
+                className="submit-button"
+                disabled={loginStatus === "loading"}
+                icon={<ArrowRight size={18} />}
+              >
+                {loginStatus === "loading" ? "Entrando..." : "Acessar painel"}
               </Button>
             </form>
 

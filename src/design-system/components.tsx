@@ -13,6 +13,7 @@ type ButtonProps = {
   ariaLabel?: string;
   children: ReactNode;
   className?: string;
+  disabled?: boolean;
   icon?: ReactNode;
   type?: "button" | "submit";
   variant?: ButtonVariant;
@@ -22,6 +23,7 @@ export function Button({
   ariaLabel,
   children,
   className = "",
+  disabled,
   icon,
   type = "button",
   variant = "primary",
@@ -30,6 +32,7 @@ export function Button({
     <button
       aria-label={ariaLabel}
       className={`${buttonClassByVariant[variant]} ${className}`.trim()}
+      disabled={disabled}
       type={type}
     >
       {icon}
@@ -57,6 +60,7 @@ type TextFieldProps = {
   endIcon?: ReactNode;
   icon: ReactNode;
   label: string;
+  name?: string;
   placeholder: string;
   type: "email" | "password" | "text";
 };
@@ -66,6 +70,7 @@ export function TextField({
   endIcon,
   icon,
   label,
+  name,
   placeholder,
   type,
 }: TextFieldProps) {
@@ -74,7 +79,7 @@ export function TextField({
       <span>{label}</span>
       <div className="field">
         {icon}
-        <input type={type} placeholder={placeholder} autoComplete={autoComplete} />
+        <input name={name} type={type} placeholder={placeholder} autoComplete={autoComplete} />
         {endIcon}
       </div>
     </label>
