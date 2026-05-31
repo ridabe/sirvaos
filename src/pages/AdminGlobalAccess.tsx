@@ -19,7 +19,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import type { FormEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, TextField } from "../design-system/components";
 import { supabase } from "../lib/supabase";
@@ -46,6 +46,7 @@ type TenantRecord = {
   status: TenantStatus;
   contact_email: string | null;
   contact_phone: string | null;
+  logo_url: string | null;
   primary_color: string;
   accent_color: string;
   created_at: string;
@@ -69,6 +70,19 @@ type TenantMemberMetric = {
   tenant_id: string;
   total_members: number;
   active_members: number;
+};
+
+type TenantFeatureFlagRecord = {
+  tenant_id: string;
+  flag_key: string;
+  enabled: boolean;
+  payload: Record<string, unknown>;
+};
+
+type TenantFeatureFlagFormRow = {
+  flag_key: string;
+  enabled: boolean;
+  payloadText: string;
 };
 
 type AuditLogRecord = {
@@ -241,6 +255,21 @@ export function AdminGlobalAccess() {
   const [catalogModuleSaveStatus, setCatalogModuleSaveStatus] = useState<LoginStatus>("idle");
   const [catalogModuleSaveMessage, setCatalogModuleSaveMessage] = useState("");
 
+  const [tenantLogoUploadStatus, setTenantLogoUploadStatus] = useState<LoginStatus>("idle");
+  const [tenantLogoUploadMessage, setTenantLogoUploadMessage] = useState("");
+
+  const [tenantFeatureFlags, setTenantFeatureFlags] = useState<TenantFeatureFlagFormRow[]>([]);
+  const [tenantFeatureFlagsStatus, setTenantFeatureFlagsStatus] = useState<LoadStatus>("idle");
+  const [tenantFeatureFlagsSaveStatus, setTenantFeatureFlagsSaveStatus] = useState<LoginStatus>("idle");
+  const [tenantFeatureFlagsMessage, setTenantFeatureFlagsMessage] = useState("");
+
+  const [tenantAdminEmail, setTenantAdminEmail] = useState("");
+  const [tenantAdminName, setTenantAdminName] = useState("");
+  const [tenantAdminRole, setTenantAdminRole] = useState<"owner" | "admin">("owner");
+  const [tenantAdminProvisionStatus, setTenantAdminProvisionStatus] = useState<LoginStatus>("idle");
+  const [tenantAdminProvisionMessage, setTenantAdminProvisionMessage] = useState("");
+  const [tenantAdminTemporaryPassword, setTenantAdminTemporaryPassword] = useState<string | null>(null);
+
   const selectedModulesTenant = useMemo(() => {
     if (!dashboardData || !selectedModulesTenantId) {
       return null;
@@ -304,6 +333,23 @@ export function AdminGlobalAccess() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!selectedTenantId) {
+      setTenantFeatureFlags([]);
+      setTenantFeatureFlagsStatus("idle");
+      setTenantFeatureFlagsSaveStatus("idle");
+      setTenantFeatureFlagsMessage("");
+      setTenantAdminTemporaryPassword(null);
+      setTenantAdminProvisionStatus("idle");
+      setTenantAdminProvisionMessage("");
+      setTenantLogoUploadStatus("idle");
+      setTenantLogoUploadMessage("");
+      return;
+    }
+
+    void loadTenantFeatureFlags(selectedTenantId);
+  }, [selectedTenantId]);
 
   async function handleAdminLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -423,6 +469,7 @@ export function AdminGlobalAccess() {
             status,
             contact_email,
             contact_phone,
+            logo_url,
             primary_color,
             accent_color,
             created_at,
@@ -768,6 +815,241 @@ export function AdminGlobalAccess() {
     setIsTenantFormOpen(false);
     setTenantForm(emptyTenantForm);
     await loadDashboardData();
+  }
+
+  async function loadTenantFeatureFlags(tenantId: string) {
+    setTenantFeatureFlagsStatus("loading");
+    setTenantFeatureFlagsMessage("");
+
+    const { data, error } = await supabase
+      .from("tenant_feature_flags")
+      .select("tenant_id, flag_key, enabled, payload")
+      .eq("tenant_id", tenantId)
+      .order("flag_key", { ascending: true })
+      .returns<TenantFeatureFlagRecord[]>();
+
+    if (error) {
+      setTenantFeatureFlagsStatus("error");
+      setTenantFeatureFlagsMessage("Não foi possível carregar as configurações do tenant.");
+      return;
+    }
+
+    setTenantFeatureFlags(
+      (data ?? []).map((row) => ({
+        flag_key: row.flag_key,
+        enabled: row.enabled,
+        payloadText: JSON.stringify(row.payload ?? {}, null, 2),
+      })),
+    );
+    setTenantFeatureFlagsStatus("ready");
+  }
+
+  function updateFeatureFlagRow(index: number, field: keyof TenantFeatureFlagFormRow, value: string | boolean) {
+    setTenantFeatureFlags((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              [field]: value,
+            }
+          : row,
+      ),
+    );
+  }
+
+  function addFeatureFlagRow() {
+    setTenantFeatureFlags((current) => [
+      ...current,
+      {
+        flag_key: "",
+        enabled: false,
+        payloadText: "{}",
+      },
+    ]);
+  }
+
+  function removeFeatureFlagRow(index: number) {
+    setTenantFeatureFlags((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  async function handleSaveFeatureFlags() {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setTenantFeatureFlagsSaveStatus("loading");
+    setTenantFeatureFlagsMessage("");
+
+    const rowsToPersist: Array<{ tenant_id: string; flag_key: string; enabled: boolean; payload: unknown }> = [];
+
+    for (const row of tenantFeatureFlags) {
+      const flagKey = row.flag_key.trim();
+      if (!flagKey) {
+        continue;
+      }
+
+      try {
+        const parsed = row.payloadText?.trim() ? JSON.parse(row.payloadText) : {};
+        rowsToPersist.push({
+          tenant_id: selectedTenantId,
+          flag_key: flagKey,
+          enabled: row.enabled,
+          payload: parsed ?? {},
+        });
+      } catch {
+        setTenantFeatureFlagsSaveStatus("error");
+        setTenantFeatureFlagsMessage(`Payload inválido no flag "${flagKey}". Use JSON válido.`);
+        return;
+      }
+    }
+
+    const { error } = await supabase.from("tenant_feature_flags").upsert(rowsToPersist, {
+      onConflict: "tenant_id,flag_key",
+    });
+
+    if (error) {
+      setTenantFeatureFlagsSaveStatus("error");
+      setTenantFeatureFlagsMessage("Não foi possível salvar as configurações do tenant.");
+      return;
+    }
+
+    setTenantFeatureFlagsSaveStatus("success");
+    setTenantFeatureFlagsMessage("Configurações atualizadas.");
+    await loadTenantFeatureFlags(selectedTenantId);
+  }
+
+  async function handleTenantLogoUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !selectedTenantId) {
+      return;
+    }
+
+    setTenantLogoUploadStatus("loading");
+    setTenantLogoUploadMessage("");
+
+    const filePath = `tenant-logos/${selectedTenantId}/${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("tenant-logos").upload(filePath, file, {
+      upsert: true,
+    });
+
+    if (uploadError) {
+      setTenantLogoUploadStatus("error");
+      setTenantLogoUploadMessage(
+        "Falha ao enviar logo. Verifique se o bucket `tenant-logos` existe e se há políticas de acesso para upload.",
+      );
+      return;
+    }
+
+    const { data } = supabase.storage.from("tenant-logos").getPublicUrl(filePath);
+    if (!data.publicUrl) {
+      setTenantLogoUploadStatus("error");
+      setTenantLogoUploadMessage("Logo enviada, mas não foi possível obter a URL pública.");
+      return;
+    }
+
+    const { error: tenantUpdateError } = await supabase
+      .from("tenants")
+      .update({ logo_url: data.publicUrl })
+      .eq("id", selectedTenantId);
+
+    if (tenantUpdateError) {
+      setTenantLogoUploadStatus("error");
+      setTenantLogoUploadMessage("Logo enviada, mas não foi possível atualizar o cadastro do tenant.");
+      return;
+    }
+
+    setTenantLogoUploadStatus("success");
+    setTenantLogoUploadMessage("Logo enviada com sucesso.");
+    await loadDashboardData();
+  }
+
+  async function handleRemoveTenantLogo() {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setTenantLogoUploadStatus("loading");
+    setTenantLogoUploadMessage("");
+
+    const { error } = await supabase.from("tenants").update({ logo_url: null }).eq("id", selectedTenantId);
+    if (error) {
+      setTenantLogoUploadStatus("error");
+      setTenantLogoUploadMessage("Não foi possível remover a logo deste tenant.");
+      return;
+    }
+
+    setTenantLogoUploadStatus("success");
+    setTenantLogoUploadMessage("Logo removida.");
+    await loadDashboardData();
+  }
+
+  async function handleToggleTenantStatus() {
+    if (!selectedTenantId || !selectedTenant) {
+      return;
+    }
+
+    const nextStatus: TenantStatus = selectedTenant.status === "active" ? "suspended" : "active";
+    const { error } = await supabase.from("tenants").update({ status: nextStatus }).eq("id", selectedTenantId);
+
+    if (error) {
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    await supabase.from("audit_logs").insert({
+      tenant_id: selectedTenantId,
+      actor_user_id: userData.user?.id ?? null,
+      action: "tenant.status.updated",
+      entity_type: "tenant",
+      entity_id: selectedTenantId,
+      metadata: {
+        from: selectedTenant.status,
+        to: nextStatus,
+      },
+    });
+
+    await loadDashboardData();
+  }
+
+  async function handleProvisionTenantAdmin(action: "create" | "reset") {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setTenantAdminProvisionStatus("loading");
+    setTenantAdminProvisionMessage("");
+    setTenantAdminTemporaryPassword(null);
+
+    const email = tenantAdminEmail.trim().toLowerCase();
+    if (!email) {
+      setTenantAdminProvisionStatus("error");
+      setTenantAdminProvisionMessage("Informe o e-mail do admin do tenant.");
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke("provision-tenant-admin", {
+      body: {
+        tenant_id: selectedTenantId,
+        email,
+        full_name: tenantAdminName.trim() || null,
+        role: tenantAdminRole,
+        action,
+      },
+    });
+
+    if (error || !data?.temporary_password) {
+      setTenantAdminProvisionStatus("error");
+      setTenantAdminProvisionMessage(
+        "Não foi possível provisionar o acesso. Verifique permissões, e-mail e configuração da função.",
+      );
+      return;
+    }
+
+    setTenantAdminProvisionStatus("success");
+    setTenantAdminProvisionMessage(
+      action === "reset" ? "Senha resetada. Envie a senha temporária ao cliente." : "Acesso criado. Envie a senha temporária ao cliente.",
+    );
+    setTenantAdminTemporaryPassword(String(data.temporary_password));
   }
 
   function openModulesPanel(tenant: TenantRecord) {
@@ -1653,6 +1935,16 @@ export function AdminGlobalAccess() {
                               <span>{selectedTenant.contact_phone ?? "-"}</span>
                             </article>
                             <article>
+                              <strong>Logo</strong>
+                              <span className="tenant-logo-preview">
+                                {selectedTenant.logo_url ? (
+                                  <img src={selectedTenant.logo_url} alt="Logo do tenant" />
+                                ) : (
+                                  <em className="placeholder">Sem logo</em>
+                                )}
+                              </span>
+                            </article>
+                            <article>
                               <strong>Cores</strong>
                               <span className="tenant-color-samples">
                                 <em style={{ background: selectedTenant.primary_color }} />
@@ -1692,6 +1984,9 @@ export function AdminGlobalAccess() {
                             <Button variant="ghost" onClick={() => openModulesPanel(selectedTenant)}>
                               Configurar módulos
                             </Button>
+                            <Button variant="secondary" onClick={handleToggleTenantStatus}>
+                              {selectedTenant.status === "active" ? "Desativar (suspender)" : "Ativar tenant"}
+                            </Button>
                             <Button
                               variant="secondary"
                               onClick={() => window.open("/admin-cliente", "_blank")}
@@ -1699,6 +1994,172 @@ export function AdminGlobalAccess() {
                               Abrir Admin Cliente
                             </Button>
                           </div>
+                        </div>
+
+                        <div className="tenant-detail-sections">
+                          <section className="tenant-detail-section" aria-label="Identidade do tenant">
+                            <header>
+                              <strong>Identidade</strong>
+                              <span>Logo e aparência da área do cliente</span>
+                            </header>
+                            <div className="tenant-detail-section-body">
+                              <label className="tenant-file">
+                                <span>Enviar logo</span>
+                                <input type="file" accept="image/*" onChange={handleTenantLogoUpload} />
+                              </label>
+                              <div className="tenant-detail-inline-actions">
+                                <Button variant="ghost" onClick={handleRemoveTenantLogo} disabled={!selectedTenant.logo_url}>
+                                  Remover logo
+                                </Button>
+                              </div>
+                              {tenantLogoUploadMessage ? (
+                                <p className={`login-feedback ${tenantLogoUploadStatus}`}>{tenantLogoUploadMessage}</p>
+                              ) : null}
+                            </div>
+                          </section>
+
+                          <section className="tenant-detail-section" aria-label="Configurações do sistema">
+                            <header>
+                              <strong>Configurações do sistema</strong>
+                              <span>Feature flags e parâmetros por tenant</span>
+                            </header>
+                            <div className="tenant-detail-section-body">
+                              {tenantFeatureFlagsStatus === "loading" ? (
+                                <p className="tenant-section-hint">Carregando configurações...</p>
+                              ) : null}
+                              {tenantFeatureFlagsStatus === "error" ? (
+                                <p className="login-feedback error">{tenantFeatureFlagsMessage}</p>
+                              ) : null}
+
+                              <div className="tenant-flag-actions">
+                                <Button variant="ghost" onClick={addFeatureFlagRow}>
+                                  Adicionar flag
+                                </Button>
+                              </div>
+
+                              {tenantFeatureFlags.length > 0 ? (
+                                <div className="tenant-flags">
+                                  {tenantFeatureFlags.map((row, index) => (
+                                    <div key={`${row.flag_key}-${index}`} className="tenant-flag-row">
+                                      <input
+                                        value={row.flag_key}
+                                        onChange={(event) => updateFeatureFlagRow(index, "flag_key", event.target.value)}
+                                        placeholder="ex.: modules.members.enabled"
+                                      />
+                                      <label className="tenant-flag-toggle">
+                                        <input
+                                          type="checkbox"
+                                          checked={row.enabled}
+                                          onChange={(event) => updateFeatureFlagRow(index, "enabled", event.target.checked)}
+                                        />
+                                        <span>Ativo</span>
+                                      </label>
+                                      <textarea
+                                        value={row.payloadText}
+                                        onChange={(event) => updateFeatureFlagRow(index, "payloadText", event.target.value)}
+                                        rows={4}
+                                        spellCheck={false}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="panel-icon-button danger"
+                                        aria-label="Remover flag da lista"
+                                        onClick={() => removeFeatureFlagRow(index)}
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="tenant-section-hint">Nenhuma configuração cadastrada para este tenant.</p>
+                              )}
+
+                              {tenantFeatureFlagsMessage ? (
+                                <p className={`login-feedback ${tenantFeatureFlagsSaveStatus}`}>{tenantFeatureFlagsMessage}</p>
+                              ) : null}
+
+                              <div className="tenant-detail-inline-actions">
+                                <Button
+                                  type="button"
+                                  onClick={handleSaveFeatureFlags}
+                                  disabled={tenantFeatureFlagsSaveStatus === "loading"}
+                                  icon={<ArrowRight size={18} />}
+                                >
+                                  {tenantFeatureFlagsSaveStatus === "loading" ? "Salvando..." : "Salvar configurações"}
+                                </Button>
+                              </div>
+                            </div>
+                          </section>
+
+                          <section className="tenant-detail-section" aria-label="Acesso administrativo do cliente">
+                            <header>
+                              <strong>Acesso do cliente</strong>
+                              <span>Crie ou resete a senha do admin do tenant</span>
+                            </header>
+                            <div className="tenant-detail-section-body">
+                              <div className="tenant-access-grid">
+                                <label>
+                                  <span>E-mail do admin</span>
+                                  <input
+                                    value={tenantAdminEmail}
+                                    onChange={(event) => setTenantAdminEmail(event.target.value)}
+                                    placeholder="admin@igreja.org"
+                                    type="email"
+                                  />
+                                </label>
+                                <label>
+                                  <span>Nome</span>
+                                  <input
+                                    value={tenantAdminName}
+                                    onChange={(event) => setTenantAdminName(event.target.value)}
+                                    placeholder="Admin da igreja"
+                                  />
+                                </label>
+                                <label>
+                                  <span>Papel</span>
+                                  <select
+                                    value={tenantAdminRole}
+                                    onChange={(event) => setTenantAdminRole(event.target.value as "owner" | "admin")}
+                                  >
+                                    <option value="owner">Owner (admin geral)</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                </label>
+                              </div>
+
+                              <div className="tenant-detail-inline-actions">
+                                <Button
+                                  type="button"
+                                  onClick={() => handleProvisionTenantAdmin("create")}
+                                  disabled={tenantAdminProvisionStatus === "loading"}
+                                  icon={<LockKeyhole size={18} />}
+                                >
+                                  {tenantAdminProvisionStatus === "loading" ? "Gerando..." : "Gerar senha de 1º acesso"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => handleProvisionTenantAdmin("reset")}
+                                  disabled={tenantAdminProvisionStatus === "loading"}
+                                >
+                                  Resetar senha
+                                </Button>
+                              </div>
+
+                              {tenantAdminProvisionMessage ? (
+                                <p className={`login-feedback ${tenantAdminProvisionStatus}`}>{tenantAdminProvisionMessage}</p>
+                              ) : null}
+
+                              {tenantAdminTemporaryPassword ? (
+                                <div className="tenant-temp-password" aria-label="Senha temporária">
+                                  <strong>Senha temporária</strong>
+                                  <code>{tenantAdminTemporaryPassword}</code>
+                                  <small>Entregue esta senha ao cliente. Ela deve ser trocada no primeiro acesso.</small>
+                                </div>
+                              ) : null}
+                            </div>
+                          </section>
                         </div>
                       </section>
                     ) : null}

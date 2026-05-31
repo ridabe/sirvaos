@@ -417,6 +417,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [dataStatus, setDataStatus] = useState<LoadStatus>("idle");
   const [clientData, setClientData] = useState<ClientDashboardData | null>(null);
   const [activeTab, setActiveTab] = useState<ClientTab>("overview");
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [passwordDraftConfirm, setPasswordDraftConfirm] = useState("");
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<LoginStatus>("idle");
+  const [passwordChangeMessage, setPasswordChangeMessage] = useState("");
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
   const [memberStatusFilter, setMemberStatusFilter] = useState<"all" | MemberFormState["status"]>("all");
   const [memberForm, setMemberForm] = useState<MemberFormState>(emptyMemberForm);
@@ -556,12 +561,55 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         return;
       }
 
+      setMustChangePassword(Boolean((data.user.user_metadata as Record<string, unknown> | null)?.must_change_password));
       const currentProfile = await loadClientData(data.user.id);
       if (currentProfile) {
         setProfile(currentProfile);
       }
     });
   }, [demoMode]);
+
+  async function handleForcePasswordChangeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (demoMode) {
+      return;
+    }
+
+    setPasswordChangeStatus("loading");
+    setPasswordChangeMessage("");
+
+    const nextPassword = passwordDraft;
+    if (!nextPassword || nextPassword.length < 8) {
+      setPasswordChangeStatus("error");
+      setPasswordChangeMessage("A nova senha deve ter pelo menos 8 caracteres.");
+      return;
+    }
+
+    if (nextPassword !== passwordDraftConfirm) {
+      setPasswordChangeStatus("error");
+      setPasswordChangeMessage("As senhas não conferem.");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: nextPassword,
+      data: {
+        must_change_password: false,
+      },
+    });
+
+    if (error) {
+      setPasswordChangeStatus("error");
+      setPasswordChangeMessage("Não foi possível atualizar a senha. Tente novamente.");
+      return;
+    }
+
+    setPasswordChangeStatus("success");
+    setPasswordChangeMessage("Senha atualizada com sucesso.");
+    setMustChangePassword(false);
+    setPasswordDraft("");
+    setPasswordDraftConfirm("");
+  }
 
   async function loadClientData(userId: string) {
     setDataStatus("loading");
@@ -1785,6 +1833,58 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
   return (
     <main className="client-admin-page">
+      {mustChangePassword ? (
+        <div className="modal-overlay" aria-label="Troca de senha obrigatória">
+          <section className="modal-card">
+            <div className="modal-header">
+              <div>
+                <span>Segurança</span>
+                <h2>Trocar senha no primeiro acesso</h2>
+              </div>
+            </div>
+
+            <form className="modal-body" onSubmit={handleForcePasswordChangeSubmit}>
+              <div className="modal-grid">
+                <label>
+                  <span>Nova senha</span>
+                  <input
+                    value={passwordDraft}
+                    onChange={(event) => setPasswordDraft(event.target.value)}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Crie uma senha forte"
+                  />
+                </label>
+                <label>
+                  <span>Confirmar nova senha</span>
+                  <input
+                    value={passwordDraftConfirm}
+                    onChange={(event) => setPasswordDraftConfirm(event.target.value)}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Repita a senha"
+                  />
+                </label>
+              </div>
+
+              {passwordChangeMessage ? (
+                <p className={`login-feedback ${passwordChangeStatus}`}>{passwordChangeMessage}</p>
+              ) : null}
+
+              <div className="modal-actions">
+                <Button
+                  type="submit"
+                  disabled={passwordChangeStatus === "loading"}
+                  icon={<ArrowRight size={18} />}
+                >
+                  {passwordChangeStatus === "loading" ? "Salvando..." : "Atualizar senha"}
+                </Button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
       <aside className="client-admin-sidebar" aria-label="Navegação do Admin Cliente">
         <div className="client-brand">
           <span>{tenant.name.slice(0, 2).toUpperCase()}</span>

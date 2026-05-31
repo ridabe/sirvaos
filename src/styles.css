@@ -970,6 +970,191 @@ h1 {
   align-items: start;
 }
 
+.tenant-logo-preview {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 44px;
+}
+
+.tenant-logo-preview img {
+  max-height: 44px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.tenant-logo-preview .placeholder {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+}
+
+.tenant-detail-sections {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.tenant-detail-section {
+  padding: 16px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 14px;
+}
+
+.tenant-detail-section header {
+  display: grid;
+  gap: 4px;
+}
+
+.tenant-detail-section header strong {
+  font-size: 1rem;
+}
+
+.tenant-detail-section header span {
+  color: var(--color-neutral-600);
+  font-size: 0.92rem;
+}
+
+.tenant-detail-section-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.tenant-file {
+  display: grid;
+  gap: 6px;
+}
+
+.tenant-file span {
+  font-size: 0.78rem;
+  color: var(--color-neutral-600);
+}
+
+.tenant-detail-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.tenant-section-hint {
+  color: var(--color-neutral-600);
+  font-size: 0.95rem;
+}
+
+.tenant-flag-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tenant-flags {
+  display: grid;
+  gap: 10px;
+}
+
+.tenant-flag-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 120px minmax(220px, 1.5fr) 40px;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 12px;
+}
+
+.tenant-flag-row input,
+.tenant-flag-row select,
+.tenant-flag-row textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  color: var(--color-neutral-950);
+  font: inherit;
+}
+
+.tenant-flag-row textarea {
+  min-height: 110px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 0.88rem;
+}
+
+.tenant-flag-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  background: var(--color-neutral-50);
+  color: var(--color-neutral-700);
+  font-weight: 700;
+}
+
+.tenant-flag-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: unset;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.panel-icon-button.danger {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-color: rgba(202, 60, 60, 0.14);
+}
+
+.tenant-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tenant-access-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.tenant-access-grid label span {
+  font-size: 0.78rem;
+  color: var(--color-neutral-600);
+}
+
+.tenant-temp-password {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(8, 124, 122, 0.15);
+  background: rgba(8, 124, 122, 0.06);
+  display: grid;
+  gap: 8px;
+}
+
+.tenant-temp-password code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-weight: 800;
+  font-size: 0.98rem;
+  overflow-x: auto;
+}
+
+.tenant-temp-password small {
+  color: var(--color-neutral-600);
+}
+
 .global-panel-heading {
   display: flex;
   align-items: center;
@@ -2347,6 +2532,12 @@ h1 {
 
   .tenant-table-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .tenant-detail-grid,
+  .tenant-access-grid,
+  .tenant-flag-row {
+    grid-template-columns: 1fr;
   }
 
   .members-panel {
