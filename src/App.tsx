@@ -33,10 +33,19 @@ import {
 } from "./data/clientDashboard";
 import { features, modules, tenantCards } from "./data/landing";
 import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
+import { ClientAdmin } from "./pages/ClientAdmin";
 
 export function App() {
   if (window.location.pathname === "/admin-global") {
     return <AdminGlobalAccess />;
+  }
+
+  if (window.location.pathname === "/admin-cliente") {
+    return <ClientAdmin />;
+  }
+
+  if (window.location.pathname === "/admin-cliente-demo") {
+    return <ClientAdmin demoMode />;
   }
 
   return (
@@ -52,6 +61,14 @@ export function App() {
               <a className="ghost-link" href="/admin-global">
                 <ShieldCheck size={17} />
                 Admin Global
+              </a>
+              <a className="ghost-link" href="/admin-cliente">
+                <Church size={17} />
+                Admin Cliente
+              </a>
+              <a className="ghost-link" href="/admin-cliente-demo">
+                <Eye size={17} />
+                Teste Cliente
               </a>
               <Button variant="ghost" icon={<Sparkles size={17} />}>
                 Demonstração
@@ -79,7 +96,10 @@ export function App() {
               </p>
 
               <div className="hero-actions">
-                <Button icon={<ArrowRight size={18} />}>Conhecer o painel</Button>
+                <a className="ghost-link" href="/admin-cliente">
+                  <ArrowRight size={18} />
+                  Conhecer o painel
+                </a>
                 <Button variant="secondary" icon={<Smartphone size={18} />}>
                   Ver app do membro
                 </Button>

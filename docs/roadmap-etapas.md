@@ -185,8 +185,9 @@ Objetivo: preparar para clientes reais.
 ### Concluído ou iniciado
 
 - Etapa 1 está parcialmente concluída: documentação, identidade visual, assets de marca, base React/Vite, design system inicial, tela inicial/login e push para o repositório.
-- Etapa 2 está em andamento: existe uma prévia visual do Admin Global com cards de tenants, a rota exclusiva `/admin-global` já usa Supabase Auth com validação de papel global, a base Supabase inicial foi criada, o primeiro dashboard interno com métricas, auditoria e listagem de tenants já consulta dados reais do Supabase, o cadastro/edição básico de tenant já salva no Supabase, e a ativação de módulos por tenant já persiste em `tenant_modules`.
+- Etapa 2 está em andamento e avançada: o Admin Global está funcional em `/admin-global`, com login global, gestão de tenants, cadastro/edição de tenants, planos comerciais e catálogo de módulos, além de ativação de módulos por tenant persistida em `tenant_modules`.
 - Etapa 3 foi iniciada antes da Etapa 2 completa: existe uma primeira fundação visual do Admin Cliente/Igreja com dashboard, membros, calendário, notificações e preview white-label.
+- Etapa 3 de testes foi iniciada com rota de demonstração do Admin Cliente e script de seed de tenant de demo para validação do fluxo.
 
 ### Próxima etapa lógica
 

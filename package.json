@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "admin:create-global": "node scripts/create-global-admin.mjs",
+    "seed:tenant-demo": "node scripts/seed-tenant-demo.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
