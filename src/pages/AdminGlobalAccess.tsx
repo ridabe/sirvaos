@@ -85,6 +85,14 @@ type TenantFeatureFlagFormRow = {
   payloadText: string;
 };
 
+type TenantAdminRecord = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  tenant_role: "owner" | "admin" | "member";
+  status: "active" | "invited" | "suspended";
+};
+
 type AuditLogRecord = {
   id: number;
   action: string;
@@ -266,9 +274,14 @@ export function AdminGlobalAccess() {
   const [tenantAdminEmail, setTenantAdminEmail] = useState("");
   const [tenantAdminName, setTenantAdminName] = useState("");
   const [tenantAdminRole, setTenantAdminRole] = useState<"owner" | "admin">("owner");
+  const [tenantAdminsStatus, setTenantAdminsStatus] = useState<LoadStatus>("idle");
+  const [tenantAdmins, setTenantAdmins] = useState<TenantAdminRecord[]>([]);
+  const [selectedTenantAdminId, setSelectedTenantAdminId] = useState<string>("");
   const [tenantAdminProvisionStatus, setTenantAdminProvisionStatus] = useState<LoginStatus>("idle");
   const [tenantAdminProvisionMessage, setTenantAdminProvisionMessage] = useState("");
   const [tenantAdminTemporaryPassword, setTenantAdminTemporaryPassword] = useState<string | null>(null);
+
+  const [resolvedTenantLogoUrl, setResolvedTenantLogoUrl] = useState<string | null>(null);
 
   const selectedModulesTenant = useMemo(() => {
     if (!dashboardData || !selectedModulesTenantId) {
@@ -287,12 +300,12 @@ export function AdminGlobalAccess() {
   }, [dashboardData, selectedTenantId]);
 
   const tenantFormLogoUrl = useMemo(() => {
-    if (!dashboardData || !tenantForm.id) {
+    if (!tenantForm.id) {
       return null;
     }
 
-    return dashboardData.tenants.find((tenant) => tenant.id === tenantForm.id)?.logo_url ?? null;
-  }, [dashboardData, tenantForm.id]);
+    return resolvedTenantLogoUrl;
+  }, [resolvedTenantLogoUrl, tenantForm.id]);
 
   const filteredTenants = useMemo(() => {
     if (!dashboardData) {
@@ -353,10 +366,19 @@ export function AdminGlobalAccess() {
       setTenantAdminProvisionMessage("");
       setTenantLogoUploadStatus("idle");
       setTenantLogoUploadMessage("");
+      setTenantAdminsStatus("idle");
+      setTenantAdmins([]);
+      setSelectedTenantAdminId("");
+      setTenantAdminEmail("");
+      setTenantAdminName("");
+      setTenantAdminRole("owner");
+      setResolvedTenantLogoUrl(null);
       return;
     }
 
     void loadTenantFeatureFlags(selectedTenantId);
+    void loadTenantAdmins(selectedTenantId);
+    void resolveTenantLogo(selectedTenantId);
   }, [selectedTenantId]);
 
   async function handleAdminLogin(event: FormEvent<HTMLFormElement>) {
@@ -852,6 +874,50 @@ export function AdminGlobalAccess() {
     setTenantFeatureFlagsStatus("ready");
   }
 
+  async function loadTenantAdmins(tenantId: string) {
+    setTenantAdminsStatus("loading");
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, tenant_role, status")
+      .eq("tenant_id", tenantId)
+      .returns<TenantAdminRecord[]>();
+
+    if (error) {
+      setTenantAdminsStatus("error");
+      setTenantAdmins([]);
+      return;
+    }
+
+    const admins = (data ?? [])
+      .filter((row) => row.status === "active" && (row.tenant_role === "owner" || row.tenant_role === "admin"))
+      .sort((a, b) => (a.tenant_role === "owner" ? -1 : 0) - (b.tenant_role === "owner" ? -1 : 0));
+
+    setTenantAdmins(admins);
+    setTenantAdminsStatus("ready");
+
+    const owner = admins.find((row) => row.tenant_role === "owner") ?? admins[0] ?? null;
+    if (owner) {
+      setSelectedTenantAdminId(owner.id);
+      setTenantAdminEmail(owner.email);
+      setTenantAdminName(owner.full_name ?? "");
+      setTenantAdminRole(owner.tenant_role === "admin" ? "admin" : "owner");
+    }
+  }
+
+  async function resolveTenantLogo(tenantId: string) {
+    const fallback = dashboardData?.tenants.find((tenant) => tenant.id === tenantId)?.logo_url ?? null;
+    const objectPath = `tenant-logos/${tenantId}/logo`;
+    const { data, error } = await supabase.storage.from("tenant-logos").createSignedUrl(objectPath, 60 * 60);
+
+    if (error || !data?.signedUrl) {
+      setResolvedTenantLogoUrl(fallback);
+      return;
+    }
+
+    setResolvedTenantLogoUrl(data.signedUrl);
+  }
+
   function updateFeatureFlagRow(index: number, field: keyof TenantFeatureFlagFormRow, value: string | boolean) {
     setTenantFeatureFlags((current) =>
       current.map((row, rowIndex) =>
@@ -950,10 +1016,11 @@ export function AdminGlobalAccess() {
       return;
     }
 
-    const { data } = supabase.storage.from("tenant-logos").getPublicUrl(filePath);
-    if (!data.publicUrl) {
+    const signedLogo = await supabase.storage.from("tenant-logos").createSignedUrl(filePath, 60 * 60);
+    const logoUrl = signedLogo.data?.signedUrl ?? null;
+    if (!logoUrl) {
       setTenantLogoUploadStatus("error");
-      setTenantLogoUploadMessage("Logo enviada, mas não foi possível obter a URL pública.");
+      setTenantLogoUploadMessage("Logo enviada, mas não foi possível obter a URL da imagem.");
       return;
     }
 
@@ -970,7 +1037,7 @@ export function AdminGlobalAccess() {
 
     const { error: tenantUpdateError } = await supabase
       .from("tenants")
-      .update({ logo_url: data.publicUrl })
+      .update({ logo_url: logoUrl })
       .eq("id", selectedTenantId);
 
     if (tenantUpdateError) {
@@ -984,6 +1051,7 @@ export function AdminGlobalAccess() {
 
     setTenantLogoUploadStatus("success");
     setTenantLogoUploadMessage("Logo enviada com sucesso.");
+    setResolvedTenantLogoUrl(logoUrl);
     await loadDashboardData();
   }
 
@@ -1969,8 +2037,8 @@ export function AdminGlobalAccess() {
                             <article>
                               <strong>Logo</strong>
                               <span className="tenant-logo-preview">
-                                {selectedTenant.logo_url ? (
-                                  <img src={selectedTenant.logo_url} alt="Logo do tenant" />
+                                {resolvedTenantLogoUrl ? (
+                                  <img src={resolvedTenantLogoUrl} alt="Logo do tenant" />
                                 ) : (
                                   <em className="placeholder">Sem logo</em>
                                 )}
@@ -2130,6 +2198,38 @@ export function AdminGlobalAccess() {
                               <span>Crie ou resete a senha do admin do tenant</span>
                             </header>
                             <div className="tenant-detail-section-body">
+                              <div className="tenant-access-admins">
+                                <label>
+                                  <span>Admin cadastrado</span>
+                                  <select
+                                    value={selectedTenantAdminId}
+                                    onChange={(event) => {
+                                      const nextId = event.target.value;
+                                      setSelectedTenantAdminId(nextId);
+                                      const selected = tenantAdmins.find((row) => row.id === nextId) ?? null;
+                                      if (selected) {
+                                        setTenantAdminEmail(selected.email);
+                                        setTenantAdminName(selected.full_name ?? "");
+                                        setTenantAdminRole(selected.tenant_role === "admin" ? "admin" : "owner");
+                                      }
+                                    }}
+                                    disabled={tenantAdminsStatus === "loading" || tenantAdmins.length === 0}
+                                  >
+                                    {tenantAdmins.length === 0 ? (
+                                      <option value="">
+                                        {tenantAdminsStatus === "loading" ? "Carregando..." : "Nenhum admin encontrado"}
+                                      </option>
+                                    ) : (
+                                      tenantAdmins.map((row) => (
+                                        <option value={row.id} key={row.id}>
+                                          {row.email} ({row.tenant_role})
+                                        </option>
+                                      ))
+                                    )}
+                                  </select>
+                                </label>
+                              </div>
+
                               <div className="tenant-access-grid">
                                 <label>
                                   <span>E-mail do admin</span>

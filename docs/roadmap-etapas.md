@@ -85,6 +85,7 @@ Objetivo: primeiro módulo funcional base.
 
 Objetivo: primeiro módulo operacional com escala.
 Acesso: Apenas quem tiver cargo de lider do louvor, Admin geral do tenant
+TEmos um sistema previamente criado na pasta C:\Projetos\ToNaEscalaWeb, analise o codigo dele e tente usar as mesmas fucnionalidades adaptando ao nosso projeto
 - Integrantes.
 - Funções/instrumentos.
 - Eventos de culto/ensaio.
@@ -192,21 +193,4 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 
 ### Concluído ou iniciado
 
-- Etapa 1 está parcialmente concluída: documentação, identidade visual, assets de marca, base React/Vite, design system inicial, tela inicial/login e push para o repositório.
-- Etapa 2 está em andamento e avançada: o Admin Global está funcional em `/admin-global`, com login global, gestão de tenants, cadastro/edição de tenants, planos comerciais e catálogo de módulos, além de ativação de módulos por tenant persistida em `tenant_modules`.
-- Etapa 3 foi iniciada antes da Etapa 2 completa: existe uma primeira fundação visual do Admin Cliente/Igreja com dashboard, membros, calendário, notificações e preview white-label.
-- Etapa 3 de testes foi iniciada com rota de demonstração do Admin Cliente e script de seed de tenant de demo para validação do fluxo.
-
-### Próxima etapa lógica
-
-A próxima etapa continua sendo a **Etapa 2 - Admin Global SirvaOS**, agora avançando da fundação de banco/login para as telas reais de dashboard global, listagem de tenants, cadastro/edição de tenants, planos e catálogo de módulos.
-
-### Próximas ações recomendadas para a Etapa 2
-
-1. Evoluir a estrutura de navegação interna após login do Admin Global.
-2. Refinar dashboard global com métricas SaaS reais adicionais.
-3. Evoluir listagem de tenants/clientes usando Supabase.
-4. Melhorar cadastro/edição de tenant com validações e feedbacks detalhados.
-5. Melhorar ativação de módulos por tenant com filtros, resumo e validações.
-6. Criar gestão de planos.
-7. Criar gestão do catálogo global de módulos.
+- Etapa 5 está concluída: Módulo de Membresia básico.
