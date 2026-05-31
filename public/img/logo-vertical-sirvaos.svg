@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="760" viewBox="0 0 720 760">
+  <defs>
+    <style>
+      .word { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 104px; font-weight: 850; fill: #162423; letter-spacing: -1px; }
+      .tag { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 30px; font-weight: 600; fill: #087C7A; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect width="720" height="760" fill="none"/>
+  <g transform="translate(210 80)">
+    <rect x="0" y="0" width="300" height="300" rx="78" fill="#E0F6F4"/>
+    <path d="M206 79 C134 40 57 82 65 153 C72 211 153 206 150 150 C147 102 228 105 236 159 C243 232 160 275 83 233"
+          class="line" stroke="#087C7A" stroke-width="32"/>
+    <circle cx="65" cy="153" r="19" fill="#00A7C4"/>
+    <circle cx="236" cy="159" r="19" fill="#00A7C4"/>
+  </g>
+  <text x="144" y="520" class="word">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+  <text x="150" y="578" class="tag">organize para servir melhor</text>
+</svg>

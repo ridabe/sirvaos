@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1400" viewBox="0 0 1920 1400">
+  <defs>
+    <style>
+      .title { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 58px; font-weight: 850; fill: #162423; }
+      .subtitle { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 24px; fill: #6B7774; }
+      .label { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 24px; font-weight: 800; fill: #162423; }
+      .small { font-family: Inter, Segoe UI, Arial, sans-serif; font-size: 18px; fill: #6B7774; }
+      .word { font-family: Inter, Segoe UI, Arial, sans-serif; font-weight: 850; fill: #162423; letter-spacing: -1px; }
+      .tag { font-family: Inter, Segoe UI, Arial, sans-serif; font-weight: 600; fill: #087C7A; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1400" fill="#FAFCFC"/>
+  <text x="80" y="100" class="title">SirvaOS — Kit de Marca Inicial</text>
+  <text x="80" y="145" class="subtitle">Baseado na opcao 01: fluxo do servir, conexao e organizacao.</text>
+
+  <rect x="80" y="210" width="1760" height="270" rx="30" fill="#FFFFFF" stroke="#D9E3E0"/>
+  <text x="120" y="270" class="label">Logo horizontal</text>
+  <g transform="translate(120 310) scale(0.58)">
+    <rect width="1200" height="320" fill="none"/>
+    <g transform="translate(54 44)">
+      <rect x="0" y="0" width="220" height="220" rx="58" fill="#E0F6F4"/>
+      <path d="M151 58 C98 29 42 60 48 112 C53 155 112 151 110 110 C108 75 167 77 173 117 C178 170 117 202 61 171" class="line" stroke="#087C7A" stroke-width="23"/>
+      <circle cx="48" cy="112" r="14" fill="#00A7C4"/>
+      <circle cx="173" cy="117" r="14" fill="#00A7C4"/>
+    </g>
+    <text x="320" y="148" class="word" font-size="116">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="326" y="205" class="tag" font-size="34">organize para servir melhor</text>
+  </g>
+
+  <rect x="80" y="540" width="540" height="480" rx="30" fill="#FFFFFF" stroke="#D9E3E0"/>
+  <text x="120" y="600" class="label">Logo vertical</text>
+  <g transform="translate(155 640) scale(0.50)">
+    <rect width="720" height="760" fill="none"/>
+    <g transform="translate(210 80)">
+      <rect x="0" y="0" width="300" height="300" rx="78" fill="#E0F6F4"/>
+      <path d="M206 79 C134 40 57 82 65 153 C72 211 153 206 150 150 C147 102 228 105 236 159 C243 232 160 275 83 233" class="line" stroke="#087C7A" stroke-width="32"/>
+      <circle cx="65" cy="153" r="19" fill="#00A7C4"/>
+      <circle cx="236" cy="159" r="19" fill="#00A7C4"/>
+    </g>
+    <text x="144" y="520" class="word" font-size="104">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="150" y="578" class="tag" font-size="30">organize para servir melhor</text>
+  </g>
+
+  <rect x="690" y="540" width="540" height="480" rx="30" fill="#FFFFFF" stroke="#D9E3E0"/>
+  <text x="730" y="600" class="label">Icon / App icon</text>
+  <g transform="translate(805 655) scale(0.52)">
+    <rect width="512" height="512" rx="126" fill="#E0F6F4"/>
+    <path d="M352 135 C229 68 99 140 112 261 C124 360 261 352 256 256 C251 174 389 179 403 271 C415 396 274 470 143 398" class="line" stroke="#087C7A" stroke-width="54"/>
+    <circle cx="112" cy="261" r="32" fill="#00A7C4"/>
+    <circle cx="403" cy="271" r="32" fill="#00A7C4"/>
+  </g>
+  <text x="730" y="960" class="small">Uso: favicon, app, avatar, sidebar compacta.</text>
+
+  <rect x="1300" y="540" width="540" height="480" rx="30" fill="#075452"/>
+  <text x="1340" y="600" class="label" fill="#FFFFFF">Aplicacao em fundo escuro</text>
+  <g transform="translate(1370 690) scale(0.42)">
+    <rect width="1200" height="320" fill="none"/>
+    <g transform="translate(54 44)">
+      <rect x="0" y="0" width="220" height="220" rx="58" fill="#E0F6F4"/>
+      <path d="M151 58 C98 29 42 60 48 112 C53 155 112 151 110 110 C108 75 167 77 173 117 C178 170 117 202 61 171" class="line" stroke="#087C7A" stroke-width="23"/>
+      <circle cx="48" cy="112" r="14" fill="#00A7C4"/>
+      <circle cx="173" cy="117" r="14" fill="#00A7C4"/>
+    </g>
+    <text x="320" y="148" class="word" font-size="116" fill="#FFFFFF">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="326" y="205" class="tag" font-size="34" fill="#DDF7FC">organize para servir melhor</text>
+  </g>
+
+  <rect x="80" y="1080" width="1760" height="220" rx="30" fill="#075452"/>
+  <text x="120" y="1150" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="44" font-weight="850" fill="#FFFFFF">Banner institucional</text>
+  <text x="120" y="1205" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" fill="#CDEDEA">Gestao de igrejas, ministerios, membros, escalas e comunicacao em um so lugar.</text>
+  <g transform="translate(1230 1122) scale(0.32)">
+    <rect width="1200" height="320" fill="none"/>
+    <g transform="translate(54 44)">
+      <rect x="0" y="0" width="220" height="220" rx="58" fill="#E0F6F4"/>
+      <path d="M151 58 C98 29 42 60 48 112 C53 155 112 151 110 110 C108 75 167 77 173 117 C178 170 117 202 61 171" class="line" stroke="#087C7A" stroke-width="23"/>
+      <circle cx="48" cy="112" r="14" fill="#00A7C4"/>
+      <circle cx="173" cy="117" r="14" fill="#00A7C4"/>
+    </g>
+    <text x="320" y="148" class="word" font-size="116" fill="#FFFFFF">Sirva<tspan fill="#00A7C4">OS</tspan></text>
+    <text x="326" y="205" class="tag" font-size="34" fill="#DDF7FC">organize para servir melhor</text>
+  </g>
+</svg>
