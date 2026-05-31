@@ -1530,10 +1530,38 @@ h1 {
   display: block;
 }
 
-.tenant-module-card span {
+.tenant-module-card > div > span:first-child {
   font-size: 0.78rem;
   font-weight: 850;
   color: var(--color-brand-primary);
+}
+
+/* Module status badges */
+.module-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  line-height: 1.6;
+}
+
+.module-badge.active {
+  background: var(--color-success-soft, #e0f7ed);
+  color: var(--color-success, #2f8a5f);
+}
+
+.module-badge.beta {
+  background: var(--color-warning-soft, #fef3da);
+  color: var(--color-warning, #c98a13);
+}
+
+.module-badge.deprecated {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-500);
 }
 
 .tenant-module-card strong {
@@ -2853,6 +2881,238 @@ h1 {
   font-weight: 700;
   color: var(--color-neutral-500);
   text-align: right;
+}
+
+/* ── Módulo Financeiro ───────────────────────────────── */
+.financial-panel {}
+
+.financial-period-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0 0.25rem;
+}
+
+.financial-period-bar label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-neutral-500);
+}
+
+.financial-period-bar .catalog-input {
+  width: auto;
+}
+
+.financial-summary {
+  margin-top: 0.5rem;
+}
+
+.financial-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-neutral-200);
+}
+
+.financial-stat svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.financial-stat.income {
+  border-color: rgba(47, 138, 95, 0.24);
+  background: var(--color-success-soft, #e0f7ed);
+}
+
+.financial-stat.income svg { color: var(--color-success); }
+
+.financial-stat.expense {
+  border-color: rgba(194, 59, 59, 0.24);
+  background: var(--color-danger-soft, #fde8e8);
+}
+
+.financial-stat.expense svg { color: var(--color-danger); }
+
+.financial-stat div { display: flex; flex-direction: column; gap: 0.1rem; }
+
+.financial-stat span {
+  font-size: 0.78rem;
+  color: var(--color-neutral-500);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.financial-stat strong {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-neutral-950);
+  line-height: 1.2;
+}
+
+.financial-stat small {
+  font-size: 0.76rem;
+  color: var(--color-neutral-500);
+}
+
+/* Transaction list */
+.financial-tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 0.25rem;
+}
+
+.financial-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--color-neutral-100);
+}
+
+.financial-tx-row:last-child { border-bottom: none; }
+
+.financial-tx-type-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.financial-tx-type-badge.income {
+  background: var(--color-success-soft, #e0f7ed);
+  color: var(--color-success);
+}
+
+.financial-tx-type-badge.expense {
+  background: var(--color-danger-soft, #fde8e8);
+  color: var(--color-danger);
+}
+
+.financial-tx-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.financial-tx-info strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-neutral-950);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.financial-tx-info small {
+  font-size: 0.76rem;
+  color: var(--color-neutral-500);
+}
+
+.financial-tx-amount {
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.financial-tx-amount.income { color: var(--color-success); }
+.financial-tx-amount.expense { color: var(--color-danger); }
+
+/* Reports */
+.financial-report-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.financial-report-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 180px;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .financial-report-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.financial-report-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-neutral-700);
+}
+
+.financial-cat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.financial-report-bar-wrap {
+  height: 8px;
+  background: var(--color-neutral-100);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.financial-report-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.financial-report-amounts {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.financial-report-amounts .income { color: var(--color-success); }
+.financial-report-amounts .expense { color: var(--color-danger); }
+
+/* Header "Novo lançamento" button in panel heading */
+.client-admin-content .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+.client-admin-content .btn-primary {
+  background: var(--color-brand-primary);
+  color: #fff;
+}
+
+.client-admin-content .btn-primary:hover {
+  background: var(--color-brand-primary-dark);
 }
 
 /* ── Member portal shell ─────────────────────────────── */

@@ -1880,10 +1880,16 @@ export function AdminGlobalAccess() {
                   </div>
 
                   <form className="tenant-modules-form" onSubmit={handleModulesSubmit}>
-                    {dashboardData.modules.map((module) => (
+                    {dashboardData.modules
+                      .filter((module) => module.status !== "deprecated")
+                      .map((module) => (
                       <article key={module.id} className="tenant-module-card">
                         <div>
-                          <span>{module.status === "beta" ? "Beta" : "Catálogo"}</span>
+                          {module.status === "beta" ? (
+                            <span className="module-badge beta">Beta</span>
+                          ) : (
+                            <span className="module-badge active">Ativo</span>
+                          )}
                           <strong>{module.name}</strong>
                           <small>{module.description ?? module.code}</small>
                         </div>
@@ -2499,7 +2505,9 @@ export function AdminGlobalAccess() {
                               <small>{module.description ?? module.code}</small>
                             </div>
                             <span>{module.code}</span>
-                            <span>{module.status}</span>
+                            <span className={`module-badge ${module.status}`}>
+                              {module.status === "active" ? "Ativo" : module.status === "beta" ? "Beta" : "Depreciado"}
+                            </span>
                             <div className="tenant-row-actions">
                               <button
                                 type="button"

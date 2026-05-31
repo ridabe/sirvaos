@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   CheckCircle2,
   Clock3,
+  DollarSign,
   Edit3,
   Eye,
   ImagePlus,
@@ -17,9 +18,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Receipt,
   Search,
   Send,
   ShieldCheck,
+  TrendingDown,
+  TrendingUp,
   UserPlus,
   Users2,
   UsersRound,
@@ -208,6 +212,32 @@ type MemberHistoryRecord = {
   occurred_at: string;
 };
 
+type FinancialCategoryRecord = {
+  id: string;
+  tenant_id: string | null;
+  name: string;
+  type: "income" | "expense" | "both";
+  color: string | null;
+  is_system: boolean;
+  sort_order: number;
+};
+
+type FinancialTransactionRecord = {
+  id: string;
+  tenant_id: string;
+  type: "income" | "expense";
+  amount: number;
+  description: string;
+  date: string;
+  payment_method: "cash" | "pix" | "transfer" | "card" | "check" | "other";
+  category_id: string | null;
+  member_id: string | null;
+  notes: string | null;
+  created_at: string;
+  financial_categories: { name: string; color: string | null } | null;
+  members: { name: string } | null;
+};
+
 type ClientDashboardData = {
   profile: TenantProfile;
   tenant: TenantRecord;
@@ -227,6 +257,8 @@ type ClientDashboardData = {
   moduleAdminModuleIdsByMemberId: Record<string, string[]>;
   catalogRoles: CatalogItemRecord[];
   catalogMinistries: CatalogItemRecord[];
+  financialCategories: FinancialCategoryRecord[];
+  financialTransactions: FinancialTransactionRecord[];
 };
 
 type MemberFormState = {
@@ -288,6 +320,25 @@ type UserEditState = {
   tenant_role: TenantRole;
   status: "active" | "invited" | "suspended";
   moduleAdminModuleIds: string[];
+};
+
+type FinancialTransactionFormState = {
+  id: string;
+  type: "income" | "expense";
+  amount: string;
+  description: string;
+  date: string;
+  payment_method: FinancialTransactionRecord["payment_method"];
+  category_id: string;
+  member_id: string;
+  notes: string;
+};
+
+type FinancialCategoryFormState = {
+  id: string;
+  name: string;
+  type: FinancialCategoryRecord["type"];
+  color: string;
 };
 
 const emptyMemberForm: MemberFormState = {
@@ -360,6 +411,25 @@ const emptyThemeForm: ThemeFormState = {
   header_color: "#087C7A",
   sidebar_color: "#087C7A",
   footer_color: "#087C7A",
+};
+
+const emptyFinancialTransactionForm: FinancialTransactionFormState = {
+  id: "",
+  type: "income",
+  amount: "",
+  description: "",
+  date: new Date().toISOString().slice(0, 10),
+  payment_method: "pix",
+  category_id: "",
+  member_id: "",
+  notes: "",
+};
+
+const emptyFinancialCategoryForm: FinancialCategoryFormState = {
+  id: "",
+  name: "",
+  type: "income",
+  color: "#087C7A",
 };
 
 const sampleClientDashboardData: ClientDashboardData = {
@@ -536,6 +606,13 @@ const sampleClientDashboardData: ClientDashboardData = {
       description: "Escalas, integrantes, funcoes e confirmacao de presenca.",
       status: "active",
     },
+    {
+      id: "module-5",
+      code: "financial",
+      name: "Financeiro",
+      description: "Dízimos, ofertas, receitas, despesas, categorias e relatórios.",
+      status: "active",
+    },
   ],
   moduleAdminModuleIdsByProfileId: {
     "user-1": ["module-1", "module-2"],
@@ -553,6 +630,91 @@ const sampleClientDashboardData: ClientDashboardData = {
     { id: "min-sys-2", tenant_id: null, name: "Intercessão / Oração" },
     { id: "min-tenant-1", tenant_id: "demo-tenant", name: "Ministério de Artes" },
   ],
+  financialCategories: [
+    { id: "fin-cat-1", tenant_id: null, name: "Dízimos", type: "income", color: "#2f8a5f", is_system: true, sort_order: 10 },
+    { id: "fin-cat-2", tenant_id: null, name: "Ofertas", type: "income", color: "#087c7a", is_system: true, sort_order: 20 },
+    { id: "fin-cat-3", tenant_id: null, name: "Doações", type: "income", color: "#00a7c4", is_system: true, sort_order: 30 },
+    { id: "fin-cat-4", tenant_id: null, name: "Salários / Honorários", type: "expense", color: "#c23b3b", is_system: true, sort_order: 60 },
+    { id: "fin-cat-5", tenant_id: null, name: "Manutenção", type: "expense", color: "#2f5a8a", is_system: true, sort_order: 100 },
+    { id: "fin-cat-6", tenant_id: null, name: "Eventos", type: "expense", color: "#8a2f5a", is_system: true, sort_order: 110 },
+  ],
+  financialTransactions: [
+    {
+      id: "fin-tx-1",
+      tenant_id: "demo-tenant",
+      type: "income",
+      amount: 3200.0,
+      description: "Dízimos - Culto Dominical 26/05",
+      date: "2026-05-26",
+      payment_method: "pix",
+      category_id: "fin-cat-1",
+      member_id: "member-1",
+      notes: null,
+      created_at: new Date().toISOString(),
+      financial_categories: { name: "Dízimos", color: "#2f8a5f" },
+      members: { name: "Mariana Souza" },
+    },
+    {
+      id: "fin-tx-2",
+      tenant_id: "demo-tenant",
+      type: "income",
+      amount: 1850.0,
+      description: "Oferta - Culto Dominical 26/05",
+      date: "2026-05-26",
+      payment_method: "cash",
+      category_id: "fin-cat-2",
+      member_id: null,
+      notes: null,
+      created_at: new Date().toISOString(),
+      financial_categories: { name: "Ofertas", color: "#087c7a" },
+      members: null,
+    },
+    {
+      id: "fin-tx-3",
+      tenant_id: "demo-tenant",
+      type: "expense",
+      amount: 4500.0,
+      description: "Salário pastoral - Maio 2026",
+      date: "2026-05-31",
+      payment_method: "transfer",
+      category_id: "fin-cat-4",
+      member_id: null,
+      notes: null,
+      created_at: new Date().toISOString(),
+      financial_categories: { name: "Salários / Honorários", color: "#c23b3b" },
+      members: null,
+    },
+    {
+      id: "fin-tx-4",
+      tenant_id: "demo-tenant",
+      type: "expense",
+      amount: 320.0,
+      description: "Manutenção sistema de som",
+      date: "2026-05-20",
+      payment_method: "pix",
+      category_id: "fin-cat-5",
+      member_id: null,
+      notes: "Troca de cabos e microfone",
+      created_at: new Date().toISOString(),
+      financial_categories: { name: "Manutenção", color: "#2f5a8a" },
+      members: null,
+    },
+    {
+      id: "fin-tx-5",
+      tenant_id: "demo-tenant",
+      type: "income",
+      amount: 500.0,
+      description: "Dízimos - Culto de Oração 19/05",
+      date: "2026-05-19",
+      payment_method: "pix",
+      category_id: "fin-cat-1",
+      member_id: "member-2",
+      notes: null,
+      created_at: new Date().toISOString(),
+      financial_categories: { name: "Dízimos", color: "#2f8a5f" },
+      members: { name: "Paulo Alves" },
+    },
+  ],
 };
 
 const clientTabs = [
@@ -561,6 +723,7 @@ const clientTabs = [
   { key: "families", label: "Famílias", icon: Users2 },
   { key: "events", label: "Calendário", icon: CalendarCheck },
   { key: "worship", label: "Louvor", icon: Music },
+  { key: "financial", label: "Financeiro", icon: DollarSign },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
@@ -576,6 +739,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   families: "members",
   events: "calendar",
   worship: "worship",
+  financial: "financial",
   notices: "announcements",
 };
 
@@ -786,6 +950,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [catalogSaveStatus, setCatalogSaveStatus] = useState<LoginStatus>("idle");
   const [catalogSaveMessage, setCatalogSaveMessage] = useState("");
   const [ministryPickerId, setMinistryPickerId] = useState("");
+  const [financialTransactionForm, setFinancialTransactionForm] = useState<FinancialTransactionFormState>(emptyFinancialTransactionForm);
+  const [financialCategoryForm, setFinancialCategoryForm] = useState<FinancialCategoryFormState>(emptyFinancialCategoryForm);
+  const [isFinancialTransactionFormOpen, setIsFinancialTransactionFormOpen] = useState(false);
+  const [financialSaveStatus, setFinancialSaveStatus] = useState<LoginStatus>("idle");
+  const [financialSaveMessage, setFinancialSaveMessage] = useState("");
+  const [financialView, setFinancialView] = useState<"dashboard" | "transactions" | "categories" | "reports">("dashboard");
+  const [financialFilterType, setFinancialFilterType] = useState<"all" | "income" | "expense">("all");
+  const [financialFilterCategoryId, setFinancialFilterCategoryId] = useState("");
+  const [financialFilterMonth, setFinancialFilterMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [financialReceiptTransactionId, setFinancialReceiptTransactionId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -844,6 +1018,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageMembers = isTenantAdmin || isSecretariaAdmin || canManageMembershipModule;
   const canManageEvents = canManageModuleCode("calendar");
   const canManageWorship = canManageModuleCode("worship");
+  const canManageFinancial = canManageModuleCode("financial");
   const canManageAnnouncements = canManageModuleCode("announcements");
 
   const visibleClientTabs = useMemo(() => {
@@ -1170,6 +1345,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       moduleAdminsResult,
       catalogRolesResult,
       catalogMinistriesResult,
+      financialCategoriesResult,
+      financialTransactionsResult,
     ] = await Promise.all([
         supabase
           .from("tenants")
@@ -1264,6 +1441,19 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
           .order("name", { ascending: true })
           .returns<CatalogItemRecord[]>(),
+        supabase
+          .from("financial_categories")
+          .select("id, tenant_id, name, type, color, is_system, sort_order")
+          .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+          .order("sort_order", { ascending: true })
+          .returns<FinancialCategoryRecord[]>(),
+        supabase
+          .from("financial_transactions")
+          .select("id, tenant_id, type, amount, description, date, payment_method, category_id, member_id, notes, created_at, financial_categories (name, color), members (name)")
+          .eq("tenant_id", tenantId)
+          .order("date", { ascending: false })
+          .limit(300)
+          .returns<FinancialTransactionRecord[]>(),
       ]);
 
     if (
@@ -1282,7 +1472,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       modulesResult.error ||
       moduleAdminsResult.error ||
       catalogRolesResult.error ||
-      catalogMinistriesResult.error
+      catalogMinistriesResult.error ||
+      financialCategoriesResult.error ||
+      financialTransactionsResult.error
     ) {
       setDataStatus("error");
       setLoginMessage("Erro ao carregar dados do tenant.");
@@ -1387,6 +1579,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       moduleAdminModuleIdsByMemberId,
       catalogRoles: catalogRolesResult.data ?? [],
       catalogMinistries: catalogMinistriesResult.data ?? [],
+      financialCategories: financialCategoriesResult.data ?? [],
+      financialTransactions: financialTransactionsResult.data ?? [],
     });
 
     setThemeForm({
@@ -2807,6 +3001,197 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     await loadClientData(profile.id);
   }
 
+  async function handleFinancialTransactionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile || !clientData || !canManageFinancial) return;
+
+    const amount = parseFloat(financialTransactionForm.amount.replace(",", "."));
+    if (!financialTransactionForm.description.trim() || !financialTransactionForm.date || isNaN(amount) || amount <= 0) {
+      setFinancialSaveStatus("error");
+      setFinancialSaveMessage("Informe descrição, data e valor válido.");
+      return;
+    }
+
+    setFinancialSaveStatus("loading");
+    setFinancialSaveMessage("");
+
+    const payload = {
+      tenant_id: clientData.tenant.id,
+      type: financialTransactionForm.type,
+      amount,
+      description: financialTransactionForm.description.trim(),
+      date: financialTransactionForm.date,
+      payment_method: financialTransactionForm.payment_method,
+      category_id: financialTransactionForm.category_id || null,
+      member_id: financialTransactionForm.member_id || null,
+      notes: financialTransactionForm.notes.trim() || null,
+    };
+
+    const isEditing = Boolean(financialTransactionForm.id);
+
+    if (demoMode) {
+      const cat = clientData.financialCategories.find((c) => c.id === payload.category_id);
+      const mem = clientData.members.find((m) => m.id === payload.member_id);
+      const row: FinancialTransactionRecord = {
+        id: financialTransactionForm.id || `fin-tx-${Date.now()}`,
+        ...payload,
+        created_at: new Date().toISOString(),
+        financial_categories: cat ? { name: cat.name, color: cat.color } : null,
+        members: mem ? { name: mem.name } : null,
+      };
+      setClientData((current) =>
+        current
+          ? {
+              ...current,
+              financialTransactions: isEditing
+                ? current.financialTransactions.map((t) => (t.id === row.id ? row : t))
+                : [row, ...current.financialTransactions],
+            }
+          : current,
+      );
+      setFinancialSaveStatus("success");
+      setFinancialSaveMessage(isEditing ? "Lançamento atualizado." : "Lançamento registrado.");
+      setIsFinancialTransactionFormOpen(false);
+      setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
+      return;
+    }
+
+    const result = isEditing
+      ? await supabase.from("financial_transactions").update(payload).eq("id", financialTransactionForm.id).select("id").single<{ id: string }>()
+      : await supabase.from("financial_transactions").insert({ ...payload, created_by: profile.id }).select("id").single<{ id: string }>();
+
+    if (result.error || !result.data) {
+      setFinancialSaveStatus("error");
+      setFinancialSaveMessage("Não foi possível salvar o lançamento.");
+      return;
+    }
+
+    setFinancialSaveStatus("success");
+    setFinancialSaveMessage(isEditing ? "Lançamento atualizado." : "Lançamento registrado.");
+    setIsFinancialTransactionFormOpen(false);
+    setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
+    await loadClientData(profile.id);
+  }
+
+  async function handleDeleteFinancialTransaction(transactionId: string) {
+    if (!transactionId || !profile || !canManageFinancial) return;
+
+    if (demoMode) {
+      setClientData((current) =>
+        current
+          ? { ...current, financialTransactions: current.financialTransactions.filter((t) => t.id !== transactionId) }
+          : current,
+      );
+      return;
+    }
+
+    const { error } = await supabase.from("financial_transactions").delete().eq("id", transactionId);
+    if (!error) {
+      await loadClientData(profile.id);
+    }
+  }
+
+  function openEditFinancialTransaction(tx: FinancialTransactionRecord) {
+    if (!canManageFinancial) return;
+    setFinancialTransactionForm({
+      id: tx.id,
+      type: tx.type,
+      amount: String(tx.amount),
+      description: tx.description,
+      date: tx.date,
+      payment_method: tx.payment_method,
+      category_id: tx.category_id ?? "",
+      member_id: tx.member_id ?? "",
+      notes: tx.notes ?? "",
+    });
+    setFinancialSaveStatus("idle");
+    setFinancialSaveMessage("");
+    setIsFinancialTransactionFormOpen(true);
+  }
+
+  async function handleFinancialCategorySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile || !clientData || !canManageFinancial) return;
+
+    const name = financialCategoryForm.name.trim();
+    if (name.length < 2) {
+      setFinancialSaveStatus("error");
+      setFinancialSaveMessage("Informe um nome válido para a categoria.");
+      return;
+    }
+
+    setFinancialSaveStatus("loading");
+    setFinancialSaveMessage("");
+
+    const isEditing = Boolean(financialCategoryForm.id);
+
+    if (demoMode) {
+      const row: FinancialCategoryRecord = {
+        id: financialCategoryForm.id || `fin-cat-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        name,
+        type: financialCategoryForm.type,
+        color: financialCategoryForm.color || null,
+        is_system: false,
+        sort_order: 200,
+      };
+      setClientData((current) =>
+        current
+          ? {
+              ...current,
+              financialCategories: isEditing
+                ? current.financialCategories.map((c) => (c.id === row.id ? row : c))
+                : [...current.financialCategories, row],
+            }
+          : current,
+      );
+      setFinancialSaveStatus("success");
+      setFinancialSaveMessage(isEditing ? "Categoria atualizada." : "Categoria criada.");
+      setFinancialCategoryForm(emptyFinancialCategoryForm);
+      return;
+    }
+
+    const payload = {
+      tenant_id: clientData.tenant.id,
+      name,
+      type: financialCategoryForm.type,
+      color: financialCategoryForm.color || null,
+    };
+
+    const result = isEditing
+      ? await supabase.from("financial_categories").update(payload).eq("id", financialCategoryForm.id)
+      : await supabase.from("financial_categories").insert(payload);
+
+    if (result.error) {
+      setFinancialSaveStatus("error");
+      setFinancialSaveMessage("Não foi possível salvar a categoria.");
+      return;
+    }
+
+    setFinancialSaveStatus("success");
+    setFinancialSaveMessage(isEditing ? "Categoria atualizada." : "Categoria criada.");
+    setFinancialCategoryForm(emptyFinancialCategoryForm);
+    await loadClientData(profile.id);
+  }
+
+  async function handleDeleteFinancialCategory(categoryId: string) {
+    if (!categoryId || !profile || !canManageFinancial) return;
+
+    if (demoMode) {
+      setClientData((current) =>
+        current
+          ? { ...current, financialCategories: current.financialCategories.filter((c) => c.id !== categoryId) }
+          : current,
+      );
+      return;
+    }
+
+    const { error } = await supabase.from("financial_categories").delete().eq("id", categoryId);
+    if (!error) {
+      await loadClientData(profile.id);
+    }
+  }
+
   const tenant = clientData?.tenant;
 
   if (!tenant || dataStatus === "error") {
@@ -3013,6 +3398,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Famílias e dependentes"
                   : activeTab === "events"
                   ? "Calendário central"
+                  : activeTab === "worship"
+                  ? "Módulo de Louvor"
+                  : activeTab === "financial"
+                  ? "Módulo Financeiro"
                   : activeTab === "notices"
                   ? "Comunicados gerais"
                   : activeTab === "lists"
@@ -3031,6 +3420,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Organize famílias, dependentes e vínculos principais para atendimento e acompanhamento."
                   : activeTab === "events"
                   ? "Planeje os eventos e cultos do calendário central."
+                  : activeTab === "worship"
+                  ? "Gerencie escalas, integrantes e confirmações de presença."
+                  : activeTab === "financial"
+                  ? "Registre dízimos, ofertas, receitas e despesas da igreja."
                   : activeTab === "notices"
                   ? "Publique comunicados gerais para a comunidade."
                   : activeTab === "lists"
@@ -3041,6 +3434,21 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               </p>
             </div>
           </div>
+          {activeTab === "financial" && canManageFinancial ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
+                setFinancialSaveStatus("idle");
+                setFinancialSaveMessage("");
+                setIsFinancialTransactionFormOpen(true);
+                setFinancialView("transactions");
+              }}
+            >
+              <Plus size={16} /> Novo lançamento
+            </button>
+          ) : null}
           {activeTab === "members" || activeTab === "families" || activeTab === "events" || activeTab === "notices" ? (
             <Button
               icon={<Plus size={18} />}
@@ -3868,6 +4276,553 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               )}
             </article>
           ) : null}
+
+          {activeTab === "financial" ? (() => {
+            const allTx = clientData.financialTransactions;
+            const thisMonth = financialFilterMonth;
+            const txThisMonth = allTx.filter((t) => t.date.slice(0, 7) === thisMonth);
+            const incomeThisMonth = txThisMonth.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+            const expenseThisMonth = txThisMonth.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+            const netThisMonth = incomeThisMonth - expenseThisMonth;
+
+            const filteredTx = allTx.filter((t) => {
+              if (financialFilterType !== "all" && t.type !== financialFilterType) return false;
+              if (financialFilterCategoryId && t.category_id !== financialFilterCategoryId) return false;
+              if (financialView === "transactions" && t.date.slice(0, 7) !== financialFilterMonth) return false;
+              return true;
+            });
+
+            const fmtCurrency = (v: number) =>
+              v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+            const paymentLabel = (m: FinancialTransactionRecord["payment_method"]) => {
+              const map: Record<string, string> = { cash: "Dinheiro", pix: "Pix", transfer: "Transferência", card: "Cartão", check: "Cheque", other: "Outro" };
+              return map[m] ?? m;
+            };
+
+            const categoryById = (clientData.financialCategories ?? []).reduce<Record<string, FinancialCategoryRecord>>(
+              (acc, c) => { acc[c.id] = c; return acc; }, {}
+            );
+
+            const reportByCategory = (() => {
+              const grouped: Record<string, { name: string; color: string | null; income: number; expense: number }> = {};
+              const reportTx = allTx.filter((t) => t.date.slice(0, 7) === financialFilterMonth);
+              for (const t of reportTx) {
+                const catId = t.category_id ?? "__uncategorized__";
+                const catName = t.financial_categories?.name ?? "Sem categoria";
+                const catColor = t.financial_categories?.color ?? null;
+                if (!grouped[catId]) grouped[catId] = { name: catName, color: catColor, income: 0, expense: 0 };
+                if (t.type === "income") grouped[catId].income += t.amount;
+                else grouped[catId].expense += t.amount;
+              }
+              return Object.values(grouped).sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
+            })();
+
+            const receiptTx = financialReceiptTransactionId
+              ? allTx.find((t) => t.id === financialReceiptTransactionId)
+              : null;
+
+            return (
+              <article className="panel full-width financial-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span>Financeiro</span>
+                    <h4>Gestão financeira da igreja</h4>
+                  </div>
+                  <div className="worship-view-toggle">
+                    {(["dashboard", "transactions", "categories", "reports"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={financialView === v ? "active" : ""}
+                        onClick={() => setFinancialView(v)}
+                      >
+                        {v === "dashboard" ? "Dashboard" : v === "transactions" ? "Lançamentos" : v === "categories" ? "Categorias" : "Relatórios"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {financialSaveMessage ? (
+                  <p className={`login-feedback ${financialSaveStatus}`}>{financialSaveMessage}</p>
+                ) : null}
+
+                {/* ── Modal: comprovante ── */}
+                {receiptTx ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet worship-email-modal">
+                      <div className="modal-section-header">
+                        <Receipt size={20} />
+                        <div>
+                          <strong>Comprovante de lançamento</strong>
+                          <small>{receiptTx.description}</small>
+                        </div>
+                      </div>
+                      <div className="worship-email-summary">
+                        <div><span>Tipo</span><strong>{receiptTx.type === "income" ? "Receita" : "Despesa"}</strong></div>
+                        <div><span>Valor</span><strong style={{ color: receiptTx.type === "income" ? "var(--color-success)" : "var(--color-danger)" }}>{fmtCurrency(receiptTx.amount)}</strong></div>
+                        <div><span>Data</span><strong>{new Date(receiptTx.date + "T12:00:00").toLocaleDateString("pt-BR")}</strong></div>
+                        <div><span>Forma</span><strong>{paymentLabel(receiptTx.payment_method)}</strong></div>
+                      </div>
+                      {receiptTx.financial_categories?.name ? (
+                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Categoria: {receiptTx.financial_categories.name}</p>
+                      ) : null}
+                      {receiptTx.members?.name ? (
+                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Membro: {receiptTx.members.name}</p>
+                      ) : null}
+                      {receiptTx.notes ? (
+                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Obs: {receiptTx.notes}</p>
+                      ) : null}
+                      <div className="modal-actions">
+                        <button type="button" className="btn btn-secondary" onClick={() => setFinancialReceiptTransactionId(null)}>
+                          Fechar
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: novo / editar lançamento ── */}
+                {isFinancialTransactionFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <DollarSign size={20} />
+                        <div>
+                          <strong>{financialTransactionForm.id ? "Editar lançamento" : "Novo lançamento"}</strong>
+                          <small>Registre uma receita ou despesa da igreja.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleFinancialTransactionSubmit}>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Tipo</span>
+                            <select
+                              className="catalog-input"
+                              value={financialTransactionForm.type}
+                              onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, type: e.target.value as "income" | "expense", category_id: "" }))}
+                            >
+                              <option value="income">Receita</option>
+                              <option value="expense">Despesa</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>Valor (R$)</span>
+                            <input
+                              className="catalog-input"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="0,00"
+                              value={financialTransactionForm.amount}
+                              onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, amount: e.target.value }))}
+                            />
+                          </label>
+                        </div>
+                        <label>
+                          <span>Descrição</span>
+                          <input
+                            className="catalog-input"
+                            placeholder="Ex.: Dízimos - Culto Dominical"
+                            value={financialTransactionForm.description}
+                            onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, description: e.target.value }))}
+                          />
+                        </label>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Data</span>
+                            <input
+                              className="catalog-input"
+                              type="date"
+                              value={financialTransactionForm.date}
+                              onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, date: e.target.value }))}
+                            />
+                          </label>
+                          <label>
+                            <span>Forma de pagamento</span>
+                            <select
+                              className="catalog-input"
+                              value={financialTransactionForm.payment_method}
+                              onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, payment_method: e.target.value as FinancialTransactionRecord["payment_method"] }))}
+                            >
+                              <option value="pix">Pix</option>
+                              <option value="cash">Dinheiro</option>
+                              <option value="transfer">Transferência</option>
+                              <option value="card">Cartão</option>
+                              <option value="check">Cheque</option>
+                              <option value="other">Outro</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Categoria</span>
+                            <select
+                              className="catalog-input"
+                              value={financialTransactionForm.category_id}
+                              onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, category_id: e.target.value }))}
+                            >
+                              <option value="">Sem categoria</option>
+                              {clientData.financialCategories
+                                .filter((cat) => cat.type === financialTransactionForm.type || cat.type === "both")
+                                .map((cat) => (
+                                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Membro (opcional)</span>
+                            <select
+                              className="catalog-input"
+                              value={financialTransactionForm.member_id}
+                              onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, member_id: e.target.value }))}
+                            >
+                              <option value="">Nenhum</option>
+                              {clientData.members.map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        <label>
+                          <span>Observações</span>
+                          <textarea
+                            className="catalog-input catalog-textarea"
+                            placeholder="Observações opcionais"
+                            rows={2}
+                            value={financialTransactionForm.notes}
+                            onChange={(e) => setFinancialTransactionForm((c) => ({ ...c, notes: e.target.value }))}
+                          />
+                        </label>
+                        <div className="modal-actions">
+                          <Button type="button" variant="secondary" onClick={() => setIsFinancialTransactionFormOpen(false)}>
+                            Cancelar
+                          </Button>
+                          <Button type="submit" disabled={financialSaveStatus === "loading"} icon={<Plus size={16} />}>
+                            {financialSaveStatus === "loading" ? "Salvando..." : financialTransactionForm.id ? "Salvar alterações" : "Registrar"}
+                          </Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Filtro de período (visível em todas as views) ── */}
+                <div className="financial-period-bar">
+                  <label>
+                    <span>Mês de referência</span>
+                    <input
+                      className="catalog-input"
+                      type="month"
+                      value={financialFilterMonth}
+                      onChange={(e) => setFinancialFilterMonth(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                {/* ── DASHBOARD ── */}
+                {financialView === "dashboard" ? (
+                  <>
+                    <div className="worship-summary financial-summary">
+                      <article className="financial-stat income">
+                        <TrendingUp size={22} />
+                        <div>
+                          <span>Receitas</span>
+                          <strong>{fmtCurrency(incomeThisMonth)}</strong>
+                          <small>{txThisMonth.filter((t) => t.type === "income").length} lançamento(s)</small>
+                        </div>
+                      </article>
+                      <article className="financial-stat expense">
+                        <TrendingDown size={22} />
+                        <div>
+                          <span>Despesas</span>
+                          <strong>{fmtCurrency(expenseThisMonth)}</strong>
+                          <small>{txThisMonth.filter((t) => t.type === "expense").length} lançamento(s)</small>
+                        </div>
+                      </article>
+                      <article className={`financial-stat ${netThisMonth >= 0 ? "income" : "expense"}`}>
+                        <DollarSign size={22} />
+                        <div>
+                          <span>Saldo líquido</span>
+                          <strong>{fmtCurrency(netThisMonth)}</strong>
+                          <small>{netThisMonth >= 0 ? "Superávit" : "Déficit"} no período</small>
+                        </div>
+                      </article>
+                    </div>
+
+                    <div className="panel-heading" style={{ marginTop: "1.5rem" }}>
+                      <div><strong>Últimos lançamentos</strong></div>
+                      <button type="button" onClick={() => setFinancialView("transactions")}>Ver todos</button>
+                    </div>
+                    <div className="financial-tx-list">
+                      {allTx.length === 0 ? (
+                        <div className="catalog-empty">Nenhum lançamento registrado ainda.</div>
+                      ) : null}
+                      {allTx.slice(0, 10).map((tx) => (
+                        <div key={tx.id} className="financial-tx-row">
+                          <div className={`financial-tx-type-badge ${tx.type}`}>
+                            {tx.type === "income" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                          </div>
+                          <div className="financial-tx-info">
+                            <strong>{tx.description}</strong>
+                            <small>
+                              {new Date(tx.date + "T12:00:00").toLocaleDateString("pt-BR")}
+                              {tx.financial_categories?.name ? ` · ${tx.financial_categories.name}` : ""}
+                              {tx.members?.name ? ` · ${tx.members.name}` : ""}
+                            </small>
+                          </div>
+                          <span className={`financial-tx-amount ${tx.type}`}>
+                            {tx.type === "income" ? "+" : "-"}{fmtCurrency(tx.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {/* ── LANÇAMENTOS ── */}
+                {financialView === "transactions" ? (
+                  <>
+                    <div className="member-filters" style={{ marginTop: "1rem" }}>
+                      <select
+                        className="catalog-input"
+                        value={financialFilterType}
+                        onChange={(e) => setFinancialFilterType(e.target.value as typeof financialFilterType)}
+                      >
+                        <option value="all">Receitas e despesas</option>
+                        <option value="income">Apenas receitas</option>
+                        <option value="expense">Apenas despesas</option>
+                      </select>
+                      <select
+                        className="catalog-input"
+                        value={financialFilterCategoryId}
+                        onChange={(e) => setFinancialFilterCategoryId(e.target.value)}
+                      >
+                        <option value="">Todas as categorias</option>
+                        {clientData.financialCategories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="financial-tx-list" style={{ marginTop: "0.5rem" }}>
+                      {filteredTx.length === 0 ? (
+                        <div className="catalog-empty">Nenhum lançamento encontrado para os filtros informados.</div>
+                      ) : null}
+                      {filteredTx.map((tx) => (
+                        <div key={tx.id} className="financial-tx-row">
+                          <div className={`financial-tx-type-badge ${tx.type}`}>
+                            {tx.type === "income" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                          </div>
+                          <div className="financial-tx-info">
+                            <strong>{tx.description}</strong>
+                            <small>
+                              {new Date(tx.date + "T12:00:00").toLocaleDateString("pt-BR")}
+                              {" · "}{paymentLabel(tx.payment_method)}
+                              {tx.financial_categories?.name ? ` · ${tx.financial_categories.name}` : ""}
+                              {tx.members?.name ? ` · ${tx.members.name}` : ""}
+                            </small>
+                          </div>
+                          <span className={`financial-tx-amount ${tx.type}`}>
+                            {tx.type === "income" ? "+" : "-"}{fmtCurrency(tx.amount)}
+                          </span>
+                          {canManageFinancial ? (
+                            <div className="member-actions">
+                              <button type="button" title="Comprovante" onClick={() => setFinancialReceiptTransactionId(tx.id)}>
+                                <Receipt size={14} />
+                              </button>
+                              <button type="button" title="Editar" onClick={() => openEditFinancialTransaction(tx)}>
+                                <Edit3 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Excluir"
+                                onClick={() => {
+                                  if (window.confirm(`Excluir "${tx.description}"?`)) void handleDeleteFinancialTransaction(tx.id);
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {/* ── CATEGORIAS ── */}
+                {financialView === "categories" ? (
+                  <div className="catalog-grid" style={{ marginTop: "1rem" }}>
+                    <section className="catalog-panel">
+                      <div className="catalog-header">
+                        <strong>Categorias do sistema</strong>
+                        <small>Categorias padrão disponíveis para todos os tenants.</small>
+                      </div>
+                      <div className="catalog-list">
+                        {clientData.financialCategories.filter((c) => c.tenant_id === null).map((cat) => (
+                          <div key={cat.id} className="catalog-row system">
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              {cat.color ? <span style={{ width: 12, height: 12, borderRadius: "50%", background: cat.color, display: "inline-block", flexShrink: 0 }} /> : null}
+                              {cat.name}
+                            </span>
+                            <em style={{ fontSize: "0.75rem", color: "var(--color-neutral-500)" }}>
+                              {cat.type === "income" ? "Receita" : cat.type === "expense" ? "Despesa" : "Ambos"}
+                            </em>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="catalog-panel">
+                      <div className="catalog-header">
+                        <strong>Categorias do tenant</strong>
+                        <small>Categorias personalizadas criadas pela sua igreja.</small>
+                      </div>
+
+                      {canManageFinancial ? (
+                        <form className="worship-form" onSubmit={handleFinancialCategorySubmit} style={{ marginBottom: "1rem" }}>
+                          <div className="modal-grid">
+                            <input
+                              className="catalog-input"
+                              placeholder="Nome da categoria"
+                              value={financialCategoryForm.name}
+                              onChange={(e) => setFinancialCategoryForm((c) => ({ ...c, name: e.target.value }))}
+                            />
+                            <select
+                              className="catalog-input"
+                              value={financialCategoryForm.type}
+                              onChange={(e) => setFinancialCategoryForm((c) => ({ ...c, type: e.target.value as FinancialCategoryRecord["type"] }))}
+                            >
+                              <option value="income">Receita</option>
+                              <option value="expense">Despesa</option>
+                              <option value="both">Ambos</option>
+                            </select>
+                          </div>
+                          <div className="modal-grid">
+                            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" }}>
+                              Cor:
+                              <input
+                                type="color"
+                                value={financialCategoryForm.color}
+                                onChange={(e) => setFinancialCategoryForm((c) => ({ ...c, color: e.target.value }))}
+                                style={{ width: 40, height: 32, padding: 2, border: "1px solid var(--color-neutral-200)", borderRadius: 6, cursor: "pointer" }}
+                              />
+                            </label>
+                          </div>
+                          <Button type="submit" disabled={financialSaveStatus === "loading"} icon={<Plus size={16} />}>
+                            {financialCategoryForm.id ? "Salvar alterações" : "Adicionar categoria"}
+                          </Button>
+                          {financialCategoryForm.id ? (
+                            <Button type="button" variant="secondary" onClick={() => setFinancialCategoryForm(emptyFinancialCategoryForm)}>
+                              Cancelar
+                            </Button>
+                          ) : null}
+                        </form>
+                      ) : null}
+
+                      <div className="catalog-list">
+                        {clientData.financialCategories.filter((c) => c.tenant_id !== null).length === 0 ? (
+                          <div className="catalog-empty">Nenhuma categoria personalizada ainda.</div>
+                        ) : null}
+                        {clientData.financialCategories.filter((c) => c.tenant_id !== null).map((cat) => (
+                          <div key={cat.id} className="catalog-row">
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              {cat.color ? <span style={{ width: 12, height: 12, borderRadius: "50%", background: cat.color, display: "inline-block", flexShrink: 0 }} /> : null}
+                              {cat.name}
+                            </span>
+                            <em style={{ fontSize: "0.75rem", color: "var(--color-neutral-500)" }}>
+                              {cat.type === "income" ? "Receita" : cat.type === "expense" ? "Despesa" : "Ambos"}
+                            </em>
+                            {canManageFinancial ? (
+                              <div className="member-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => setFinancialCategoryForm({ id: cat.id, name: cat.name, type: cat.type, color: cat.color ?? "#087C7A" })}
+                                >
+                                  <Edit3 size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Excluir categoria "${cat.name}"?`)) void handleDeleteFinancialCategory(cat.id);
+                                  }}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── RELATÓRIOS ── */}
+                {financialView === "reports" ? (
+                  <div style={{ marginTop: "1rem" }}>
+                    <div className="worship-summary financial-summary">
+                      <article className="financial-stat income">
+                        <TrendingUp size={20} />
+                        <div>
+                          <span>Total receitas</span>
+                          <strong>{fmtCurrency(incomeThisMonth)}</strong>
+                        </div>
+                      </article>
+                      <article className="financial-stat expense">
+                        <TrendingDown size={20} />
+                        <div>
+                          <span>Total despesas</span>
+                          <strong>{fmtCurrency(expenseThisMonth)}</strong>
+                        </div>
+                      </article>
+                      <article className={`financial-stat ${netThisMonth >= 0 ? "income" : "expense"}`}>
+                        <DollarSign size={20} />
+                        <div>
+                          <span>Saldo</span>
+                          <strong>{fmtCurrency(netThisMonth)}</strong>
+                        </div>
+                      </article>
+                    </div>
+
+                    <div className="panel-heading" style={{ marginTop: "1.5rem" }}>
+                      <strong>Por categoria — {new Date(financialFilterMonth + "-01").toLocaleString("pt-BR", { month: "long", year: "numeric" })}</strong>
+                    </div>
+
+                    {reportByCategory.length === 0 ? (
+                      <div className="catalog-empty" style={{ marginTop: "1rem" }}>Nenhum lançamento no período selecionado.</div>
+                    ) : null}
+
+                    <div className="financial-report-table" style={{ marginTop: "0.75rem" }}>
+                      {reportByCategory.map((row) => {
+                        const total = row.income + row.expense;
+                        const maxAmount = Math.max(...reportByCategory.map((r) => r.income + r.expense), 1);
+                        return (
+                          <div key={row.name} className="financial-report-row">
+                            <div className="financial-report-name">
+                              {row.color ? <span className="financial-cat-dot" style={{ background: row.color }} /> : null}
+                              <span>{row.name}</span>
+                            </div>
+                            <div className="financial-report-bar-wrap">
+                              <div
+                                className="financial-report-bar"
+                                style={{ width: `${Math.round((total / maxAmount) * 100)}%`, background: row.color ?? "var(--color-brand-primary)" }}
+                              />
+                            </div>
+                            <div className="financial-report-amounts">
+                              {row.income > 0 ? <span className="income">+{fmtCurrency(row.income)}</span> : null}
+                              {row.expense > 0 ? <span className="expense">-{fmtCurrency(row.expense)}</span> : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </article>
+            );
+          })() : null}
 
           {activeTab === "notices" ? (
             <article className="panel full-width">
