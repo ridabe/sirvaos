@@ -19,6 +19,17 @@ function jsonResponse(status: number, body: unknown, headers?: HeadersInit) {
   });
 }
 
+function getDefaultKeyFromJsonEnv(raw: string | undefined) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const value = parsed?.default;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function getCorsHeaders(origin: string | null) {
   return {
     "Access-Control-Allow-Origin": origin ?? "*",
@@ -56,16 +67,29 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const publishableKey =
+    getDefaultKeyFromJsonEnv(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")) ?? Deno.env.get("SUPABASE_ANON_KEY") ?? null;
+  const secretKey =
+    getDefaultKeyFromJsonEnv(Deno.env.get("SUPABASE_SECRET_KEYS")) ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? null;
 
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-    return jsonResponse(500, { error: "missing_env" }, corsHeaders);
+  if (!supabaseUrl || !publishableKey || !secretKey) {
+    return jsonResponse(
+      500,
+      {
+        error: "missing_env",
+        details: {
+          has_url: Boolean(supabaseUrl),
+          has_publishable_key: Boolean(publishableKey),
+          has_secret_key: Boolean(secretKey),
+        },
+      },
+      corsHeaders,
+    );
   }
 
   const authorization = req.headers.get("Authorization") ?? "";
 
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+  const userClient = createClient(supabaseUrl, publishableKey, {
     global: {
       headers: {
         Authorization: authorization,
@@ -116,7 +140,7 @@ serve(async (req) => {
     return jsonResponse(400, { error: "invalid_payload" }, corsHeaders);
   }
 
-  const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  const adminClient = createClient(supabaseUrl, secretKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -223,4 +247,3 @@ serve(async (req) => {
     corsHeaders,
   );
 });
-
