@@ -1,33 +1,25 @@
 import {
   ArrowRight,
-  Bell,
-  CalendarDays,
   Check,
   ChevronDown,
   Church,
   Eye,
   Fingerprint,
-  LayoutDashboard,
   LockKeyhole,
   Mail,
-  Network,
   ShieldCheck,
   Smartphone,
   Sparkles,
-  UsersRound,
 } from "lucide-react";
-
-const modules = [
-  { name: "Membresia", metric: "12.450", label: "membros organizados" },
-  { name: "Louvor", metric: "186", label: "escalas publicadas" },
-  { name: "Kids", metric: "72", label: "famílias acompanhadas" },
-];
-
-const tenantCards = [
-  { name: "Primeira Igreja", status: "Online", modules: "Membresia, Louvor, Financeiro" },
-  { name: "Comunidade Vida", status: "Configurando", modules: "Kids, Escola Bíblica" },
-  { name: "Igreja Central", status: "Online", modules: "Todos os módulos" },
-];
+import {
+  Button,
+  FeatureItem,
+  IconButton,
+  MetricCard,
+  StatusBadge,
+  TextField,
+} from "./design-system/components";
+import { features, modules, tenantCards } from "./data/landing";
 
 export function App() {
   return (
@@ -39,14 +31,13 @@ export function App() {
           </a>
 
           <div className="nav-actions" aria-label="Acesso rápido">
-            <button className="ghost-button" type="button">
-              <Sparkles size={17} />
+            <Button variant="ghost" icon={<Sparkles size={17} />}>
               Demonstração
-            </button>
-            <button className="ghost-icon" type="button" aria-label="Selecionar idioma">
+            </Button>
+            <IconButton ariaLabel="Selecionar idioma">
               PT
               <ChevronDown size={14} />
-            </button>
+            </IconButton>
           </div>
         </nav>
 
@@ -66,29 +57,19 @@ export function App() {
             </p>
 
             <div className="hero-actions">
-              <button className="primary-button" type="button">
-                Conhecer o painel
-                <ArrowRight size={18} />
-              </button>
-              <button className="secondary-button" type="button">
-                <Smartphone size={18} />
+              <Button icon={<ArrowRight size={18} />}>Conhecer o painel</Button>
+              <Button variant="secondary" icon={<Smartphone size={18} />}>
                 Ver app do membro
-              </button>
+              </Button>
             </div>
 
             <div className="trust-row" aria-label="Pilares do SirvaOS">
-              <span>
-                <Check size={16} />
-                Multi-tenant
-              </span>
-              <span>
-                <Check size={16} />
-                White-label
-              </span>
-              <span>
-                <Check size={16} />
-                Módulos ativos
-              </span>
+              {["Multi-tenant", "White-label", "Módulos ativos"].map((item) => (
+                <span key={item}>
+                  <Check size={16} />
+                  {item}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -111,11 +92,7 @@ export function App() {
 
               <div className="module-strip">
                 {modules.map((module) => (
-                  <article key={module.name}>
-                    <span>{module.name}</span>
-                    <strong>{module.metric}</strong>
-                    <small>{module.label}</small>
-                  </article>
+                  <MetricCard key={module.name} {...module} />
                 ))}
               </div>
 
@@ -129,9 +106,9 @@ export function App() {
                       <strong>{tenant.name}</strong>
                       <span>{tenant.modules}</span>
                     </div>
-                    <em className={tenant.status === "Online" ? "online" : "setup"}>
+                    <StatusBadge tone={tenant.status === "Online" ? "success" : "warning"}>
                       {tenant.status}
-                    </em>
+                    </StatusBadge>
                   </article>
                 ))}
               </div>
@@ -151,24 +128,26 @@ export function App() {
           </div>
 
           <form className="login-form">
-            <label>
-              <span>E-mail</span>
-              <div className="field">
-                <Mail size={18} />
-                <input type="email" placeholder="admin@suaigreja.org" autoComplete="email" />
-              </div>
-            </label>
+            <TextField
+              autoComplete="email"
+              icon={<Mail size={18} />}
+              label="E-mail"
+              placeholder="admin@suaigreja.org"
+              type="email"
+            />
 
-            <label>
-              <span>Senha</span>
-              <div className="field">
-                <LockKeyhole size={18} />
-                <input type="password" placeholder="Sua senha" autoComplete="current-password" />
+            <TextField
+              autoComplete="current-password"
+              endIcon={
                 <button type="button" aria-label="Mostrar senha">
                   <Eye size={18} />
                 </button>
-              </div>
-            </label>
+              }
+              icon={<LockKeyhole size={18} />}
+              label="Senha"
+              placeholder="Sua senha"
+              type="password"
+            />
 
             <div className="form-options">
               <label className="remember">
@@ -178,50 +157,26 @@ export function App() {
               <a href="/">Esqueci a senha</a>
             </div>
 
-            <button className="submit-button" type="submit">
+            <Button type="submit" className="submit-button" icon={<ArrowRight size={18} />}>
               Acessar painel
-              <ArrowRight size={18} />
-            </button>
+            </Button>
           </form>
 
           <div className="divider">
             <span>ou</span>
           </div>
 
-          <button className="sso-button" type="button">
-            <Fingerprint size={18} />
+          <Button variant="sso" icon={<Fingerprint size={18} />}>
             Entrar com código seguro
-          </button>
+          </Button>
         </div>
 
         <div className="feature-list" aria-label="Recursos do SirvaOS">
-          <Feature icon={<LayoutDashboard size={20} />} title="Admin Global" text="Gerencie clientes, planos e módulos em um só lugar." />
-          <Feature icon={<Network size={20} />} title="White-label" text="Cada igreja usa sua logo, cores e módulos contratados." />
-          <Feature icon={<Bell size={20} />} title="Notificações" text="Escalas, eventos e comunicados chegam às pessoas certas." />
-          <Feature icon={<CalendarDays size={20} />} title="Calendário único" text="A liderança enxerga a agenda consolidada da igreja." />
-          <Feature icon={<UsersRound size={20} />} title="Membros" text="Cadastro central para todos os ministérios e módulos." />
+          {features.map(({ icon: Icon, title, text }) => (
+            <FeatureItem key={title} icon={<Icon size={20} />} title={title} text={text} />
+          ))}
         </div>
       </aside>
     </main>
-  );
-}
-
-function Feature({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <article className="feature-item">
-      <span>{icon}</span>
-      <div>
-        <strong>{title}</strong>
-        <p>{text}</p>
-      </div>
-    </article>
   );
 }

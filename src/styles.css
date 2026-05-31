@@ -399,12 +399,12 @@ h1 {
   border-radius: 999px;
 }
 
-.tenant-list .online {
+.tenant-list .success {
   color: var(--color-success);
   background: #e3f5ec;
 }
 
-.tenant-list .setup {
+.tenant-list .warning {
   color: var(--color-warning);
   background: #fff3d8;
 }
