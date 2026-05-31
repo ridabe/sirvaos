@@ -11,7 +11,10 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  Menu,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   ShieldCheck,
@@ -621,6 +624,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [catalogSaveStatus, setCatalogSaveStatus] = useState<LoginStatus>("idle");
   const [catalogSaveMessage, setCatalogSaveMessage] = useState("");
   const [ministryPickerId, setMinistryPickerId] = useState("");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const isTenantAdmin = useMemo(() => {
     if (!profile) return false;
@@ -2358,7 +2363,27 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   return (
-    <main className="client-admin-page">
+    <main
+      className={`client-admin-page ${isSidebarCollapsed ? "sidebar-collapsed" : ""} ${
+        isMobileSidebarOpen ? "sidebar-mobile-open" : ""
+      }`}
+    >
+      <button
+        className="sidebar-mobile-toggle"
+        type="button"
+        onClick={() => setIsMobileSidebarOpen(true)}
+        aria-label="Abrir menu"
+      >
+        <Menu size={20} />
+      </button>
+      {isMobileSidebarOpen ? (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          aria-label="Fechar menu"
+        />
+      ) : null}
       {mustChangePassword ? (
         <div className="modal-overlay" aria-label="Troca de senha obrigatória">
           <section className="modal-card">
@@ -2412,22 +2437,38 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       ) : null}
 
       <aside className="client-admin-sidebar" aria-label="Navegação do Admin Cliente">
-        <div className="client-brand">
-          <div className="tenant-sidebar-logo" aria-label="Logo do tenant">
-            {resolvedTenantLogoUrl ? (
-              <img
-                src={resolvedTenantLogoUrl}
-                alt={`Logo ${tenant.name}`}
-                onError={() => setResolvedTenantLogoUrl(null)}
-              />
-            ) : (
-              <span className="tenant-sidebar-logo-fallback">{tenant.name.slice(0, 2).toUpperCase()}</span>
-            )}
+        <div className="sidebar-top-row">
+          <div className="client-brand">
+            <div className="tenant-sidebar-logo" aria-label="Logo do tenant">
+              {resolvedTenantLogoUrl ? (
+                <img
+                  src={resolvedTenantLogoUrl}
+                  alt={`Logo ${tenant.name}`}
+                  onError={() => setResolvedTenantLogoUrl(null)}
+                />
+              ) : (
+                <span className="tenant-sidebar-logo-fallback">{tenant.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="sidebar-label">
+              <strong>{tenant.name}</strong>
+              <small>{tenant.slug}</small>
+            </div>
           </div>
-          <div>
-            <strong>{tenant.name}</strong>
-            <small>{tenant.slug}</small>
-          </div>
+          <button
+            className="sidebar-collapse-button"
+            type="button"
+            onClick={() => {
+              if (isMobileSidebarOpen) {
+                setIsMobileSidebarOpen(false);
+                return;
+              }
+              setIsSidebarCollapsed((current) => !current);
+            }}
+            aria-label={isMobileSidebarOpen ? "Fechar menu" : isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
 
         <nav>
@@ -2436,17 +2477,20 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               key={key}
               type="button"
               className={activeTab === key ? "active" : undefined}
-              onClick={() => setActiveTab(key)}
+              onClick={() => {
+                setActiveTab(key);
+                setIsMobileSidebarOpen(false);
+              }}
             >
               <Icon size={18} />
-              {label}
+              <span className="sidebar-label">{label}</span>
             </button>
           ))}
         </nav>
 
         <button className="global-admin-logout" type="button" onClick={handleSignOut}>
           <LogOut size={18} />
-          Sair
+          <span className="sidebar-label">Sair</span>
         </button>
       </aside>
 

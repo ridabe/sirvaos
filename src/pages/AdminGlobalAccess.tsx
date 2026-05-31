@@ -11,7 +11,10 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  Menu,
   PackageCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Settings2,
@@ -297,6 +300,8 @@ export function AdminGlobalAccess() {
   const [isModuleFormOpen, setIsModuleFormOpen] = useState(false);
   const [catalogModuleSaveStatus, setCatalogModuleSaveStatus] = useState<LoginStatus>("idle");
   const [catalogModuleSaveMessage, setCatalogModuleSaveMessage] = useState("");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [tenantLogoUploadStatus, setTenantLogoUploadStatus] = useState<LoginStatus>("idle");
   const [tenantLogoUploadMessage, setTenantLogoUploadMessage] = useState("");
@@ -1287,51 +1292,99 @@ export function AdminGlobalAccess() {
 
   if (profile) {
     return (
-      <main className="global-admin-page">
+      <main
+        className={`global-admin-page ${isSidebarCollapsed ? "sidebar-collapsed" : ""} ${
+          isMobileSidebarOpen ? "sidebar-mobile-open" : ""
+        }`}
+      >
+        <button
+          className="sidebar-mobile-toggle"
+          type="button"
+          onClick={() => setIsMobileSidebarOpen(true)}
+          aria-label="Abrir menu"
+        >
+          <Menu size={20} />
+        </button>
+        {isMobileSidebarOpen ? (
+          <button
+            className="sidebar-backdrop"
+            type="button"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            aria-label="Fechar menu"
+          />
+        ) : null}
         <aside className="global-admin-sidebar" aria-label="Navegação do Admin Global">
-          <a className="global-admin-logo" href="/" aria-label="SirvaOS">
-            <img src="/img/icon-sirvaos.svg" alt="" />
-            <span>SirvaOS</span>
-          </a>
+          <div className="sidebar-top-row">
+            <a className="global-admin-logo" href="/" aria-label="SirvaOS">
+              <img src="/img/icon-sirvaos.svg" alt="" />
+              <span className="sidebar-label">SirvaOS</span>
+            </a>
+            <button
+              className="sidebar-collapse-button"
+              type="button"
+              onClick={() => {
+                if (isMobileSidebarOpen) {
+                  setIsMobileSidebarOpen(false);
+                  return;
+                }
+                setIsSidebarCollapsed((current) => !current);
+              }}
+              aria-label={isMobileSidebarOpen ? "Fechar menu" : isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          </div>
 
           <nav>
             <button
               className={activeSection === "dashboard" ? "active" : undefined}
               type="button"
-              onClick={() => setActiveSection("dashboard")}
+              onClick={() => {
+                setActiveSection("dashboard");
+                setIsMobileSidebarOpen(false);
+              }}
             >
               <LayoutDashboard size={18} />
-              Dashboard
+              <span className="sidebar-label">Dashboard</span>
             </button>
             <button
               className={activeSection === "clients" ? "active" : undefined}
               type="button"
-              onClick={() => setActiveSection("clients")}
+              onClick={() => {
+                setActiveSection("clients");
+                setIsMobileSidebarOpen(false);
+              }}
             >
               <Building2 size={18} />
-              Clientes
+              <span className="sidebar-label">Clientes</span>
             </button>
             <button
               className={activeSection === "modules" ? "active" : undefined}
               type="button"
-              onClick={() => setActiveSection("modules")}
+              onClick={() => {
+                setActiveSection("modules");
+                setIsMobileSidebarOpen(false);
+              }}
             >
               <PackageCheck size={18} />
-              Catálogo
+              <span className="sidebar-label">Catálogo</span>
             </button>
             <button
               className={activeSection === "plans" ? "active" : undefined}
               type="button"
-              onClick={() => setActiveSection("plans")}
+              onClick={() => {
+                setActiveSection("plans");
+                setIsMobileSidebarOpen(false);
+              }}
             >
               <ShieldCheck size={18} />
-              Planos
+              <span className="sidebar-label">Planos</span>
             </button>
           </nav>
 
           <button className="global-admin-logout" type="button" onClick={handleSignOut}>
             <LogOut size={18} />
-            Sair
+            <span className="sidebar-label">Sair</span>
           </button>
         </aside>
 

@@ -2606,6 +2606,122 @@ h1 {
   font-size: 0.82rem;
 }
 
+.global-admin-page,
+.client-admin-page {
+  transition: grid-template-columns 180ms ease;
+}
+
+.global-admin-page.sidebar-collapsed,
+.client-admin-page.sidebar-collapsed {
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
+.sidebar-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sidebar-collapse-button,
+.sidebar-mobile-toggle,
+.sidebar-backdrop {
+  border: 0;
+}
+
+.sidebar-collapse-button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+
+.sidebar-collapse-button:hover {
+  color: var(--color-white);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.client-admin-sidebar .sidebar-collapse-button {
+  color: var(--tenant-sidebar-muted-fg);
+  background: var(--tenant-sidebar-hover-bg);
+  border-color: var(--tenant-sidebar-hover-border);
+}
+
+.client-admin-sidebar .sidebar-collapse-button:hover {
+  color: var(--tenant-sidebar-fg);
+}
+
+.global-admin-page.sidebar-collapsed .global-admin-sidebar,
+.client-admin-page.sidebar-collapsed .client-admin-sidebar {
+  align-items: center;
+  padding-inline: 16px;
+}
+
+.global-admin-page.sidebar-collapsed .sidebar-top-row,
+.client-admin-page.sidebar-collapsed .sidebar-top-row {
+  flex-direction: column;
+}
+
+.global-admin-page.sidebar-collapsed .sidebar-label,
+.client-admin-page.sidebar-collapsed .sidebar-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.global-admin-page.sidebar-collapsed .global-admin-logo,
+.client-admin-page.sidebar-collapsed .client-brand {
+  justify-content: center;
+  gap: 0;
+}
+
+.global-admin-page.sidebar-collapsed .global-admin-sidebar nav,
+.client-admin-page.sidebar-collapsed .client-admin-sidebar nav {
+  width: 100%;
+}
+
+.global-admin-page.sidebar-collapsed .global-admin-sidebar nav button,
+.global-admin-page.sidebar-collapsed .global-admin-logout,
+.client-admin-page.sidebar-collapsed .client-admin-sidebar nav button,
+.client-admin-page.sidebar-collapsed .global-admin-logout {
+  justify-content: center;
+  width: 100%;
+  padding-inline: 0;
+}
+
+.sidebar-mobile-toggle {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 70;
+  display: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  color: var(--color-brand-primary-dark);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  background: rgba(15, 23, 42, 0.42);
+}
+
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -2897,5 +3013,99 @@ h1 {
 
   .notification-list em {
     width: max-content;
+  }
+}
+
+@media (max-width: 1180px) {
+  .global-admin-page,
+  .client-admin-page,
+  .global-admin-page.sidebar-collapsed,
+  .client-admin-page.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-mobile-toggle {
+    display: grid;
+  }
+
+  .global-admin-sidebar,
+  .client-admin-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 90;
+    width: min(86vw, 320px);
+    min-height: 100vh;
+    overflow-y: auto;
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+  }
+
+  .global-admin-page.sidebar-mobile-open .global-admin-sidebar,
+  .client-admin-page.sidebar-mobile-open .client-admin-sidebar {
+    transform: translateX(0);
+  }
+
+  .global-admin-page.sidebar-mobile-open .sidebar-backdrop,
+  .client-admin-page.sidebar-mobile-open .sidebar-backdrop {
+    display: block;
+  }
+
+  .global-admin-page.sidebar-collapsed .global-admin-sidebar,
+  .client-admin-page.sidebar-collapsed .client-admin-sidebar {
+    align-items: stretch;
+    padding: 22px;
+  }
+
+  .global-admin-page.sidebar-collapsed .sidebar-top-row,
+  .client-admin-page.sidebar-collapsed .sidebar-top-row {
+    flex-direction: row;
+  }
+
+  .global-admin-page.sidebar-collapsed .sidebar-label,
+  .client-admin-page.sidebar-collapsed .sidebar-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  .global-admin-page.sidebar-collapsed .global-admin-sidebar nav button,
+  .global-admin-page.sidebar-collapsed .global-admin-logout,
+  .client-admin-page.sidebar-collapsed .client-admin-sidebar nav button,
+  .client-admin-page.sidebar-collapsed .global-admin-logout {
+    justify-content: flex-start;
+    padding-inline: 12px;
+  }
+
+  .global-admin-sidebar nav,
+  .global-admin-page.sidebar-collapsed .global-admin-sidebar nav {
+    grid-template-columns: 1fr;
+  }
+
+  .client-admin-sidebar nav {
+    grid-template-columns: 1fr;
+  }
+
+  .global-admin-content {
+    padding-top: 72px;
+  }
+}
+
+@media (max-width: 620px) {
+  .sidebar-mobile-toggle {
+    top: 10px;
+    left: 10px;
+  }
+
+  .global-admin-sidebar,
+  .client-admin-sidebar {
+    width: min(90vw, 300px);
+    padding: 18px;
+  }
+
+  .global-admin-content {
+    padding-top: 68px;
   }
 }
