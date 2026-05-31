@@ -196,7 +196,7 @@ export function App() {
         <div className="section-heading">
           <span className="eyebrow">
             <Church size={18} />
-            Etapa 2 · Admin Cliente/Igreja
+            Etapa 3 · Admin Cliente/Igreja
           </span>
           <div>
             <h2 id="client-dashboard-title">Painel operacional da igreja</h2>
