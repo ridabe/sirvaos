@@ -75,6 +75,12 @@ Script disponível:
 npm run admin:create-global
 ```
 
+No Windows, se `npm` ou `node` não estiverem no `PATH`, use o helper PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\create-global-admin.ps1
+```
+
 Variáveis necessárias para executar o script:
 
 ```bash
