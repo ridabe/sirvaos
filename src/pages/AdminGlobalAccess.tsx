@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { supabase } from "../lib/supabase";
 
@@ -2634,6 +2635,7 @@ export function AdminGlobalAccess() {
           </form>
         </div>
       </section>
+      <PolicyFooter entityName="SirvaOS · Admin Global" />
     </main>
   );
 }

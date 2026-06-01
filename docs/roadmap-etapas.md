@@ -239,3 +239,4 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 - Etapa 8 concluída (2026-05-31): Módulo Kids com melhorias em reacao as instruções iniciais
 - Etapa 9 concluída (2026-06-01): Módulo Escola Biblica
 - Etapa 10 concluída (2026-06-01): Módulo Relatorio e Auditoria
+- Etapa 11 concluída (2026-06-01): Produção e Escala — ErrorBoundary global com log no Supabase (`app_error_logs`), LGPD com consentimentos e solicitação de exclusão no portal do membro, termos/política por tenant com versionamento e modal de aceite obrigatório, tab "Política & LGPD" no ClientAdmin, migration `20260604100000_stage_11_production.sql`.

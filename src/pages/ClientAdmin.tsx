@@ -10,6 +10,7 @@ import {
   DollarSign,
   Edit3,
   Eye,
+  FileCheck2,
   ImagePlus,
   LayoutDashboard,
   LockKeyhole,
@@ -24,6 +25,7 @@ import {
   Plus,
   QrCode,
   Receipt,
+  ScrollText,
   Search,
   Send,
   ShieldCheck,
@@ -36,6 +38,7 @@ import {
 } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { supabase } from "../lib/supabase";
 import {
@@ -1207,6 +1210,7 @@ const clientTabs = [
   { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
   { key: "users", label: "Usuários", icon: ShieldCheck },
+  { key: "policies", label: "Política & LGPD", icon: ScrollText },
 ] as const;
 
 type ClientTab = (typeof clientTabs)[number]["key"];
@@ -1224,7 +1228,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   notices: "announcements",
 };
 
-const tenantAdminOnlyTabs = new Set<ClientTab>(["lists", "theme", "users"]);
+const tenantAdminOnlyTabs = new Set<ClientTab>(["lists", "theme", "users", "policies"]);
 
 type ClientAdminProps = {
   demoMode?: boolean;
@@ -1643,6 +1647,17 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // ── Política & LGPD ──────────────────────────────────────────────────────
+  type PolicyRecord = { id: string; terms_text: string; privacy_text: string; version: number; published_at: string | null };
+  type LgpdConsentRecord = { id: string; user_id: string; consent_type: string; granted: boolean; consented_at: string; profiles?: { full_name: string | null; email: string } };
+  type PolicyAcceptanceRecord = { id: string; user_id: string; policy_version: number; accepted_at: string; profiles?: { full_name: string | null; email: string } };
+  const [policyRecord, setPolicyRecord] = useState<PolicyRecord | null>(null);
+  const [policyForm, setPolicyForm] = useState({ terms_text: "", privacy_text: "" });
+  const [policyStatus, setPolicyStatus] = useState<LoginStatus>("idle");
+  const [policyMessage, setPolicyMessage] = useState("");
+  const [lgpdConsents, setLgpdConsents] = useState<LgpdConsentRecord[]>([]);
+  const [policyAcceptances, setPolicyAcceptances] = useState<PolicyAcceptanceRecord[]>([]);
+
   const isTenantAdmin = useMemo(() => {
     if (!profile) return false;
     return profile.tenant_role === "owner" || profile.tenant_role === "admin";
@@ -1957,6 +1972,90 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       stopKidsQrScanner();
     };
   }, []);
+
+  // ── useEffect: recarrega políticas toda vez que a tab é aberta ──────────
+  useEffect(() => {
+    if (activeTab !== "policies" || demoMode || !profile?.tenant_id) return;
+    void loadPolicies(profile.tenant_id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, demoMode, profile?.tenant_id]);
+
+  async function loadPolicies(tenantId: string) {
+    const [policyResult, consentsResult, acceptancesResult] = await Promise.all([
+      supabase
+        .from("tenant_policies")
+        .select("id, terms_text, privacy_text, version, published_at")
+        .eq("tenant_id", tenantId)
+        .maybeSingle<PolicyRecord>(),
+      supabase
+        .from("lgpd_consents")
+        .select("id, user_id, consent_type, granted, consented_at, profiles(full_name, email)")
+        .eq("tenant_id", tenantId)
+        .order("consented_at", { ascending: false }),
+      supabase
+        .from("user_policy_acceptances")
+        .select("id, user_id, policy_version, accepted_at, profiles(full_name, email)")
+        .eq("tenant_id", tenantId)
+        .order("accepted_at", { ascending: false }),
+    ]);
+
+    if (policyResult.data) {
+      setPolicyRecord(policyResult.data);
+      setPolicyForm({ terms_text: policyResult.data.terms_text, privacy_text: policyResult.data.privacy_text });
+    } else {
+      setPolicyRecord(null);
+      setPolicyForm({ terms_text: "", privacy_text: "" });
+    }
+
+    setLgpdConsents((consentsResult.data ?? []) as LgpdConsentRecord[]);
+    setPolicyAcceptances((acceptancesResult.data ?? []) as PolicyAcceptanceRecord[]);
+  }
+
+  async function handleSavePolicy() {
+    if (!profile?.tenant_id) return;
+    setPolicyStatus("loading");
+    setPolicyMessage("");
+
+    if (policyRecord) {
+      const { error } = await supabase
+        .from("tenant_policies")
+        .update({ terms_text: policyForm.terms_text, privacy_text: policyForm.privacy_text, updated_at: new Date().toISOString() })
+        .eq("id", policyRecord.id);
+      if (error) { setPolicyStatus("error"); setPolicyMessage("Erro ao salvar: " + error.message); return; }
+      setPolicyRecord((r) => r ? { ...r, terms_text: policyForm.terms_text, privacy_text: policyForm.privacy_text } : r);
+    } else {
+      const { data, error } = await supabase
+        .from("tenant_policies")
+        .insert({ tenant_id: profile.tenant_id, terms_text: policyForm.terms_text, privacy_text: policyForm.privacy_text, version: 1 })
+        .select("id, terms_text, privacy_text, version, published_at")
+        .single<PolicyRecord>();
+      if (error || !data) { setPolicyStatus("error"); setPolicyMessage("Erro ao criar: " + (error?.message ?? "")); return; }
+      setPolicyRecord(data);
+    }
+
+    setPolicyStatus("success");
+    setPolicyMessage("Rascunho salvo com sucesso.");
+    setTimeout(() => { setPolicyStatus("idle"); setPolicyMessage(""); }, 3000);
+  }
+
+  async function handlePublishPolicy() {
+    if (!profile?.tenant_id || !policyRecord) return;
+    setPolicyStatus("loading");
+    setPolicyMessage("");
+
+    const newVersion = policyRecord.version + 1;
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("tenant_policies")
+      .update({ terms_text: policyForm.terms_text, privacy_text: policyForm.privacy_text, version: newVersion, published_at: now })
+      .eq("id", policyRecord.id);
+
+    if (error) { setPolicyStatus("error"); setPolicyMessage("Erro ao publicar: " + error.message); return; }
+    setPolicyRecord((r) => r ? { ...r, terms_text: policyForm.terms_text, privacy_text: policyForm.privacy_text, version: newVersion, published_at: now } : r);
+    setPolicyStatus("success");
+    setPolicyMessage(`Versão ${newVersion} publicada. Membros precisarão aceitar novamente ao acessar o portal.`);
+    setTimeout(() => { setPolicyStatus("idle"); setPolicyMessage(""); }, 5000);
+  }
 
   async function handleForcePasswordChangeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5641,6 +5740,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Listagens do tenant"
                   : activeTab === "theme"
                   ? "Identidade visual"
+                  : activeTab === "policies"
+                  ? "Política & LGPD"
                   : "Gestão de usuários"}
               </span>
               <h1>{tenant.name}</h1>
@@ -5669,6 +5770,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Gerencie cargos e ministérios visíveis neste ambiente."
                   : activeTab === "theme"
                   ? "Atualize logo, cores e visual usado nas páginas da igreja."
+                  : activeTab === "policies"
+                  ? "Configure termos de uso, política de privacidade e acompanhe consentimentos LGPD."
                   : "Gerencie usuários e permissões do ambiente da igreja."}
               </p>
             </div>
@@ -9197,11 +9300,158 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               </div>
             </article>
           ) : null}
+
+          {activeTab === "policies" ? (
+            <article className="panel full-width">
+              <div className="panel-heading">
+                <div>
+                  <span>Política &amp; LGPD</span>
+                  <h4>Termos de uso, privacidade e consentimentos</h4>
+                </div>
+              </div>
+
+              {policyMessage ? (
+                <p className={`login-feedback ${policyStatus}`}>{policyMessage}</p>
+              ) : null}
+
+              <div className="policy-editor-stack">
+                {/* ── Termos de Uso ─────────────────────────────────────── */}
+                <section className="policy-editor-block" aria-label="Termos de uso">
+                  <div className="catalog-header">
+                    <strong>Termos de Uso</strong>
+                    <small>Texto exibido para membros ao acessar o portal pela primeira vez.</small>
+                  </div>
+                  <textarea
+                    className="policy-editor-textarea"
+                    rows={12}
+                    placeholder="Descreva os termos de uso do portal da sua igreja..."
+                    value={policyForm.terms_text}
+                    onChange={(e) => setPolicyForm((f) => ({ ...f, terms_text: e.target.value }))}
+                  />
+                </section>
+
+                {/* ── Política de Privacidade ───────────────────────────── */}
+                <section className="policy-editor-block" aria-label="Política de privacidade">
+                  <div className="catalog-header">
+                    <strong>Política de Privacidade (LGPD)</strong>
+                    <small>Informe como os dados dos membros são coletados, usados e protegidos.</small>
+                  </div>
+                  <textarea
+                    className="policy-editor-textarea"
+                    rows={12}
+                    placeholder="Descreva sua política de privacidade de acordo com a LGPD..."
+                    value={policyForm.privacy_text}
+                    onChange={(e) => setPolicyForm((f) => ({ ...f, privacy_text: e.target.value }))}
+                  />
+                </section>
+
+                {/* ── Ações ─────────────────────────────────────────────── */}
+                <section className="policy-editor-block" aria-label="Publicação">
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                    <div>
+                      <strong style={{ display: "block", fontSize: "0.95rem" }}>Versão publicada</strong>
+                      <small style={{ color: "var(--color-neutral-500)" }}>
+                        {policyRecord?.published_at
+                          ? `Versão ${policyRecord.version} · publicada em ${new Date(policyRecord.published_at).toLocaleDateString("pt-BR")} às ${new Date(policyRecord.published_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                          : policyRecord
+                            ? `Versão ${policyRecord.version} (rascunho — nunca publicada)`
+                            : "Nenhum documento criado ainda"}
+                      </small>
+                      {!policyRecord && (
+                        <small style={{ color: "var(--color-neutral-400)", display: "block", marginTop: 4 }}>
+                          Salve o rascunho primeiro para habilitar a publicação.
+                        </small>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        disabled={policyStatus === "loading"}
+                        onClick={() => void handleSavePolicy()}
+                      >
+                        Salvar rascunho
+                      </Button>
+                      <Button
+                        variant="primary"
+                        type="button"
+                        disabled={policyStatus === "loading" || !policyRecord || (!policyForm.terms_text.trim() && !policyForm.privacy_text.trim())}
+                        onClick={() => void handlePublishPolicy()}
+                      >
+                        <FileCheck2 size={16} />
+                        Publicar nova versão
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ── Cards de aceites e LGPD lado a lado ──────────────── */}
+                <div className="catalog-grid" style={{ marginTop: 0 }}>
+                {/* ── Aceites registrados ───────────────────────────────── */}
+                <section className="catalog-panel" aria-label="Aceites de política">
+                  <div className="catalog-header">
+                    <strong>Aceites de Política</strong>
+                    <small>{policyAcceptances.length} registro(s) de aceite</small>
+                  </div>
+                  {policyAcceptances.length === 0 ? (
+                    <p style={{ color: "var(--color-text-secondary)", fontSize: "0.875rem" }}>
+                      Nenhum aceite registrado ainda.
+                    </p>
+                  ) : (
+                    <div className="member-list" style={{ maxHeight: 240, overflowY: "auto" }}>
+                      {policyAcceptances.map((a) => (
+                        <div key={a.id} className="member-row" style={{ fontSize: "0.875rem" }}>
+                          <FileCheck2 size={16} style={{ color: "var(--color-success)", flexShrink: 0 }} />
+                          <div>
+                            <strong>{(a.profiles as { full_name?: string | null; email?: string } | undefined)?.full_name ?? (a.profiles as { full_name?: string | null; email?: string } | undefined)?.email ?? a.user_id.slice(0, 8)}</strong>
+                            <small>Versão {a.policy_version} — {new Date(a.accepted_at).toLocaleDateString("pt-BR")}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* ── Consentimentos LGPD ───────────────────────────────── */}
+                <section className="catalog-panel" aria-label="Consentimentos LGPD">
+                  <div className="catalog-header">
+                    <strong>Consentimentos LGPD</strong>
+                    <small>{lgpdConsents.filter((c) => c.granted).length} ativo(s) · {lgpdConsents.filter((c) => c.consent_type === "data_deletion_request").length} solicitação(ões) de exclusão</small>
+                  </div>
+                  {lgpdConsents.length === 0 ? (
+                    <p style={{ color: "var(--color-text-secondary)", fontSize: "0.875rem" }}>
+                      Nenhum consentimento registrado ainda.
+                    </p>
+                  ) : (
+                    <div className="member-list" style={{ maxHeight: 240, overflowY: "auto" }}>
+                      {lgpdConsents.map((c) => (
+                        <div key={c.id} className="member-row" style={{ fontSize: "0.875rem" }}>
+                          <ScrollText size={16} style={{ color: c.consent_type === "data_deletion_request" ? "var(--color-danger)" : c.granted ? "var(--color-success)" : "var(--color-text-secondary)", flexShrink: 0 }} />
+                          <div>
+                            <strong>{(c.profiles as { full_name?: string | null; email?: string } | undefined)?.full_name ?? (c.profiles as { full_name?: string | null; email?: string } | undefined)?.email ?? c.user_id.slice(0, 8)}</strong>
+                            <small>
+                              {c.consent_type === "data_processing" ? "Tratamento de dados" : c.consent_type === "marketing" ? "Marketing" : c.consent_type === "data_deletion_request" ? "Solicitação de exclusão" : c.consent_type}
+                              {" · "}{new Date(c.consented_at).toLocaleDateString("pt-BR")}
+                            </small>
+                          </div>
+                          <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: c.consent_type === "data_deletion_request" ? "var(--color-danger)" : c.granted ? "var(--color-success)" : "var(--color-text-secondary)", fontWeight: 600 }}>
+                            {c.consent_type === "data_deletion_request" ? "Exclusão" : c.granted ? "Ativo" : "Revogado"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+                </div>{/* fim catalog-grid dos cards */}
+              </div>{/* fim policy-editor-stack */}
+            </article>
+          ) : null}
         </div>
 
         <footer className="client-admin-footer">
           <strong>{tenant.name}</strong>
           <span>Ambiente administrativo do cliente</span>
+          <PolicyFooter tenantId={tenant.id} variant="inline" />
         </footer>
       </section>
 

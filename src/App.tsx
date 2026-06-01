@@ -35,6 +35,7 @@ import {
 } from "./data/clientDashboard";
 import { features, modules, tenantCards } from "./data/landing";
 import { resolvePostLoginPath } from "./lib/accessRouting";
+import { PolicyFooter } from "./components/PolicyFooter";
 import { supabase } from "./lib/supabase";
 import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 import { ClientAdmin } from "./pages/ClientAdmin";
@@ -858,6 +859,7 @@ export function App() {
           </div>
         </div>
       </section>
+      <PolicyFooter />
     </main>
   );
 }

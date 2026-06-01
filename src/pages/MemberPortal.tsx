@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  FileCheck2,
   LockKeyhole,
   LogOut,
   Mail,
@@ -12,9 +13,13 @@ import {
   Music,
   Plus,
   QrCode,
+  ScrollText,
+  ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { supabase } from "../lib/supabase";
 
@@ -325,6 +330,18 @@ export function MemberPortal() {
   const [actionStatus, setActionStatus] = useState<Record<string, "loading" | "done">>({});
   const [showPassword, setShowPassword] = useState(false);
 
+  // ── LGPD & Termos ────────────────────────────────────────────────────────
+  type TenantPolicy = { id: string; terms_text: string; privacy_text: string; version: number; published_at: string | null };
+  const [pendingPolicy, setPendingPolicy] = useState<TenantPolicy | null>(null);
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [policyChecked, setPolicyChecked] = useState(false);
+  const [policyAcceptStatus, setPolicyAcceptStatus] = useState<LoginStatus>("idle");
+  const [policyAcceptMessage, setPolicyAcceptMessage] = useState("");
+  const [lgpdConsentGranted, setLgpdConsentGranted] = useState<boolean | null>(null);
+  const [lgpdDeletionRequested, setLgpdDeletionRequested] = useState(false);
+  const [lgpdActionStatus, setLgpdActionStatus] = useState<LoginStatus>("idle");
+  const [lgpdActionMessage, setLgpdActionMessage] = useState("");
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) {
@@ -332,6 +349,133 @@ export function MemberPortal() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (loadStatus === "ready" && profile?.tenant_id) {
+      void checkPolicyAcceptance(profile.tenant_id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadStatus, profile?.tenant_id]);
+
+  async function checkPolicyAcceptance(tenantId: string) {
+    const { data: policyData } = await supabase
+      .from("tenant_policies")
+      .select("id, terms_text, privacy_text, version, published_at")
+      .eq("tenant_id", tenantId)
+      .not("published_at", "is", null)
+      .maybeSingle<TenantPolicy>();
+
+    if (!policyData) return;
+
+    const { data: acceptance } = await supabase
+      .from("user_policy_acceptances")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("policy_version", policyData.version)
+      .maybeSingle();
+
+    if (!acceptance) {
+      setPendingPolicy(policyData);
+      setIsPolicyModalOpen(true);
+    }
+
+    // Load LGPD consent status
+    const { data: consent } = await supabase
+      .from("lgpd_consents")
+      .select("granted")
+      .eq("tenant_id", tenantId)
+      .eq("consent_type", "data_processing")
+      .maybeSingle<{ granted: boolean }>();
+
+    setLgpdConsentGranted(consent?.granted ?? null);
+
+    const { data: deletionReq } = await supabase
+      .from("lgpd_consents")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("consent_type", "data_deletion_request")
+      .eq("granted", true)
+      .maybeSingle();
+
+    setLgpdDeletionRequested(Boolean(deletionReq));
+  }
+
+  async function handleAcceptPolicy() {
+    if (!pendingPolicy || !profile?.tenant_id) return;
+    setPolicyAcceptStatus("loading");
+    setPolicyAcceptMessage("");
+
+    const { error: acceptError } = await supabase.rpc("accept_tenant_policy", {
+      p_tenant_id: profile.tenant_id,
+    });
+
+    if (acceptError) {
+      setPolicyAcceptStatus("error");
+      setPolicyAcceptMessage("Erro ao registrar aceite. Tente novamente.");
+      return;
+    }
+
+    // Register LGPD data processing consent
+    await supabase.from("lgpd_consents").upsert({
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+      tenant_id: profile.tenant_id,
+      consent_type: "data_processing",
+      granted: true,
+    }, { onConflict: "user_id,tenant_id,consent_type" });
+
+    setLgpdConsentGranted(true);
+    setIsPolicyModalOpen(false);
+    setPendingPolicy(null);
+    setPolicyChecked(false);
+    setPolicyAcceptStatus("idle");
+  }
+
+  async function handleLgpdRevoke() {
+    if (!profile?.tenant_id) return;
+    setLgpdActionStatus("loading");
+    setLgpdActionMessage("");
+
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const { error } = await supabase.from("lgpd_consents").upsert({
+      user_id: userId,
+      tenant_id: profile.tenant_id,
+      consent_type: "data_processing",
+      granted: false,
+    }, { onConflict: "user_id,tenant_id,consent_type" });
+
+    if (error) {
+      setLgpdActionStatus("error");
+      setLgpdActionMessage("Erro ao atualizar consentimento.");
+      return;
+    }
+    setLgpdConsentGranted(false);
+    setLgpdActionStatus("success");
+    setLgpdActionMessage("Consentimento revogado. Entre em contato com o administrador para mais informações.");
+  }
+
+  async function handleDeletionRequest() {
+    if (!profile?.tenant_id || lgpdDeletionRequested) return;
+    setLgpdActionStatus("loading");
+    setLgpdActionMessage("");
+
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const { error } = await supabase.from("lgpd_consents").upsert({
+      user_id: userId,
+      tenant_id: profile.tenant_id,
+      consent_type: "data_deletion_request",
+      granted: true,
+      notes: "Solicitado pelo próprio usuário via portal.",
+    }, { onConflict: "user_id,tenant_id,consent_type" });
+
+    if (error) {
+      setLgpdActionStatus("error");
+      setLgpdActionMessage("Erro ao registrar solicitação.");
+      return;
+    }
+    setLgpdDeletionRequested(true);
+    setLgpdActionStatus("success");
+    setLgpdActionMessage("Solicitação de exclusão registrada. O administrador será notificado.");
+  }
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2151,6 +2295,65 @@ export function MemberPortal() {
             </div>
           </section>
         ) : null}
+
+        {/* ── Seção LGPD ──────────────────────────────────────────────── */}
+        {lgpdConsentGranted !== null && (
+          <section className="member-portal-section">
+            <div className="member-portal-section-head">
+              <ShieldCheck size={18} />
+              <strong>Privacidade &amp; LGPD</strong>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ background: "#f9fafb", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <FileCheck2 size={18} style={{ color: lgpdConsentGranted ? "var(--color-success, #22c55e)" : "var(--color-danger, #ef4444)", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <strong style={{ fontSize: "0.875rem" }}>Consentimento de tratamento de dados</strong>
+                  <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "4px 0 8px" }}>
+                    {lgpdConsentGranted
+                      ? "Você autorizou o tratamento dos seus dados pessoais conforme a Política de Privacidade."
+                      : "Você revogou o consentimento de tratamento de dados. Alguns recursos podem não funcionar."}
+                  </p>
+                  {lgpdConsentGranted && (
+                    <button
+                      type="button"
+                      style={{ fontSize: "0.8rem", color: "var(--color-danger, #ef4444)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                      onClick={() => void handleLgpdRevoke()}
+                      disabled={lgpdActionStatus === "loading"}
+                    >
+                      Revogar consentimento
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ background: "#f9fafb", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <Trash2 size={18} style={{ color: lgpdDeletionRequested ? "var(--color-danger, #ef4444)" : "#9ca3af", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <strong style={{ fontSize: "0.875rem" }}>Exclusão dos meus dados</strong>
+                  <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "4px 0 8px" }}>
+                    {lgpdDeletionRequested
+                      ? "Solicitação de exclusão registrada. O administrador foi notificado e entrará em contato."
+                      : "Você pode solicitar a exclusão permanente dos seus dados pessoais da plataforma."}
+                  </p>
+                  {!lgpdDeletionRequested && (
+                    <button
+                      type="button"
+                      style={{ fontSize: "0.8rem", color: "var(--color-danger, #ef4444)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                      onClick={() => void handleDeletionRequest()}
+                      disabled={lgpdActionStatus === "loading"}
+                    >
+                      Solicitar exclusão dos meus dados
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {lgpdActionMessage && (
+                <p className={`login-feedback ${lgpdActionStatus}`} style={{ margin: 0 }}>{lgpdActionMessage}</p>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
       {isBibleSchoolClassFormOpen ? (
@@ -2579,6 +2782,77 @@ export function MemberPortal() {
             </form>
           </section>
         </div>
+      ) : null}
+
+      {/* ── Modal de aceite de termos/política ──────────────────────────── */}
+      {isPolicyModalOpen && pendingPolicy ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Termos e Política de Privacidade">
+          <div className="modal-card" style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <div>
+                <span>Atualização necessária</span>
+                <h2>Termos e Política de Privacidade</h2>
+              </div>
+            </div>
+            <div className="modal-body" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+              {pendingPolicy.terms_text && (
+                <div style={{ marginBottom: 24 }}>
+                  <strong style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <ScrollText size={16} /> Termos de Uso
+                  </strong>
+                  <div style={{ background: "#f9fafb", borderRadius: 8, padding: "12px 16px", fontSize: "0.875rem", whiteSpace: "pre-wrap", color: "#374151" }}>
+                    {pendingPolicy.terms_text}
+                  </div>
+                </div>
+              )}
+              {pendingPolicy.privacy_text && (
+                <div style={{ marginBottom: 24 }}>
+                  <strong style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <ShieldCheck size={16} /> Política de Privacidade (LGPD)
+                  </strong>
+                  <div style={{ background: "#f9fafb", borderRadius: 8, padding: "12px 16px", fontSize: "0.875rem", whiteSpace: "pre-wrap", color: "#374151" }}>
+                    {pendingPolicy.privacy_text}
+                  </div>
+                </div>
+              )}
+              <label className="check-row" style={{ alignItems: "flex-start", gap: 10, marginTop: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={policyChecked}
+                  onChange={(e) => setPolicyChecked(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: "0.875rem" }}>
+                  Li e concordo com os Termos de Uso e a Política de Privacidade. Autorizo o tratamento dos meus dados pessoais conforme descrito acima.
+                </span>
+              </label>
+              {policyAcceptMessage && (
+                <p className={`login-feedback ${policyAcceptStatus}`} style={{ marginTop: 12 }}>{policyAcceptMessage}</p>
+              )}
+            </div>
+            <div className="modal-footer" style={{ display: "flex", gap: 12, padding: "16px 24px", borderTop: "1px solid #e5e7eb" }}>
+              <Button
+                type="button"
+                disabled={!policyChecked || policyAcceptStatus === "loading"}
+                onClick={() => void handleAcceptPolicy()}
+              >
+                <FileCheck2 size={16} />
+                {policyAcceptStatus === "loading" ? "Registrando..." : "Aceitar e continuar"}
+              </Button>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => void (async () => { await supabase.auth.signOut(); window.location.reload(); })()}
+              >
+                Sair sem aceitar
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {profile?.tenant_id ? (
+        <PolicyFooter tenantId={profile.tenant_id} />
       ) : null}
     </div>
   );
