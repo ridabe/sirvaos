@@ -343,6 +343,140 @@ type KidsQrConsumeResult = {
   checked_in_at: string;
 };
 
+type BibleSchoolClassRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type BibleSchoolTeacherRecord = {
+  id: string;
+  tenant_id: string;
+  member_id: string;
+  role: "admin" | "teacher";
+  members: { name: string; email: string | null; phone: string | null } | null;
+};
+
+type BibleSchoolClassTeacherRecord = {
+  id: string;
+  tenant_id: string;
+  class_id: string;
+  teacher_id: string;
+  bible_school_teachers: BibleSchoolTeacherRecord | null;
+};
+
+type BibleSchoolStudentRecord = {
+  id: string;
+  tenant_id: string;
+  member_id: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+type BibleSchoolEnrollmentRecord = {
+  id: string;
+  tenant_id: string;
+  class_id: string;
+  student_id: string;
+  status: "active" | "inactive";
+  enrolled_at: string;
+  bible_school_students: BibleSchoolStudentRecord | null;
+};
+
+type BibleSchoolSessionRecord = {
+  id: string;
+  tenant_id: string;
+  class_id: string;
+  session_date: string;
+  topic: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+type BibleSchoolAttendanceRecord = {
+  id: string;
+  tenant_id: string;
+  session_id: string;
+  enrollment_id: string;
+  status: "present" | "absent" | "excused";
+  notes: string | null;
+  created_at: string;
+};
+
+type BibleSchoolMaterialRecord = {
+  id: string;
+  tenant_id: string;
+  class_id: string;
+  title: string;
+  kind: "link" | "file" | "text";
+  url: string | null;
+  content: string | null;
+  created_at: string;
+};
+
+type BibleSchoolGradeRecord = {
+  id: string;
+  tenant_id: string;
+  enrollment_id: string;
+  title: string;
+  score: number | null;
+  max_score: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+type BibleSchoolClassFormState = {
+  id: string | null;
+  name: string;
+  description: string;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+  teacherMemberIds: string[];
+};
+
+type BibleSchoolStudentFormState = {
+  id: string | null;
+  member_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+};
+
+type BibleSchoolSessionFormState = {
+  id: string | null;
+  session_date: string;
+  topic: string;
+  notes: string;
+};
+
+type BibleSchoolMaterialFormState = {
+  id: string | null;
+  title: string;
+  kind: "link" | "file" | "text";
+  url: string;
+  content: string;
+  file: File | null;
+};
+
+type BibleSchoolGradeFormState = {
+  enrollment_id: string;
+  title: string;
+  score: string;
+  max_score: string;
+  notes: string;
+};
+
 type ClientDashboardData = {
   profile: TenantProfile;
   tenant: TenantRecord;
@@ -524,6 +658,49 @@ const emptyThemeForm: ThemeFormState = {
   header_color: "#087C7A",
   sidebar_color: "#087C7A",
   footer_color: "#087C7A",
+};
+
+const emptyBibleSchoolClassForm: BibleSchoolClassFormState = {
+  id: null,
+  name: "",
+  description: "",
+  starts_at: "",
+  ends_at: "",
+  is_active: true,
+  teacherMemberIds: [],
+};
+
+const emptyBibleSchoolStudentForm: BibleSchoolStudentFormState = {
+  id: null,
+  member_id: "",
+  name: "",
+  email: "",
+  phone: "",
+  notes: "",
+};
+
+const emptyBibleSchoolSessionForm: BibleSchoolSessionFormState = {
+  id: null,
+  session_date: new Date().toISOString().slice(0, 10),
+  topic: "",
+  notes: "",
+};
+
+const emptyBibleSchoolMaterialForm: BibleSchoolMaterialFormState = {
+  id: null,
+  title: "",
+  kind: "link",
+  url: "",
+  content: "",
+  file: null,
+};
+
+const emptyBibleSchoolGradeForm: BibleSchoolGradeFormState = {
+  enrollment_id: "",
+  title: "",
+  score: "",
+  max_score: "",
+  notes: "",
 };
 
 const emptyFinancialTransactionForm: FinancialTransactionFormState = {
@@ -1013,6 +1190,7 @@ const clientTabs = [
   { key: "worship", label: "Louvor", icon: Music },
   { key: "financial", label: "Financeiro", icon: DollarSign },
   { key: "kids", label: "Kids", icon: Baby },
+  { key: "bible-school", label: "Escola Bíblica", icon: BookOpen },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
@@ -1030,6 +1208,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   worship: "worship",
   financial: "financial",
   kids: "kids",
+  "bible-school": "bible-school",
   notices: "announcements",
 };
 
@@ -1321,6 +1500,29 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const kidsQrVideoRef = useRef<HTMLVideoElement | null>(null);
   const kidsQrStreamRef = useRef<MediaStream | null>(null);
   const kidsQrScanTimerRef = useRef<number | null>(null);
+  const [bibleSchoolStatus, setBibleSchoolStatus] = useState<LoadStatus>("idle");
+  const [bibleSchoolMessage, setBibleSchoolMessage] = useState("");
+  const [bibleSchoolClasses, setBibleSchoolClasses] = useState<BibleSchoolClassRecord[]>([]);
+  const [selectedBibleSchoolClassId, setSelectedBibleSchoolClassId] = useState<string | null>(null);
+  const [bibleSchoolClassForm, setBibleSchoolClassForm] = useState<BibleSchoolClassFormState>(emptyBibleSchoolClassForm);
+  const [isBibleSchoolClassFormOpen, setIsBibleSchoolClassFormOpen] = useState(false);
+  const [bibleSchoolTeachers, setBibleSchoolTeachers] = useState<BibleSchoolTeacherRecord[]>([]);
+  const [bibleSchoolClassTeachers, setBibleSchoolClassTeachers] = useState<BibleSchoolClassTeacherRecord[]>([]);
+  const [bibleSchoolEnrollments, setBibleSchoolEnrollments] = useState<BibleSchoolEnrollmentRecord[]>([]);
+  const [bibleSchoolStudents, setBibleSchoolStudents] = useState<BibleSchoolStudentRecord[]>([]);
+  const [bibleSchoolStudentForm, setBibleSchoolStudentForm] = useState<BibleSchoolStudentFormState>(emptyBibleSchoolStudentForm);
+  const [isBibleSchoolStudentFormOpen, setIsBibleSchoolStudentFormOpen] = useState(false);
+  const [bibleSchoolSessions, setBibleSchoolSessions] = useState<BibleSchoolSessionRecord[]>([]);
+  const [selectedBibleSchoolSessionId, setSelectedBibleSchoolSessionId] = useState<string | null>(null);
+  const [bibleSchoolSessionForm, setBibleSchoolSessionForm] = useState<BibleSchoolSessionFormState>(emptyBibleSchoolSessionForm);
+  const [isBibleSchoolSessionFormOpen, setIsBibleSchoolSessionFormOpen] = useState(false);
+  const [bibleSchoolAttendance, setBibleSchoolAttendance] = useState<BibleSchoolAttendanceRecord[]>([]);
+  const [bibleSchoolMaterials, setBibleSchoolMaterials] = useState<BibleSchoolMaterialRecord[]>([]);
+  const [bibleSchoolGrades, setBibleSchoolGrades] = useState<BibleSchoolGradeRecord[]>([]);
+  const [bibleSchoolMaterialForm, setBibleSchoolMaterialForm] = useState<BibleSchoolMaterialFormState>(emptyBibleSchoolMaterialForm);
+  const [isBibleSchoolMaterialFormOpen, setIsBibleSchoolMaterialFormOpen] = useState(false);
+  const [bibleSchoolGradeForm, setBibleSchoolGradeForm] = useState<BibleSchoolGradeFormState>(emptyBibleSchoolGradeForm);
+  const [isBibleSchoolGradeFormOpen, setIsBibleSchoolGradeFormOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -1381,6 +1583,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageWorship = canManageModuleCode("worship");
   const canManageFinancial = canManageModuleCode("financial");
   const canManageKids = canManageModuleCode("kids");
+  const canManageBibleSchool = canManageModuleCode("bible-school");
   const canManageAnnouncements = canManageModuleCode("announcements");
 
   const visibleClientTabs = useMemo(() => {
@@ -1694,7 +1897,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       }
     }
 
-    const tenantId = currentProfile.tenant_id;
+    const tenantId = currentProfile.tenant_id!;
 
     const [
       tenantResult,
@@ -2045,8 +2248,684 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       footer_color: tenantResult.data.footer_color,
     });
 
+    if (modules.some((item) => item.code === "bible-school")) {
+      void loadBibleSchoolData(tenantId);
+    } else {
+      setBibleSchoolStatus("idle");
+      setBibleSchoolMessage("");
+      setBibleSchoolClasses([]);
+      setSelectedBibleSchoolClassId(null);
+      setBibleSchoolTeachers([]);
+      setBibleSchoolClassTeachers([]);
+      setBibleSchoolEnrollments([]);
+      setBibleSchoolStudents([]);
+      setBibleSchoolSessions([]);
+      setSelectedBibleSchoolSessionId(null);
+      setBibleSchoolAttendance([]);
+      setBibleSchoolMaterials([]);
+      setBibleSchoolGrades([]);
+    }
+
     setDataStatus("ready");
     return currentProfile;
+  }
+
+  async function loadBibleSchoolData(tenantId: string) {
+    setBibleSchoolStatus("loading");
+    setBibleSchoolMessage("");
+
+    if (demoMode) {
+      const now = new Date().toISOString();
+      const demoClasses: BibleSchoolClassRecord[] = [
+        {
+          id: "bible-class-1",
+          tenant_id: tenantId,
+          name: "Classe de Discipulado",
+          description: "Fundamentos da fé e vida cristã.",
+          starts_at: new Date().toISOString().slice(0, 10),
+          ends_at: null,
+          is_active: true,
+          created_at: now,
+          updated_at: now,
+        },
+      ];
+      setBibleSchoolClasses(demoClasses);
+      setSelectedBibleSchoolClassId(demoClasses[0]?.id ?? null);
+      setBibleSchoolTeachers([]);
+      setBibleSchoolClassTeachers([]);
+      setBibleSchoolStatus("ready");
+      return;
+    }
+
+    const [classesResult, teachersResult, classTeachersResult] = await Promise.all([
+      supabase
+        .from("bible_school_classes")
+        .select("id, tenant_id, name, description, starts_at, ends_at, is_active, created_at, updated_at")
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
+        .returns<BibleSchoolClassRecord[]>(),
+      supabase
+        .from("bible_school_teachers")
+        .select("id, tenant_id, member_id, role, members (name, email, phone)")
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
+        .returns<BibleSchoolTeacherRecord[]>(),
+      supabase
+        .from("bible_school_class_teachers")
+        .select(
+          "id, tenant_id, class_id, teacher_id, bible_school_teachers (id, tenant_id, member_id, role, members (name, email, phone))",
+        )
+        .eq("tenant_id", tenantId)
+        .returns<BibleSchoolClassTeacherRecord[]>(),
+    ]);
+
+    if (classesResult.error || teachersResult.error || classTeachersResult.error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível carregar os dados da Escola Bíblica.");
+      setBibleSchoolClasses([]);
+      setBibleSchoolTeachers([]);
+      setBibleSchoolClassTeachers([]);
+      return;
+    }
+
+    setBibleSchoolClasses(classesResult.data ?? []);
+    setBibleSchoolTeachers(teachersResult.data ?? []);
+    setBibleSchoolClassTeachers(classTeachersResult.data ?? []);
+    setBibleSchoolStatus("ready");
+
+    if (!selectedBibleSchoolClassId && (classesResult.data ?? []).length) {
+      setSelectedBibleSchoolClassId((classesResult.data ?? [])[0]!.id);
+    }
+  }
+
+  async function loadBibleSchoolClassDetails(tenantId: string, classId: string) {
+    setBibleSchoolMessage("");
+
+    if (demoMode) {
+      setBibleSchoolEnrollments([]);
+      setBibleSchoolStudents([]);
+      setBibleSchoolSessions([]);
+      setSelectedBibleSchoolSessionId(null);
+      setBibleSchoolAttendance([]);
+      setBibleSchoolMaterials([]);
+      setBibleSchoolGrades([]);
+      return;
+    }
+
+    const [enrollmentsResult, sessionsResult, materialsResult] = await Promise.all([
+      supabase
+        .from("bible_school_enrollments")
+        .select(
+          "id, tenant_id, class_id, student_id, status, enrolled_at, bible_school_students (id, tenant_id, member_id, name, email, phone, notes, created_at)",
+        )
+        .eq("tenant_id", tenantId)
+        .eq("class_id", classId)
+        .order("enrolled_at", { ascending: false })
+        .returns<BibleSchoolEnrollmentRecord[]>(),
+      supabase
+        .from("bible_school_sessions")
+        .select("id, tenant_id, class_id, session_date, topic, notes, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("class_id", classId)
+        .order("session_date", { ascending: false })
+        .returns<BibleSchoolSessionRecord[]>(),
+      supabase
+        .from("bible_school_materials")
+        .select("id, tenant_id, class_id, title, kind, url, content, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("class_id", classId)
+        .order("created_at", { ascending: false })
+        .returns<BibleSchoolMaterialRecord[]>(),
+    ]);
+
+    if (enrollmentsResult.error || sessionsResult.error || materialsResult.error) {
+      setBibleSchoolMessage("Não foi possível carregar turmas/matrículas da Escola Bíblica.");
+      setBibleSchoolEnrollments([]);
+      setBibleSchoolSessions([]);
+      setBibleSchoolMaterials([]);
+      return;
+    }
+
+    setBibleSchoolEnrollments(enrollmentsResult.data ?? []);
+    setBibleSchoolSessions(sessionsResult.data ?? []);
+    setBibleSchoolMaterials(materialsResult.data ?? []);
+
+    const enrollmentIds = (enrollmentsResult.data ?? []).map((row) => row.id);
+    if (enrollmentIds.length === 0) {
+      setBibleSchoolGrades([]);
+    } else {
+      const gradesResult = await supabase
+        .from("bible_school_grades")
+        .select("id, tenant_id, enrollment_id, title, score, max_score, notes, created_at")
+        .eq("tenant_id", tenantId)
+        .in("enrollment_id", enrollmentIds)
+        .order("created_at", { ascending: false })
+        .returns<BibleSchoolGradeRecord[]>();
+
+      setBibleSchoolGrades(gradesResult.data ?? []);
+    }
+
+    const activeSessionId =
+      selectedBibleSchoolSessionId && (sessionsResult.data ?? []).some((s) => s.id === selectedBibleSchoolSessionId)
+        ? selectedBibleSchoolSessionId
+        : (sessionsResult.data ?? [])[0]?.id ?? null;
+    setSelectedBibleSchoolSessionId(activeSessionId);
+
+    if (!activeSessionId) {
+      setBibleSchoolAttendance([]);
+      return;
+    }
+
+    const attendanceResult = await supabase
+      .from("bible_school_attendance")
+      .select("id, tenant_id, session_id, enrollment_id, status, notes, created_at")
+      .eq("tenant_id", tenantId)
+      .eq("session_id", activeSessionId)
+      .returns<BibleSchoolAttendanceRecord[]>();
+
+    if (attendanceResult.error) {
+      setBibleSchoolAttendance([]);
+      return;
+    }
+
+    setBibleSchoolAttendance(attendanceResult.data ?? []);
+  }
+
+  useEffect(() => {
+    if (!clientData?.tenant.id || !selectedBibleSchoolClassId) {
+      return;
+    }
+    void loadBibleSchoolClassDetails(clientData.tenant.id, selectedBibleSchoolClassId);
+  }, [clientData?.tenant.id, selectedBibleSchoolClassId]);
+
+  function openBibleSchoolCreateClassForm() {
+    if (!clientData || !canManageBibleSchool) {
+      return;
+    }
+    setBibleSchoolClassForm(emptyBibleSchoolClassForm);
+    setIsBibleSchoolClassFormOpen(true);
+  }
+
+  function openBibleSchoolEditClassForm(item: BibleSchoolClassRecord) {
+    if (!clientData || !canManageBibleSchool) {
+      return;
+    }
+
+    const teacherMemberIds = bibleSchoolClassTeachers
+      .filter((row) => row.class_id === item.id)
+      .map((row) => row.bible_school_teachers?.member_id)
+      .filter((value): value is string => Boolean(value));
+
+    setBibleSchoolClassForm({
+      id: item.id,
+      name: item.name,
+      description: item.description ?? "",
+      starts_at: item.starts_at ?? "",
+      ends_at: item.ends_at ?? "",
+      is_active: item.is_active,
+      teacherMemberIds,
+    });
+    setIsBibleSchoolClassFormOpen(true);
+  }
+
+  async function handleBibleSchoolClassSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !canManageBibleSchool) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const payload = {
+      tenant_id: tenantId,
+      name: bibleSchoolClassForm.name.trim(),
+      description: bibleSchoolClassForm.description.trim() || null,
+      starts_at: bibleSchoolClassForm.starts_at || null,
+      ends_at: bibleSchoolClassForm.ends_at || null,
+      is_active: bibleSchoolClassForm.is_active,
+    };
+
+    if (!payload.name) {
+      setBibleSchoolMessage("Informe o nome da turma.");
+      return;
+    }
+
+    setBibleSchoolStatus("loading");
+
+    const classResult = bibleSchoolClassForm.id
+      ? await supabase.from("bible_school_classes").update(payload).eq("id", bibleSchoolClassForm.id).select("id").single()
+      : await supabase.from("bible_school_classes").insert(payload).select("id").single();
+
+    if (classResult.error || !classResult.data?.id) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível salvar a turma.");
+      return;
+    }
+
+    const classId = classResult.data.id as string;
+
+    const existingTeacherByMemberId = (bibleSchoolTeachers ?? []).reduce<Record<string, BibleSchoolTeacherRecord>>(
+      (acc, teacher) => {
+        acc[teacher.member_id] = teacher;
+        return acc;
+      },
+      {},
+    );
+
+    const desiredMemberIds = Array.from(new Set(bibleSchoolClassForm.teacherMemberIds.filter(Boolean)));
+    const teacherIds: string[] = [];
+
+    for (const memberId of desiredMemberIds) {
+      const existing = existingTeacherByMemberId[memberId];
+      if (existing) {
+        teacherIds.push(existing.id);
+        continue;
+      }
+
+      const insertTeacher = await supabase
+        .from("bible_school_teachers")
+        .insert({ tenant_id: tenantId, member_id: memberId, role: "teacher" })
+        .select("id, tenant_id, member_id, role, members (name, email, phone)")
+        .single<BibleSchoolTeacherRecord>();
+
+      if (!insertTeacher.error && insertTeacher.data) {
+        teacherIds.push(insertTeacher.data.id);
+      }
+    }
+
+    await supabase.from("bible_school_class_teachers").delete().eq("tenant_id", tenantId).eq("class_id", classId);
+
+    if (teacherIds.length) {
+      await supabase.from("bible_school_class_teachers").insert(
+        teacherIds.map((teacherId) => ({
+          tenant_id: tenantId,
+          class_id: classId,
+          teacher_id: teacherId,
+        })),
+      );
+    }
+
+    setIsBibleSchoolClassFormOpen(false);
+    setBibleSchoolClassForm(emptyBibleSchoolClassForm);
+    setBibleSchoolStatus("ready");
+    await loadBibleSchoolData(tenantId);
+    setSelectedBibleSchoolClassId(classId);
+  }
+
+  function openBibleSchoolStudentForm() {
+    if (!clientData || !canManageBibleSchool || !selectedBibleSchoolClassId) {
+      return;
+    }
+    setBibleSchoolStudentForm(emptyBibleSchoolStudentForm);
+    setIsBibleSchoolStudentFormOpen(true);
+  }
+
+  async function handleBibleSchoolStudentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !canManageBibleSchool || !selectedBibleSchoolClassId) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const memberId = bibleSchoolStudentForm.member_id.trim() || null;
+
+    let resolvedName = bibleSchoolStudentForm.name.trim();
+    let resolvedEmail = bibleSchoolStudentForm.email.trim() || null;
+    let resolvedPhone = bibleSchoolStudentForm.phone.trim() || null;
+
+    if (memberId) {
+      const member = clientData.members.find((m) => m.id === memberId) ?? null;
+      if (member) {
+        resolvedName = member.name;
+        resolvedEmail = member.email ?? resolvedEmail;
+        resolvedPhone = member.phone ?? resolvedPhone;
+      }
+    }
+
+    if (!resolvedName) {
+      setBibleSchoolMessage("Informe o nome do aluno.");
+      return;
+    }
+
+    setBibleSchoolStatus("loading");
+
+    const existingStudent = memberId
+      ? await supabase
+          .from("bible_school_students")
+          .select("id, tenant_id, member_id, name, email, phone, notes, created_at")
+          .eq("tenant_id", tenantId)
+          .eq("member_id", memberId)
+          .maybeSingle<BibleSchoolStudentRecord>()
+      : { data: null, error: null };
+
+    if ((existingStudent as { error: unknown }).error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível validar o aluno.");
+      return;
+    }
+
+    const studentId =
+      (existingStudent as { data: BibleSchoolStudentRecord | null }).data?.id ??
+      (
+        await supabase
+          .from("bible_school_students")
+          .insert({
+            tenant_id: tenantId,
+            member_id: memberId,
+            name: resolvedName,
+            email: resolvedEmail,
+            phone: resolvedPhone,
+            notes: bibleSchoolStudentForm.notes.trim() || null,
+          })
+          .select("id")
+          .single<{ id: string }>()
+      ).data?.id ??
+      null;
+
+    if (!studentId) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível salvar o aluno.");
+      return;
+    }
+
+    const enrollmentResult = await supabase
+      .from("bible_school_enrollments")
+      .insert({ tenant_id: tenantId, class_id: selectedBibleSchoolClassId, student_id: studentId, status: "active" })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (enrollmentResult.error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Aluno salvo, mas não foi possível matricular na turma.");
+      return;
+    }
+
+    setIsBibleSchoolStudentFormOpen(false);
+    setBibleSchoolStudentForm(emptyBibleSchoolStudentForm);
+    setBibleSchoolStatus("ready");
+    await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
+  }
+
+  function openBibleSchoolSessionForm() {
+    if (!clientData || !selectedBibleSchoolClassId) {
+      return;
+    }
+    if (!canManageBibleSchool) {
+      setBibleSchoolMessage("Sem permissão para criar aulas.");
+      return;
+    }
+    setBibleSchoolSessionForm(emptyBibleSchoolSessionForm);
+    setIsBibleSchoolSessionFormOpen(true);
+  }
+
+  async function handleBibleSchoolSessionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !selectedBibleSchoolClassId || !canManageBibleSchool) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const payload = {
+      tenant_id: tenantId,
+      class_id: selectedBibleSchoolClassId,
+      session_date: bibleSchoolSessionForm.session_date,
+      topic: bibleSchoolSessionForm.topic.trim() || null,
+      notes: bibleSchoolSessionForm.notes.trim() || null,
+    };
+
+    if (!payload.session_date) {
+      setBibleSchoolMessage("Informe a data da aula.");
+      return;
+    }
+
+    setBibleSchoolStatus("loading");
+
+    const result = bibleSchoolSessionForm.id
+      ? await supabase.from("bible_school_sessions").update(payload).eq("id", bibleSchoolSessionForm.id)
+      : await supabase.from("bible_school_sessions").insert(payload);
+
+    if (result.error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível salvar a aula.");
+      return;
+    }
+
+    setIsBibleSchoolSessionFormOpen(false);
+    setBibleSchoolSessionForm(emptyBibleSchoolSessionForm);
+    setBibleSchoolStatus("ready");
+    await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
+  }
+
+  async function upsertBibleSchoolAttendance(enrollmentId: string, nextStatus: BibleSchoolAttendanceRecord["status"]) {
+    if (!clientData?.tenant.id || !selectedBibleSchoolSessionId || !selectedBibleSchoolClassId) {
+      return;
+    }
+
+    if (!canManageBibleSchool) {
+      setBibleSchoolMessage("Sem permissão para registrar presença.");
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const existing = bibleSchoolAttendance.find((row) => row.enrollment_id === enrollmentId) ?? null;
+
+    setBibleSchoolStatus("loading");
+
+    const payload = {
+      tenant_id: tenantId,
+      session_id: selectedBibleSchoolSessionId,
+      enrollment_id: enrollmentId,
+      status: nextStatus,
+      notes: null,
+    };
+
+    const result = existing
+      ? await supabase.from("bible_school_attendance").update(payload).eq("id", existing.id)
+      : await supabase.from("bible_school_attendance").insert(payload);
+
+    if (result.error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível registrar presença.");
+      return;
+    }
+
+    setBibleSchoolStatus("ready");
+    await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
+  }
+
+  function openBibleSchoolMaterialForm() {
+    if (!clientData || !selectedBibleSchoolClassId) {
+      return;
+    }
+    if (!canManageBibleSchool) {
+      setBibleSchoolMessage("Sem permissão para cadastrar materiais.");
+      return;
+    }
+    setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
+    setIsBibleSchoolMaterialFormOpen(true);
+  }
+
+  async function handleBibleSchoolMaterialSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !selectedBibleSchoolClassId || !canManageBibleSchool) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const title = bibleSchoolMaterialForm.title.trim();
+    const kind = bibleSchoolMaterialForm.kind;
+    const rawUrl = bibleSchoolMaterialForm.url.trim();
+    const rawContent = bibleSchoolMaterialForm.content.trim();
+
+    if (!title) {
+      setBibleSchoolMessage("Informe um título para o material.");
+      return;
+    }
+
+    if (kind === "link" && !rawUrl) {
+      setBibleSchoolMessage("Informe a URL do material.");
+      return;
+    }
+
+    setBibleSchoolStatus("loading");
+
+    if (kind === "file") {
+      const file = bibleSchoolMaterialForm.file;
+      if (!file) {
+        setBibleSchoolStatus("error");
+        setBibleSchoolMessage("Selecione um arquivo para upload.");
+        return;
+      }
+
+      const materialId = crypto.randomUUID();
+      const safeName = (file.name || "arquivo").replace(/[^\w.\-]+/g, "-");
+      const objectKey = `${tenantId}/${selectedBibleSchoolClassId}/${materialId}/${Date.now()}-${safeName}`;
+
+      const uploadResult = await supabase.storage.from("bible-school-materials").upload(objectKey, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+
+      if (uploadResult.error) {
+        setBibleSchoolStatus("error");
+        setBibleSchoolMessage("Não foi possível fazer upload do arquivo.");
+        return;
+      }
+
+      const insertResult = await supabase.from("bible_school_materials").insert({
+        id: materialId,
+        tenant_id: tenantId,
+        class_id: selectedBibleSchoolClassId,
+        title,
+        kind,
+        url: objectKey,
+        content: null,
+      });
+
+      if (insertResult.error) {
+        setBibleSchoolStatus("error");
+        setBibleSchoolMessage("Arquivo enviado, mas não foi possível salvar o material.");
+        return;
+      }
+
+      setIsBibleSchoolMaterialFormOpen(false);
+      setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
+      setBibleSchoolStatus("ready");
+      await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
+      return;
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      class_id: selectedBibleSchoolClassId,
+      title,
+      kind,
+      url: kind === "link" ? rawUrl || null : null,
+      content: kind === "text" ? rawContent || null : null,
+    };
+
+    const result = bibleSchoolMaterialForm.id
+      ? await supabase.from("bible_school_materials").update(payload).eq("id", bibleSchoolMaterialForm.id)
+      : await supabase.from("bible_school_materials").insert(payload);
+
+    if (result.error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível salvar o material.");
+      return;
+    }
+
+    setIsBibleSchoolMaterialFormOpen(false);
+    setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
+    setBibleSchoolStatus("ready");
+    await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
+  }
+
+  function openBibleSchoolGradeForm() {
+    if (!clientData || !selectedBibleSchoolClassId || !canManageBibleSchool) {
+      return;
+    }
+    const firstEnrollment = bibleSchoolEnrollments[0]?.id ?? "";
+    setBibleSchoolGradeForm({ ...emptyBibleSchoolGradeForm, enrollment_id: firstEnrollment });
+    setIsBibleSchoolGradeFormOpen(true);
+  }
+
+  async function handleBibleSchoolGradeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !selectedBibleSchoolClassId || !canManageBibleSchool) {
+      return;
+    }
+
+    const tenantId = clientData.tenant.id;
+    const enrollmentId = bibleSchoolGradeForm.enrollment_id;
+    const title = bibleSchoolGradeForm.title.trim();
+
+    if (!enrollmentId) {
+      setBibleSchoolMessage("Selecione uma matrícula.");
+      return;
+    }
+
+    if (!title) {
+      setBibleSchoolMessage("Informe um título para a nota.");
+      return;
+    }
+
+    const scoreRaw = bibleSchoolGradeForm.score.trim();
+    const maxScoreRaw = bibleSchoolGradeForm.max_score.trim();
+    const score = scoreRaw ? Number(scoreRaw.replace(",", ".")) : null;
+    const maxScore = maxScoreRaw ? Number(maxScoreRaw.replace(",", ".")) : null;
+
+    if (scoreRaw && Number.isNaN(score as number)) {
+      setBibleSchoolMessage("Informe um valor de nota válido.");
+      return;
+    }
+
+    if (maxScoreRaw && Number.isNaN(maxScore as number)) {
+      setBibleSchoolMessage("Informe um valor de nota máxima válido.");
+      return;
+    }
+
+    setBibleSchoolStatus("loading");
+
+    const result = await supabase.from("bible_school_grades").insert({
+      tenant_id: tenantId,
+      enrollment_id: enrollmentId,
+      title,
+      score,
+      max_score: maxScore,
+      notes: bibleSchoolGradeForm.notes.trim() || null,
+    });
+
+    if (result.error) {
+      setBibleSchoolStatus("error");
+      setBibleSchoolMessage("Não foi possível salvar a nota.");
+      return;
+    }
+
+    setIsBibleSchoolGradeFormOpen(false);
+    setBibleSchoolGradeForm(emptyBibleSchoolGradeForm);
+    setBibleSchoolStatus("ready");
+    await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
+  }
+
+  async function openBibleSchoolMaterial(mat: BibleSchoolMaterialRecord) {
+    if (!clientData?.tenant.id) {
+      return;
+    }
+
+    if (mat.kind === "link" && mat.url) {
+      window.open(mat.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (mat.kind === "file" && mat.url) {
+      const signed = await supabase.storage.from("bible-school-materials").createSignedUrl(mat.url, 60);
+      const signedUrl = signed.data?.signedUrl ?? null;
+      if (signed.error || !signedUrl) {
+        setBibleSchoolStatus("error");
+        setBibleSchoolMessage("Não foi possível gerar link de download.");
+        return;
+      }
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    }
   }
 
   function handleCatalogEditChange(itemId: string, value: string) {
@@ -4296,7 +5175,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 Admin Cliente / Igreja
               </span>
               <h1>Acesso ao painel da igreja</h1>
-              <p>Faça login com seu usuário de tenant para acessar a gestão do cliente.</p>
+              <p>Faça login com seu usuário para acessar a área de gestão</p>
             </div>
           </div>
 
@@ -5915,6 +6794,632 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               </article>
             );
           })() : null}
+
+          {activeTab === "bible-school" ? (
+            <article className="panel full-width">
+              <div className="panel-heading">
+                <div>
+                  <span>Escola Bíblica</span>
+                  <h4>Turmas, aulas, presença e materiais</h4>
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {canManageBibleSchool ? (
+                    <>
+                      <Button type="button" variant="secondary" onClick={openBibleSchoolCreateClassForm} icon={<Plus size={16} />}>
+                        Nova turma
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={openBibleSchoolStudentForm} icon={<UserPlus size={16} />}>
+                        Matricular aluno
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={openBibleSchoolSessionForm} icon={<CalendarCheck size={16} />}>
+                        Nova aula
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={openBibleSchoolMaterialForm} icon={<Plus size={16} />}>
+                        Novo material
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={openBibleSchoolGradeForm} icon={<Plus size={16} />}>
+                        Nova nota
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              {bibleSchoolMessage ? <p className={`login-feedback ${bibleSchoolStatus === "error" ? "error" : "success"}`}>{bibleSchoolMessage}</p> : null}
+
+              {bibleSchoolStatus === "loading" ? (
+                <div className="catalog-empty" style={{ marginTop: 12 }}>
+                  Carregando Escola Bíblica...
+                </div>
+              ) : null}
+
+              <div className="modal-grid" style={{ marginTop: 12 }}>
+                <label>
+                  <span>Turma selecionada</span>
+                  <select
+                    value={selectedBibleSchoolClassId ?? ""}
+                    onChange={(e) => setSelectedBibleSchoolClassId(e.target.value || null)}
+                  >
+                    <option value="">Selecione</option>
+                    {bibleSchoolClasses.map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {selectedBibleSchoolClassId ? (
+                <div className="dashboard-grid" style={{ marginTop: 16, gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)" }}>
+                  <article className="panel" style={{ padding: 16 }}>
+                    <div className="panel-heading">
+                      <div>
+                        <span>Turmas</span>
+                        <h4>Cadastro e professores</h4>
+                      </div>
+                    </div>
+
+                    {bibleSchoolClasses.length === 0 ? (
+                      <div className="catalog-empty">Nenhuma turma cadastrada.</div>
+                    ) : (
+                      <div className="catalog-list" style={{ marginTop: 12 }}>
+                        {bibleSchoolClasses.map((cls) => {
+                          const isSelected = cls.id === selectedBibleSchoolClassId;
+                          const teacherNames = bibleSchoolClassTeachers
+                            .filter((row) => row.class_id === cls.id)
+                            .map((row) => row.bible_school_teachers?.members?.name)
+                            .filter(Boolean)
+                            .slice(0, 3)
+                            .join(", ");
+                          return (
+                            <div
+                              key={cls.id}
+                              className="catalog-row"
+                              style={{ cursor: "pointer", borderColor: isSelected ? "var(--color-brand-accent)" : undefined }}
+                              onClick={() => setSelectedBibleSchoolClassId(cls.id)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") setSelectedBibleSchoolClassId(cls.id);
+                              }}
+                            >
+                              <div style={{ display: "grid", gap: 4 }}>
+                                <strong style={{ fontSize: "0.95rem" }}>{cls.name}</strong>
+                                <small style={{ color: "var(--color-neutral-500)" }}>
+                                  {teacherNames ? `Professores: ${teacherNames}` : "Sem professores vinculados"}
+                                </small>
+                              </div>
+                              <div className="member-actions">
+                                {canManageBibleSchool ? (
+                                  <button type="button" onClick={() => openBibleSchoolEditClassForm(cls)} aria-label="Editar turma">
+                                    <Edit3 size={14} />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </article>
+
+                  <article className="panel" style={{ padding: 16 }}>
+                    <div className="panel-heading">
+                      <div>
+                        <span>Matrículas</span>
+                        <h4>Alunos da turma</h4>
+                      </div>
+                    </div>
+
+                    {bibleSchoolEnrollments.length === 0 ? (
+                      <div className="catalog-empty" style={{ marginTop: 12 }}>
+                        Nenhum aluno matriculado ainda.
+                      </div>
+                    ) : (
+                      <div className="member-list" style={{ marginTop: 12 }}>
+                        {bibleSchoolEnrollments.map((row) => (
+                          <div key={row.id} className="member-row">
+                            <span>{(row.bible_school_students?.name ?? "A").slice(0, 1).toUpperCase()}</span>
+                            <div>
+                              <strong>{row.bible_school_students?.name ?? "Aluno"}</strong>
+                              <small style={{ color: "var(--color-neutral-500)" }}>
+                                {row.bible_school_students?.member_id ? "Vinculado ao cadastro de membro" : "Cadastro avulso"}
+                              </small>
+                            </div>
+                            <em className={row.status === "active" ? "success" : "warning"}>{row.status}</em>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+
+                  <article className="panel full-width" style={{ padding: 16 }}>
+                    <div className="panel-heading">
+                      <div>
+                        <span>Aulas e presença</span>
+                        <h4>Registro por data</h4>
+                      </div>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span style={{ fontSize: "0.78rem", color: "var(--color-neutral-600)" }}>Aula</span>
+                          <select
+                            value={selectedBibleSchoolSessionId ?? ""}
+                            onChange={(e) => setSelectedBibleSchoolSessionId(e.target.value || null)}
+                          >
+                            <option value="">Selecione</option>
+                            {bibleSchoolSessions.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {new Date(`${s.session_date}T12:00:00`).toLocaleDateString("pt-BR")} {s.topic ? `· ${s.topic}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+
+                    {bibleSchoolSessions.length === 0 ? (
+                      <div className="catalog-empty" style={{ marginTop: 12 }}>
+                        Nenhuma aula cadastrada.
+                      </div>
+                    ) : null}
+
+                    {selectedBibleSchoolSessionId ? (
+                      <div className="catalog-list" style={{ marginTop: 12 }}>
+                        {bibleSchoolEnrollments.map((enrollment) => {
+                          const studentName = enrollment.bible_school_students?.name ?? "Aluno";
+                          const attendance = bibleSchoolAttendance.find((a) => a.enrollment_id === enrollment.id) ?? null;
+                          const value = attendance?.status ?? "present";
+                          return (
+                            <div key={enrollment.id} className="catalog-row">
+                              <div style={{ display: "grid", gap: 4 }}>
+                                <strong style={{ fontSize: "0.95rem" }}>{studentName}</strong>
+                                <small style={{ color: "var(--color-neutral-500)" }}>{attendance ? "Registrado" : "Sem registro"}</small>
+                              </div>
+                              <select
+                                value={value}
+                                onChange={(e) => void upsertBibleSchoolAttendance(enrollment.id, e.target.value as BibleSchoolAttendanceRecord["status"])}
+                                disabled={!canManageBibleSchool || bibleSchoolStatus === "loading"}
+                              >
+                                <option value="present">Presente</option>
+                                <option value="absent">Faltou</option>
+                                <option value="excused">Justificado</option>
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </article>
+
+                  <article className="panel full-width" style={{ padding: 16 }}>
+                    <div className="panel-heading">
+                      <div>
+                        <span>Materiais</span>
+                        <h4>Links e conteúdos</h4>
+                      </div>
+                    </div>
+
+                    {bibleSchoolMaterials.length === 0 ? (
+                      <div className="catalog-empty" style={{ marginTop: 12 }}>
+                        Nenhum material cadastrado.
+                      </div>
+                    ) : (
+                      <div className="catalog-list" style={{ marginTop: 12 }}>
+                        {bibleSchoolMaterials.map((mat) => (
+                          <div key={mat.id} className="catalog-row">
+                            <div style={{ display: "grid", gap: 4 }}>
+                              <strong style={{ fontSize: "0.95rem" }}>{mat.title}</strong>
+                              <small style={{ color: "var(--color-neutral-500)" }}>
+                                {mat.kind === "link" ? "Link" : mat.kind === "file" ? "Arquivo" : "Texto"}
+                                {mat.url ? ` · ${mat.url}` : ""}
+                              </small>
+                            </div>
+                            {mat.kind === "link" && mat.url ? (
+                              <a className="preview-link" href={mat.url} target="_blank" rel="noreferrer">
+                                Abrir
+                              </a>
+                            ) : mat.kind === "file" && mat.url ? (
+                              <button type="button" className="preview-link" onClick={() => void openBibleSchoolMaterial(mat)}>
+                                Baixar
+                              </button>
+                            ) : (
+                              <span style={{ color: "var(--color-neutral-500)", fontSize: "0.85rem" }}>—</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+
+                  <article className="panel full-width" style={{ padding: 16 }}>
+                    <div className="panel-heading">
+                      <div>
+                        <span>Notas</span>
+                        <h4>Avaliações e lançamentos</h4>
+                      </div>
+                    </div>
+
+                    {bibleSchoolGrades.length === 0 ? (
+                      <div className="catalog-empty" style={{ marginTop: 12 }}>
+                        Nenhuma nota lançada ainda.
+                      </div>
+                    ) : (
+                      <div className="catalog-list" style={{ marginTop: 12 }}>
+                        {bibleSchoolGrades.slice(0, 20).map((grade) => {
+                          const enrollment = bibleSchoolEnrollments.find((row) => row.id === grade.enrollment_id) ?? null;
+                          const studentName = enrollment?.bible_school_students?.name ?? "Aluno";
+                          const scoreLabel =
+                            grade.score === null && grade.max_score === null
+                              ? "—"
+                              : grade.max_score === null
+                                ? `${grade.score ?? "—"}`
+                                : `${grade.score ?? "—"} / ${grade.max_score ?? "—"}`;
+                          return (
+                            <div key={grade.id} className="catalog-row">
+                              <div style={{ display: "grid", gap: 4 }}>
+                                <strong style={{ fontSize: "0.95rem" }}>{grade.title}</strong>
+                                <small style={{ color: "var(--color-neutral-500)" }}>
+                                  {studentName} · {new Date(grade.created_at).toLocaleString("pt-BR")}
+                                </small>
+                              </div>
+                              <span style={{ fontWeight: 700 }}>{scoreLabel}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </article>
+                </div>
+              ) : (
+                <div className="catalog-empty" style={{ marginTop: 12 }}>
+                  Selecione uma turma para ver detalhes.
+                </div>
+              )}
+
+              {isBibleSchoolClassFormOpen ? (
+                <div className="modal-backdrop">
+                  <section className="modal-sheet">
+                    <div className="modal-section-header">
+                      <strong>{bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}</strong>
+                      <button type="button" onClick={() => setIsBibleSchoolClassFormOpen(false)} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <form className="tenant-form" onSubmit={handleBibleSchoolClassSubmit}>
+                      <label>
+                        <span>Nome</span>
+                        <input
+                          value={bibleSchoolClassForm.name}
+                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, name: e.target.value }))}
+                          placeholder="Ex.: 1º Trimestre 2026"
+                        />
+                      </label>
+                      <label>
+                        <span>Descrição</span>
+                        <input
+                          value={bibleSchoolClassForm.description}
+                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, description: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <label>
+                        <span>Início</span>
+                        <input
+                          type="date"
+                          value={bibleSchoolClassForm.starts_at}
+                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, starts_at: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        <span>Fim</span>
+                        <input
+                          type="date"
+                          value={bibleSchoolClassForm.ends_at}
+                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, ends_at: e.target.value }))}
+                        />
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={bibleSchoolClassForm.is_active}
+                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, is_active: e.target.checked }))}
+                        />
+                        <span style={{ fontSize: "0.9rem", fontWeight: 700 }}>Turma ativa</span>
+                      </label>
+                      <label style={{ gridColumn: "span 2" }}>
+                        <span>Professores (membros)</span>
+                        <select
+                          multiple
+                          value={bibleSchoolClassForm.teacherMemberIds}
+                          onChange={(e) => {
+                            const values = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+                            setBibleSchoolClassForm((c) => ({ ...c, teacherMemberIds: values }));
+                          }}
+                          style={{ minHeight: 140 }}
+                        >
+                          {clientData.members
+                            .slice()
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <div className="tenant-form-actions">
+                        <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
+                          {bibleSchoolStatus === "loading" ? "Salvando..." : "Salvar"}
+                        </Button>
+                        <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolClassFormOpen(false)}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              ) : null}
+
+              {isBibleSchoolStudentFormOpen ? (
+                <div className="modal-backdrop">
+                  <section className="modal-sheet">
+                    <div className="modal-section-header">
+                      <strong>Matricular aluno</strong>
+                      <button type="button" onClick={() => setIsBibleSchoolStudentFormOpen(false)} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <form className="tenant-form" onSubmit={handleBibleSchoolStudentSubmit}>
+                      <label>
+                        <span>Vincular a membro (opcional)</span>
+                        <select
+                          value={bibleSchoolStudentForm.member_id}
+                          onChange={(e) => setBibleSchoolStudentForm((c) => ({ ...c, member_id: e.target.value }))}
+                        >
+                          <option value="">Sem vínculo</option>
+                          {clientData.members
+                            .slice()
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Nome</span>
+                        <input
+                          value={bibleSchoolStudentForm.name}
+                          onChange={(e) => setBibleSchoolStudentForm((c) => ({ ...c, name: e.target.value }))}
+                          placeholder="Obrigatório se não vincular"
+                        />
+                      </label>
+                      <label>
+                        <span>E-mail</span>
+                        <input
+                          value={bibleSchoolStudentForm.email}
+                          onChange={(e) => setBibleSchoolStudentForm((c) => ({ ...c, email: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <label>
+                        <span>Telefone</span>
+                        <input
+                          value={bibleSchoolStudentForm.phone}
+                          onChange={(e) => setBibleSchoolStudentForm((c) => ({ ...c, phone: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <label style={{ gridColumn: "span 2" }}>
+                        <span>Observações</span>
+                        <input
+                          value={bibleSchoolStudentForm.notes}
+                          onChange={(e) => setBibleSchoolStudentForm((c) => ({ ...c, notes: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <div className="tenant-form-actions">
+                        <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
+                          {bibleSchoolStatus === "loading" ? "Salvando..." : "Matricular"}
+                        </Button>
+                        <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolStudentFormOpen(false)}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              ) : null}
+
+              {isBibleSchoolSessionFormOpen ? (
+                <div className="modal-backdrop">
+                  <section className="modal-sheet">
+                    <div className="modal-section-header">
+                      <strong>Nova aula</strong>
+                      <button type="button" onClick={() => setIsBibleSchoolSessionFormOpen(false)} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <form className="tenant-form" onSubmit={handleBibleSchoolSessionSubmit}>
+                      <label>
+                        <span>Data</span>
+                        <input
+                          type="date"
+                          value={bibleSchoolSessionForm.session_date}
+                          onChange={(e) => setBibleSchoolSessionForm((c) => ({ ...c, session_date: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        <span>Tema</span>
+                        <input
+                          value={bibleSchoolSessionForm.topic}
+                          onChange={(e) => setBibleSchoolSessionForm((c) => ({ ...c, topic: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <label style={{ gridColumn: "span 2" }}>
+                        <span>Notas</span>
+                        <input
+                          value={bibleSchoolSessionForm.notes}
+                          onChange={(e) => setBibleSchoolSessionForm((c) => ({ ...c, notes: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <div className="tenant-form-actions">
+                        <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
+                          {bibleSchoolStatus === "loading" ? "Salvando..." : "Salvar"}
+                        </Button>
+                        <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolSessionFormOpen(false)}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              ) : null}
+
+              {isBibleSchoolMaterialFormOpen ? (
+                <div className="modal-backdrop">
+                  <section className="modal-sheet">
+                    <div className="modal-section-header">
+                      <strong>Novo material</strong>
+                      <button type="button" onClick={() => setIsBibleSchoolMaterialFormOpen(false)} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <form className="tenant-form" onSubmit={handleBibleSchoolMaterialSubmit}>
+                      <label>
+                        <span>Título</span>
+                        <input
+                          value={bibleSchoolMaterialForm.title}
+                          onChange={(e) => setBibleSchoolMaterialForm((c) => ({ ...c, title: e.target.value }))}
+                          placeholder="Ex.: Apostila aula 1"
+                        />
+                      </label>
+                      <label>
+                        <span>Tipo</span>
+                        <select
+                          value={bibleSchoolMaterialForm.kind}
+                          onChange={(e) => setBibleSchoolMaterialForm((c) => ({ ...c, kind: e.target.value as BibleSchoolMaterialFormState["kind"] }))}
+                        >
+                          <option value="link">Link</option>
+                          <option value="text">Texto</option>
+                          <option value="file">Arquivo</option>
+                        </select>
+                      </label>
+                      {bibleSchoolMaterialForm.kind === "link" ? (
+                        <label style={{ gridColumn: "span 2" }}>
+                          <span>URL</span>
+                          <input
+                            value={bibleSchoolMaterialForm.url}
+                            onChange={(e) => setBibleSchoolMaterialForm((c) => ({ ...c, url: e.target.value }))}
+                            placeholder="https://..."
+                          />
+                        </label>
+                      ) : bibleSchoolMaterialForm.kind === "file" ? (
+                        <label style={{ gridColumn: "span 2" }}>
+                          <span>Arquivo</span>
+                          <input
+                            type="file"
+                            onChange={(e) => setBibleSchoolMaterialForm((c) => ({ ...c, file: e.target.files?.[0] ?? null }))}
+                            required
+                          />
+                        </label>
+                      ) : (
+                        <label style={{ gridColumn: "span 2" }}>
+                          <span>Conteúdo</span>
+                          <input
+                            value={bibleSchoolMaterialForm.content}
+                            onChange={(e) => setBibleSchoolMaterialForm((c) => ({ ...c, content: e.target.value }))}
+                            placeholder="Texto do material"
+                          />
+                        </label>
+                      )}
+                      <div className="tenant-form-actions">
+                        <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
+                          {bibleSchoolStatus === "loading" ? "Salvando..." : "Salvar"}
+                        </Button>
+                        <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolMaterialFormOpen(false)}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              ) : null}
+
+              {isBibleSchoolGradeFormOpen ? (
+                <div className="modal-backdrop">
+                  <section className="modal-sheet">
+                    <div className="modal-section-header">
+                      <strong>Nova nota</strong>
+                      <button type="button" onClick={() => setIsBibleSchoolGradeFormOpen(false)} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <form className="tenant-form" onSubmit={handleBibleSchoolGradeSubmit}>
+                      <label style={{ gridColumn: "span 2" }}>
+                        <span>Aluno (matrícula)</span>
+                        <select
+                          value={bibleSchoolGradeForm.enrollment_id}
+                          onChange={(e) => setBibleSchoolGradeForm((c) => ({ ...c, enrollment_id: e.target.value }))}
+                        >
+                          <option value="">Selecione</option>
+                          {bibleSchoolEnrollments.map((row) => (
+                            <option key={row.id} value={row.id}>
+                              {row.bible_school_students?.name ?? "Aluno"}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ gridColumn: "span 2" }}>
+                        <span>Título</span>
+                        <input
+                          value={bibleSchoolGradeForm.title}
+                          onChange={(e) => setBibleSchoolGradeForm((c) => ({ ...c, title: e.target.value }))}
+                          placeholder="Ex.: Prova 1"
+                        />
+                      </label>
+                      <label>
+                        <span>Nota</span>
+                        <input
+                          value={bibleSchoolGradeForm.score}
+                          onChange={(e) => setBibleSchoolGradeForm((c) => ({ ...c, score: e.target.value }))}
+                          placeholder="Ex.: 8,5"
+                        />
+                      </label>
+                      <label>
+                        <span>Nota máxima</span>
+                        <input
+                          value={bibleSchoolGradeForm.max_score}
+                          onChange={(e) => setBibleSchoolGradeForm((c) => ({ ...c, max_score: e.target.value }))}
+                          placeholder="Ex.: 10"
+                        />
+                      </label>
+                      <label style={{ gridColumn: "span 2" }}>
+                        <span>Observações</span>
+                        <input
+                          value={bibleSchoolGradeForm.notes}
+                          onChange={(e) => setBibleSchoolGradeForm((c) => ({ ...c, notes: e.target.value }))}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                      <div className="tenant-form-actions">
+                        <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
+                          {bibleSchoolStatus === "loading" ? "Salvando..." : "Salvar"}
+                        </Button>
+                        <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolGradeFormOpen(false)}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              ) : null}
+            </article>
+          ) : null}
 
           {activeTab === "kids" ? (() => {
             const allChildren = clientData.kidsChildren;

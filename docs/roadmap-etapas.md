@@ -143,7 +143,7 @@ O moduloDevera tera estas funcionalidades:
 ## Etapa 9 - Escola Bíblica
 
 ### Escola Bíblica
-
+- cadastros gerais regerentes ao modulo
 - Turmas.
 - Professores.
 - Alunos.(podera ser adicionado da lista de mebros do tenant, ou adicionados avulsos)
@@ -154,6 +154,7 @@ O moduloDevera tera estas funcionalidades:
 - Adicionar o modulo na tela de admin global para ser liberado para os cliente/tenant
 - Adicionar o modulo novo na area de adicionar membros, tanto na tela de admin global quanto no acesso pela admin do cliente
 - Adicionar as regras para acesso dos usuarios no menu lateral quando este modulo for liberado para ele
+- Os usuarios do portal de membros so terao acesso a area de aulas caso o usuario logado que nao seja admin do sistema ou admin do modulo de Escola Biblica esteja matriculado em alguma turma vigente ou tenha o cargo de professor dentro do sistema. Nestes casos ai sera liberado o modulo de escola biblica no menu apontando para a turma e curso matriculado, Caso seja Admin do tenant ou admin do modulo ou professor ai tera acesso a todas as turmas e materias rgistradas
 
 ## Etapa 10 - Relatórios e Auditoria
 
@@ -165,8 +166,7 @@ Objetivo: maturidade administrativa.
 - Logs de atividade com dados e nomes humizados e nao nome de funcoes, tambelas e permissoes.
 - Auditoria de dados sensíveis.
 - Métricas de engajamento.
-- Adicionar o modulo na tela de admin global para ser liberado para os cliente/tenant
-- Adicionar as regras para acesso dos usuarios no menu lateral quando este modulo for liberado para ele
+- Adicionar o dash para o admin global e para o admin tenant
 
 ## Etapa 11 - Produção e Escala
 
@@ -222,3 +222,5 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 - Etapa 6 concluída (2026-05-31): Módulo de Louvor completo — tabelas, RLS, escalas, calendário Google, portal do membro (/membro) com confirmação/recusa, links WhatsApp, indicadores por integrante.
 - Etapa 7 concluída (2026-05-31): Módulo Financeiro — tabelas `financial_categories` e `financial_transactions`, RLS por tenant, dashboard, CRUD de lançamentos, categorias, relatórios por período/categoria, comprovantes para membros. Módulos `worship` e `financial` marcados como ativos no catálogo global. Admin Global atualizado com badges de status e filtro de módulos depreciados.
 - Pendente: notificações push no app mobile (Etapa 12), integração WhatsApp Business API (melhoria futura).
+- Etapa 8 concluída (2026-05-31): Módulo Kids com melhorias em reacao as instruções iniciais
+- Etapa 9 concluída (2026-06-01): Módulo Escola Biblica

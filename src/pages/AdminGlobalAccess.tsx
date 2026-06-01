@@ -2576,23 +2576,22 @@ export function AdminGlobalAccess() {
             <ShieldCheck size={18} />
             Acesso interno SirvaOS
           </span>
-          <h1>Admin Global para operar a plataforma SaaS.</h1>
+          <h1>Administre todos os clientes do Saas.</h1>
           <p>
-            Esta rota é exclusiva para usuários globais criados por processo controlado.
-            Nenhum administrador global é cadastrado por interface pública.
+            Esta area é exclusiva para GErenciamento do Saas.
           </p>
         </div>
 
         <div className="admin-auth-metrics" aria-label="Escopo do Admin Global">
           <article>
             <Building2 size={20} />
-            <strong>Tenants</strong>
+            <strong>Clientes</strong>
             <span>Clientes, status e módulos contratados</span>
           </article>
           <article>
             <ShieldCheck size={20} />
             <strong>Permissões</strong>
-            <span>Acesso restrito por papel global</span>
+            <span>Sistema com permissionamento inteligente</span>
           </article>
         </div>
       </section>
@@ -2602,7 +2601,7 @@ export function AdminGlobalAccess() {
           <div className="login-card-header">
             <img src="/img/icon-sirvaos.svg" alt="" />
             <div>
-              <span>Admin Global</span>
+              <span>Admin SirvaOS</span>
               <h2>Acessar sistema</h2>
             </div>
           </div>
