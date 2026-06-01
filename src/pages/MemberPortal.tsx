@@ -2,6 +2,7 @@ import {
   Baby,
   BookOpen,
   CalendarCheck,
+  CalendarDays,
   Check,
   ChevronDown,
   Clock3,
@@ -68,6 +69,17 @@ type PortalModuleAccessRecord = {
   id: string;
   module_id: string;
   platform_modules: { code: string; name: string; description: string | null } | null;
+};
+
+type PortalEventRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  event_date: string;
+  ends_at: string | null;
+  event_type: string;
+  color: string;
 };
 
 function normalizeAccessLabel(value: string | null | undefined) {
@@ -289,6 +301,7 @@ export function MemberPortal() {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
+  const [portalEvents, setPortalEvents] = useState<PortalEventRecord[]>([]);
   const [memberMinistries, setMemberMinistries] = useState<PortalMinistryRecord[]>([]);
   const [moduleAdminAccesses, setModuleAdminAccesses] = useState<PortalModuleAccessRecord[]>([]);
   const [canManageMembers, setCanManageMembers] = useState(false);
@@ -521,6 +534,7 @@ export function MemberPortal() {
 
     if (!profileData.member_id || !profileData.tenant_id) {
       setAssignments([]);
+      setPortalEvents([]);
       setMemberMinistries([]);
       setModuleAdminAccesses([]);
       setCanManageMembers(false);
@@ -755,6 +769,18 @@ export function MemberPortal() {
     }
 
     setSelectedBibleSchoolClassId((current) => current ?? bibleClasses[0]!.id);
+
+    // Eventos públicos (todos os membros veem independente de permissão)
+    const eventsResult = await supabase
+      .from("tenant_events")
+      .select("id, title, description, location, event_date, ends_at, event_type, color")
+      .eq("tenant_id", profileData.tenant_id)
+      .eq("status", "publicado")
+      .gte("event_date", new Date().toISOString())
+      .order("event_date", { ascending: true })
+      .limit(20)
+      .returns<PortalEventRecord[]>();
+    setPortalEvents(eventsResult.data ?? []);
 
     setLoadStatus("ready");
   }
@@ -1585,6 +1611,11 @@ export function MemberPortal() {
             </article>
           ) : null}
           <article className="member-portal-access-card">
+            <span><CalendarDays size={17} /> Eventos</span>
+            <strong>{portalEvents.length}</strong>
+            <small>{portalEvents.length === 1 ? "próximo evento" : "próximos eventos"}</small>
+          </article>
+          <article className="member-portal-access-card">
             <span><Baby size={17} /> Kids</span>
             <strong>{kidsChildren.length}</strong>
             <small>{kidsChildren.length === 1 ? "criança vinculada" : "crianças vinculadas"}</small>
@@ -1652,6 +1683,66 @@ export function MemberPortal() {
             ) : null}
           </div>
         </section>
+
+        {/* ── Seção: Próximos Eventos ─────────────────────────────────── */}
+        {portalEvents.length > 0 ? (
+          <section className="member-portal-section">
+            <div className="member-portal-section-head">
+              <div>
+                <h2><CalendarDays size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Próximos eventos</h2>
+                <p>Agenda da sua igreja para os próximos dias.</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {portalEvents.map((evt) => {
+                const eventDate = new Date(evt.event_date);
+                const typeLabels: Record<string, string> = {
+                  culto: "Culto", conferencia: "Conferência", retiro: "Retiro",
+                  jovens: "Jovens", infantil: "Infantil", social: "Social", outro: "Evento",
+                };
+                const typeLabel = typeLabels[evt.event_type] ?? "Evento";
+                return (
+                  <div
+                    key={evt.id}
+                    style={{
+                      display: "flex", gap: 14, alignItems: "flex-start",
+                      background: "var(--color-bg-subtle)", borderRadius: 10,
+                      padding: "14px 16px",
+                      borderLeft: `4px solid ${evt.color ?? "#6d28d9"}`,
+                    }}
+                  >
+                    <div style={{ textAlign: "center", minWidth: 44 }}>
+                      <div style={{ fontSize: "1.4rem", fontWeight: 700, color: evt.color ?? "#6d28d9", lineHeight: 1 }}>
+                        {eventDate.getDate()}
+                      </div>
+                      <div style={{ fontSize: "0.7rem", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                        {eventDate.toLocaleString("pt-BR", { month: "short" })}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                        <strong style={{ fontSize: "0.95rem" }}>{evt.title}</strong>
+                        <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg)", padding: "1px 7px", borderRadius: 4, fontStyle: "normal" }}>
+                          {typeLabel}
+                        </em>
+                      </div>
+                      <div style={{ fontSize: "0.825rem", color: "var(--color-text-secondary)" }}>
+                        {eventDate.toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                        {evt.ends_at ? ` às ${new Date(evt.ends_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                        {evt.location ? ` · ${evt.location}` : ""}
+                      </div>
+                      {evt.description ? (
+                        <div style={{ fontSize: "0.825rem", color: "var(--color-text-secondary)", marginTop: 4 }}>
+                          {evt.description}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         {hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
           <section className="member-portal-section">

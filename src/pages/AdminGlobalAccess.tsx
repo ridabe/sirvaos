@@ -19,6 +19,8 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  UserCog,
+  UserPlus,
   UsersRound,
   X,
 } from "lucide-react";
@@ -154,6 +156,7 @@ type AdminDashboardData = {
   auditLogs: AuditLogRecord[];
   plans: PlanRecord[];
   modules: PlatformModuleRecord[];
+  globalAdmins: GlobalAdminRecord[];
   counts: {
     tenants: number;
     activeTenants: number;
@@ -166,7 +169,23 @@ type AdminDashboardData = {
   };
 };
 
-type AdminSection = "dashboard" | "clients" | "plans" | "modules";
+type AdminSection = "dashboard" | "clients" | "plans" | "modules" | "admins";
+
+type GlobalAdminRecord = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  global_role: "super_admin" | "operations" | "support";
+  status: "active" | "invited" | "suspended";
+  created_at: string;
+};
+
+type GlobalAdminFormState = {
+  email: string;
+  password: string;
+  full_name: string;
+  global_role: "super_admin" | "operations" | "support";
+};
 type PlanStatus = "active" | "archived";
 
 type PlanFormState = {
@@ -284,6 +303,10 @@ export function AdminGlobalAccess() {
   const [statusFilter, setStatusFilter] = useState<TenantStatus | "all">("all");
   const [planFilter, setPlanFilter] = useState<string>("all");
   const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
+  const [isAdminFormOpen, setIsAdminFormOpen] = useState(false);
+  const [adminForm, setAdminForm] = useState<GlobalAdminFormState>({ email: "", password: "", full_name: "", global_role: "operations" });
+  const [adminSaveStatus, setAdminSaveStatus] = useState<LoginStatus>("idle");
+  const [adminSaveMessage, setAdminSaveMessage] = useState("");
   const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
   const [isTenantFormOpen, setIsTenantFormOpen] = useState(false);
   const [tenantSaveStatus, setTenantSaveStatus] = useState<LoginStatus>("idle");
@@ -331,6 +354,20 @@ export function AdminGlobalAccess() {
 
     return dashboardData.tenants.find((tenant) => tenant.id === selectedModulesTenantId) ?? null;
   }, [dashboardData, selectedModulesTenantId]);
+
+  // Sincroniza moduleConfig sempre que o tenant selecionado muda —
+  // garante que o painel reflita o estado real do banco, inclusive após recarregar dados.
+  useEffect(() => {
+    if (!selectedModulesTenantId || !dashboardData) return;
+    const tenant = dashboardData.tenants.find((t) => t.id === selectedModulesTenantId);
+    if (!tenant) return;
+    const freshConfig = tenant.tenant_modules.reduce<ModuleConfigState>((config, mod) => {
+      config[mod.module_id] = mod.status;
+      return config;
+    }, {});
+    setModuleConfig(freshConfig);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModulesTenantId]); // só dispara quando o TENANT muda, não a cada reload de dados
 
   const selectedTenant = useMemo(() => {
     if (!dashboardData || !selectedTenantId) {
@@ -519,6 +556,7 @@ export function AdminGlobalAccess() {
       auditLogsResult,
       plansResult,
       modulesResult,
+      globalAdminsResult,
       tenantCount,
       activeTenants,
       suspendedTenants,
@@ -576,6 +614,12 @@ export function AdminGlobalAccess() {
         .select("id, code, name, description, status, icon_name, sort_order")
         .order("sort_order", { ascending: true })
         .returns<PlatformModuleRecord[]>(),
+      supabase
+        .from("profiles")
+        .select("id, email, full_name, global_role, status, created_at")
+        .not("global_role", "is", null)
+        .order("created_at", { ascending: true })
+        .returns<GlobalAdminRecord[]>(),
       getTableCount("tenants"),
       getTenantStatusCount("active"),
       getTenantStatusCount("suspended"),
@@ -630,6 +674,7 @@ export function AdminGlobalAccess() {
       auditLogs: auditLogsResult.data ?? [],
       plans: plansResult.data ?? [],
       modules: modulesResult.data ?? [],
+      globalAdmins: (globalAdminsResult.data ?? []) as GlobalAdminRecord[],
       counts: {
         tenants: tenantCount,
         activeTenants,
@@ -781,6 +826,61 @@ export function AdminGlobalAccess() {
     setIsPlanFormOpen(false);
     setPlanForm(emptyPlanForm);
     await loadDashboardData();
+  }
+
+  async function handleCreateGlobalAdmin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAdminSaveStatus("loading");
+    setAdminSaveMessage("");
+
+    if (!adminForm.email.trim() || !adminForm.password || !adminForm.full_name.trim()) {
+      setAdminSaveStatus("error");
+      setAdminSaveMessage("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-global-admin`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(adminForm),
+      },
+    );
+
+    const body = await res.json() as { error?: string; id?: string };
+
+    if (!res.ok) {
+      const msgMap: Record<string, string> = {
+        EMAIL_ALREADY_EXISTS: "Este e-mail já está cadastrado.",
+        PASSWORD_TOO_SHORT: "A senha deve ter no mínimo 8 caracteres.",
+        MISSING_FIELDS: "Preencha todos os campos.",
+        FORBIDDEN: "Seu usuário não tem permissão para criar admins globais.",
+      };
+      setAdminSaveStatus("error");
+      setAdminSaveMessage(msgMap[body.error ?? ""] ?? body.error ?? "Erro ao criar admin.");
+      return;
+    }
+
+    setAdminSaveStatus("success");
+    setAdminSaveMessage("Admin global criado com sucesso.");
+    setAdminForm({ email: "", password: "", full_name: "", global_role: "operations" });
+    setIsAdminFormOpen(false);
+    await loadDashboardData();
+  }
+
+  async function handleToggleGlobalAdminStatus(admin: GlobalAdminRecord) {
+    const newStatus = admin.status === "active" ? "suspended" : "active";
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: newStatus })
+      .eq("id", admin.id);
+    if (!error) {
+      await loadDashboardData();
+    }
   }
 
   function openCreateModuleForm() {
@@ -1222,6 +1322,13 @@ export function AdminGlobalAccess() {
 
   function openTenantDetailPanel(tenant: TenantRecord) {
     setSelectedTenantId(tenant.id);
+    const currentConfig = tenant.tenant_modules.reduce<ModuleConfigState>((config, mod) => {
+      config[mod.module_id] = mod.status;
+      return config;
+    }, {});
+    setModuleConfig(currentConfig);
+    setModuleSaveStatus("idle");
+    setModuleSaveMessage("");
     setSelectedModulesTenantId(tenant.id);
   }
 
@@ -1375,6 +1482,17 @@ export function AdminGlobalAccess() {
               <ShieldCheck size={18} />
               <span className="sidebar-label">Planos</span>
             </button>
+            <button
+              className={activeSection === "admins" ? "active" : undefined}
+              type="button"
+              onClick={() => {
+                setActiveSection("admins");
+                setIsMobileSidebarOpen(false);
+              }}
+            >
+              <UserCog size={18} />
+              <span className="sidebar-label">Admins</span>
+            </button>
           </nav>
 
           <button className="global-admin-logout" type="button" onClick={handleSignOut}>
@@ -1392,12 +1510,14 @@ export function AdminGlobalAccess() {
                 {activeSection === "clients" && "Clientes / Igrejas"}
                 {activeSection === "plans" && "Gestão de planos"}
                 {activeSection === "modules" && "Catálogo global de módulos"}
+                {activeSection === "admins" && "Admins Globais"}
               </h1>
               <p>
                 {activeSection === "dashboard" && "Acompanhe saúde do SaaS, auditoria e métricas do Admin Global."}
                 {activeSection === "clients" && "Gerencie clientes, contratos e ativação de módulos por tenant."}
                 {activeSection === "plans" && "Crie e mantenha o catálogo de planos comerciais do SirvaOS."}
                 {activeSection === "modules" && "Configure o catálogo global de módulos e seus metadados."}
+                {activeSection === "admins" && "Gerencie os usuários com acesso ao painel Admin Global do SirvaOS."}
               </p>
             </div>
             <Button
@@ -1409,6 +1529,10 @@ export function AdminGlobalAccess() {
                   openCreatePlanForm();
                 } else if (activeSection === "modules") {
                   openCreateModuleForm();
+                } else if (activeSection === "admins") {
+                  setAdminSaveStatus("idle");
+                  setAdminSaveMessage("");
+                  setIsAdminFormOpen(true);
                 } else {
                   setActiveSection("clients");
                 }
@@ -1420,6 +1544,8 @@ export function AdminGlobalAccess() {
                 ? "Novo plano"
                 : activeSection === "modules"
                 ? "Novo módulo"
+                : activeSection === "admins"
+                ? "Novo admin global"
                 : "Ver clientes"}
             </Button>
           </header>
@@ -1751,6 +1877,79 @@ export function AdminGlobalAccess() {
                       >
                         Cancelar
                       </button>
+                    </div>
+                  </form>
+                </section>
+              ) : null}
+
+              {activeSection === "admins" && isAdminFormOpen ? (
+                <section className="global-panel tenant-form-panel" aria-label="Novo admin global">
+                  <div className="global-panel-heading">
+                    <div>
+                      <span>Novo acesso</span>
+                      <h2>Criar admin global</h2>
+                    </div>
+                    <button className="panel-icon-button" type="button" onClick={() => setIsAdminFormOpen(false)}>
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <form className="tenant-form" onSubmit={handleCreateGlobalAdmin}>
+                    <label>
+                      <span>Nome completo *</span>
+                      <input
+                        className="catalog-input"
+                        placeholder="Ex.: João da Silva"
+                        value={adminForm.full_name}
+                        onChange={(e) => setAdminForm((f) => ({ ...f, full_name: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span>E-mail *</span>
+                      <input
+                        className="catalog-input"
+                        type="email"
+                        placeholder="admin@sirvaos.com"
+                        value={adminForm.email}
+                        onChange={(e) => setAdminForm((f) => ({ ...f, email: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span>Senha temporária *</span>
+                      <input
+                        className="catalog-input"
+                        type="password"
+                        placeholder="Mínimo 8 caracteres"
+                        value={adminForm.password}
+                        onChange={(e) => setAdminForm((f) => ({ ...f, password: e.target.value }))}
+                        required
+                        minLength={8}
+                      />
+                      <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
+                        Entregue esta senha ao novo admin. Oriente a troca no primeiro acesso.
+                      </small>
+                    </label>
+                    <label>
+                      <span>Perfil de acesso *</span>
+                      <select
+                        className="catalog-input"
+                        value={adminForm.global_role}
+                        onChange={(e) => setAdminForm((f) => ({ ...f, global_role: e.target.value as GlobalAdminFormState["global_role"] }))}
+                      >
+                        <option value="super_admin">Super Admin — acesso total</option>
+                        <option value="operations">Operações — gerencia clientes e módulos</option>
+                        <option value="support">Suporte — acesso somente leitura</option>
+                      </select>
+                    </label>
+                    {adminSaveMessage ? (
+                      <p className={`login-feedback ${adminSaveStatus}`}>{adminSaveMessage}</p>
+                    ) : null}
+                    <div className="tenant-form-actions">
+                      <Button type="button" variant="secondary" onClick={() => setIsAdminFormOpen(false)}>Cancelar</Button>
+                      <Button type="submit" disabled={adminSaveStatus === "loading"} icon={<UserPlus size={18} />}>
+                        {adminSaveStatus === "loading" ? "Criando..." : "Criar admin global"}
+                      </Button>
                     </div>
                   </form>
                 </section>
@@ -2445,6 +2644,58 @@ export function AdminGlobalAccess() {
                       </section>
                     ) : null}
                     </>
+                  ) : activeSection === "admins" ? (
+                    <div className="tenant-table">
+                      <div className="tenant-table-head">
+                        <span>Nome</span>
+                        <span>E-mail</span>
+                        <span>Perfil</span>
+                        <span>Status</span>
+                        <span>Ações</span>
+                      </div>
+                      {dashboardData.globalAdmins.length > 0 ? (
+                        dashboardData.globalAdmins.map((admin) => {
+                          const roleLabel: Record<string, string> = {
+                            super_admin: "Super Admin",
+                            operations: "Operações",
+                            support: "Suporte",
+                          };
+                          return (
+                            <article key={admin.id} className="tenant-table-row">
+                              <div>
+                                <strong>{admin.full_name ?? "—"}</strong>
+                                <small>desde {new Date(admin.created_at).toLocaleDateString("pt-BR")}</small>
+                              </div>
+                              <span>{admin.email}</span>
+                              <span>
+                                <em className={admin.global_role === "super_admin" ? "active" : "configuring"} style={{ fontSize: "0.78rem" }}>
+                                  {roleLabel[admin.global_role] ?? admin.global_role}
+                                </em>
+                              </span>
+                              <em className={admin.status === "active" ? "active" : "suspended"}>
+                                {admin.status === "active" ? "Ativo" : admin.status === "suspended" ? "Suspenso" : "Convidado"}
+                              </em>
+                              <div className="tenant-row-actions">
+                                <button
+                                  type="button"
+                                  title={admin.status === "active" ? "Suspender acesso" : "Reativar acesso"}
+                                  onClick={() => handleToggleGlobalAdminStatus(admin)}
+                                  style={{ color: admin.status === "active" ? "var(--color-danger)" : "var(--color-success)" }}
+                                >
+                                  {admin.status === "active" ? <X size={16} /> : <CheckCircle2 size={16} />}
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <div className="empty-admin-state">
+                          <UserCog size={22} />
+                          <strong>Nenhum admin global encontrado.</strong>
+                          <span>Crie o primeiro acesso com o botão "Novo admin global".</span>
+                        </div>
+                      )}
+                    </div>
                   ) : activeSection === "plans" ? (
                     <div className="tenant-table">
                       <div className="tenant-table-head">

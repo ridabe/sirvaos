@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   CalendarCheck,
+  CalendarDays,
   Camera,
   CheckCircle2,
   Clock3,
@@ -102,6 +103,11 @@ type EventRecord = {
   description: string | null;
   location: string | null;
   event_date: string;
+  ends_at: string | null;
+  event_type: "culto" | "conferencia" | "retiro" | "jovens" | "infantil" | "social" | "outro";
+  color: string;
+  status: "rascunho" | "publicado" | "cancelado";
+  cover_image_url: string | null;
   created_at: string;
 };
 
@@ -635,6 +641,11 @@ const emptyEventForm: EventFormState = {
   description: "",
   location: "",
   event_date: "",
+  ends_at: null,
+  event_type: "outro",
+  color: "#6d28d9",
+  status: "publicado",
+  cover_image_url: null,
   tenant_id: "",
 };
 
@@ -938,15 +949,25 @@ const sampleClientDashboardData: ClientDashboardData = {
       title: "Culto Dominical",
       description: "Adoração, palavra e comunhão.",
       location: "Templo principal",
-      event_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      event_date: new Date(Date.now() + 86400000).toISOString(),
+      ends_at: null,
+      event_type: "culto" as const,
+      color: "#6d28d9",
+      status: "publicado" as const,
+      cover_image_url: null,
       created_at: new Date().toISOString(),
     },
     {
       id: "event-2",
-      title: "Ensaio de Louvor",
+      title: "Conferência de Jovens",
       description: "Preparação para o culto.",
       location: "Sala Multiuso",
-      event_date: new Date(Date.now() + 172800000).toISOString().slice(0, 10),
+      event_date: new Date(Date.now() + 172800000).toISOString(),
+      ends_at: null,
+      event_type: "jovens" as const,
+      color: "#059669",
+      status: "publicado" as const,
+      cover_image_url: null,
       created_at: new Date().toISOString(),
     },
   ],
@@ -1201,7 +1222,7 @@ const clientTabs = [
   { key: "reports", label: "Relatórios", icon: Receipt },
   { key: "members", label: "Membros", icon: UsersRound },
   { key: "families", label: "Famílias", icon: Users2 },
-  { key: "events", label: "Calendário", icon: CalendarCheck },
+  { key: "events", label: "Eventos", icon: CalendarDays },
   { key: "worship", label: "Louvor", icon: Music },
   { key: "financial", label: "Financeiro", icon: DollarSign },
   { key: "kids", label: "Kids", icon: Baby },
@@ -1220,7 +1241,7 @@ const defaultClientTabs = new Set<ClientTab>(["overview"]);
 const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   members: "members",
   families: "members",
-  events: "calendar",
+  events: "events",
   worship: "worship",
   financial: "financial",
   kids: "kids",
@@ -1540,6 +1561,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [eventSaveStatus, setEventSaveStatus] = useState<LoginStatus>("idle");
   const [eventSaveMessage, setEventSaveMessage] = useState("");
+  const [eventViewMode, setEventViewMode] = useState<"list" | "calendar">("list");
+  const [eventCalendarMonth, setEventCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [eventNotifyOpen, setEventNotifyOpen] = useState(false);
+  const [eventNotifyTarget, setEventNotifyTarget] = useState<EventRecord | null>(null);
+  const [eventNotifyStatus, setEventNotifyStatus] = useState<LoginStatus>("idle");
+  const [eventNotifyMessage, setEventNotifyMessage] = useState("");
   const [worshipEventForm, setWorshipEventForm] = useState<WorshipEventFormState>(emptyWorshipEventForm);
   const [worshipAssignmentForm, setWorshipAssignmentForm] = useState<WorshipAssignmentFormState>(
     emptyWorshipAssignmentForm,
@@ -1711,7 +1741,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
   const canManageMembershipModule = canManageModuleCode("members");
   const canManageMembers = isTenantAdmin || isSecretariaAdmin || canManageMembershipModule;
-  const canManageEvents = canManageModuleCode("calendar");
+  const canManageEvents = canManageModuleCode("events");
   const canManageWorship = canManageModuleCode("worship");
   const canManageFinancial = canManageModuleCode("financial");
   const canManageKids = canManageModuleCode("kids");
@@ -2250,7 +2280,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .returns<FamilyMemberRecord[]>(),
         supabase
           .from("tenant_events")
-          .select("id, title, description, location, event_date, created_at")
+          .select("id, title, description, location, event_date, ends_at, event_type, color, status, cover_image_url, created_at")
           .eq("tenant_id", tenantId)
           .order("event_date", { ascending: true })
           .returns<EventRecord[]>(),
@@ -2379,7 +2409,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       memberMinistriesResult.error ||
       familiesResult.error ||
       familyMembersResult.error ||
-      eventsResult.error ||
       announcementsResult.error ||
       worshipRolesResult.error ||
       worshipEventsResult.error ||
@@ -4054,17 +4083,22 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     const payload = {
-      id: eventForm.id || undefined,
       tenant_id: clientData?.tenant.id,
       title: eventForm.title.trim(),
       description: eventForm.description?.trim() || null,
       location: eventForm.location?.trim() || null,
       event_date: eventForm.event_date,
+      ends_at: eventForm.ends_at || null,
+      event_type: eventForm.event_type || "outro",
+      color: eventForm.color || "#6d28d9",
+      status: eventForm.status || "publicado",
+      cover_image_url: eventForm.cover_image_url || null,
+      updated_at: new Date().toISOString(),
     };
 
     const result = eventForm.id
       ? await supabase.from("tenant_events").update(payload).eq("id", eventForm.id)
-      : await supabase.from("tenant_events").insert(payload);
+      : await supabase.from("tenant_events").insert({ ...payload, created_by: profile?.id });
 
     if (result.error) {
       setEventSaveStatus("error");
@@ -4086,9 +4120,63 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
+    if (!confirm("Deseja excluir este evento? Esta ação não pode ser desfeita.")) return;
+
     const { error } = await supabase.from("tenant_events").delete().eq("id", eventId);
     if (!error) {
       await loadClientData(profile.id);
+    }
+  }
+
+  function openEventNotifyModal(event: EventRecord) {
+    setEventNotifyTarget(event);
+    setEventNotifyStatus("idle");
+    setEventNotifyMessage("");
+    setEventNotifyOpen(true);
+  }
+
+  async function handleEventSendEmail() {
+    if (!eventNotifyTarget || !clientData || !profile) return;
+    setEventNotifyStatus("loading");
+    setEventNotifyMessage("");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-event-emails`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ event_id: eventNotifyTarget.id }),
+        },
+      );
+
+      const body = await res.json() as { sent?: number; failed?: number; error?: string };
+
+      if (!res.ok) {
+        setEventNotifyStatus("error");
+        setEventNotifyMessage(body.error ?? "Erro ao enviar e-mails.");
+        return;
+      }
+
+      await supabase.from("event_notifications_log").insert({
+        tenant_id: clientData.tenant.id,
+        event_id: eventNotifyTarget.id,
+        channel: "email",
+        recipient_count: body.sent ?? 0,
+        sent_by: profile.id,
+      });
+
+      setEventNotifyStatus("success");
+      setEventNotifyMessage(`E-mails enviados: ${body.sent ?? 0} com sucesso${body.failed ? `, ${body.failed} com falha` : ""}.`);
+    } catch (err) {
+      setEventNotifyStatus("error");
+      setEventNotifyMessage("Erro ao chamar o serviço de e-mail.");
     }
   }
 
@@ -5727,7 +5815,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   : activeTab === "families"
                   ? "Famílias e dependentes"
                   : activeTab === "events"
-                  ? "Calendário central"
+                  ? "Módulo de Eventos"
                   : activeTab === "worship"
                   ? "Módulo de Louvor"
                   : activeTab === "financial"
@@ -5757,7 +5845,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   : activeTab === "families"
                   ? "Organize famílias, dependentes e vínculos principais para atendimento e acompanhamento."
                   : activeTab === "events"
-                  ? "Planeje os eventos e cultos do calendário central."
+                  ? "Agenda institucional da igreja visível para todos os membros."
                   : activeTab === "worship"
                   ? "Gerencie escalas, integrantes e confirmações de presença."
                   : activeTab === "financial"
@@ -5915,8 +6003,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <article className="panel theme-panel">
                 <div className="panel-heading">
                   <div>
-                    <span>White-label</span>
-                    <h4>Visual do tenant</h4>
+                    <span>Design</span>
+                    <h4>Visual selecionado para a igreja</h4>
                   </div>
                   <Palette size={20} />
                 </div>
@@ -6267,38 +6355,203 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           ) : null}
 
           {activeTab === "events" ? (
-            <article className="panel full-width">
+            <article className="panel full-width worship-panel">
               <div className="panel-heading">
                 <div>
-                  <span>Calendário central</span>
+                  <span>Agenda institucional</span>
                   <h4>Eventos da igreja</h4>
                 </div>
-                {isTenantAdmin ? (
-                  <button type="button" onClick={openCreateEventForm}>Novo evento</button>
-                ) : null}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div className="worship-view-toggle">
+                    <button
+                      type="button"
+                      className={eventViewMode === "list" ? "active" : ""}
+                      onClick={() => setEventViewMode("list")}
+                    >
+                      Lista
+                    </button>
+                    <button
+                      type="button"
+                      className={eventViewMode === "calendar" ? "active" : ""}
+                      onClick={() => setEventViewMode("calendar")}
+                    >
+                      Calendário
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="event-list">
-                {clientData.events.map((item) => (
-                  <div key={item.id}>
-                    <time>{new Date(item.event_date).toLocaleDateString("pt-BR")}</time>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <small>{item.location || item.description || "Sem local definido"}</small>
-                    </div>
-                    {canManageEvents ? (
-                      <div className="member-actions">
-                        <button type="button" onClick={() => openEditEventForm(item)}>
-                          <Edit3 size={16} />
-                        </button>
-                        <button type="button" onClick={() => handleDeleteEvent(item.id)}>
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
+              {/* Resumo */}
+              <div className="worship-summary">
+                <article>
+                  <span>Total de eventos</span>
+                  <strong>{clientData.events.length}</strong>
+                  <small>Todos os status</small>
+                </article>
+                <article>
+                  <span>Publicados</span>
+                  <strong>{clientData.events.filter((e) => e.status === "publicado").length}</strong>
+                  <small>Visíveis para membros</small>
+                </article>
+                <article>
+                  <span>Próximos 30 dias</span>
+                  <strong>{clientData.events.filter((e) => {
+                    const d = new Date(e.event_date);
+                    const now = new Date();
+                    const in30 = new Date();
+                    in30.setDate(in30.getDate() + 30);
+                    return d >= now && d <= in30 && e.status === "publicado";
+                  }).length}</strong>
+                  <small>Eventos agendados</small>
+                </article>
               </div>
+
+              {/* Visão calendário */}
+              {eventViewMode === "calendar" ? (
+                (() => {
+                  const year = eventCalendarMonth.getFullYear();
+                  const month = eventCalendarMonth.getMonth();
+                  const firstDay = new Date(year, month, 1).getDay();
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const monthName = eventCalendarMonth.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+                  const eventsByDay: Record<number, EventRecord[]> = {};
+                  for (const evt of clientData.events) {
+                    const d = new Date(evt.event_date);
+                    if (d.getFullYear() === year && d.getMonth() === month) {
+                      const day = d.getDate();
+                      if (!eventsByDay[day]) eventsByDay[day] = [];
+                      eventsByDay[day].push(evt);
+                    }
+                  }
+                  const cells: (number | null)[] = [
+                    ...Array(firstDay === 0 ? 6 : firstDay - 1).fill(null),
+                    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+                  ];
+                  while (cells.length % 7 !== 0) cells.push(null);
+                  const today = new Date();
+                  return (
+                    <div className="worship-calendar">
+                      <div className="worship-calendar-nav">
+                        <button type="button" onClick={() => setEventCalendarMonth(new Date(year, month - 1, 1))}>‹</button>
+                        <strong>{monthName}</strong>
+                        <button type="button" onClick={() => setEventCalendarMonth(new Date(year, month + 1, 1))}>›</button>
+                      </div>
+                      <div className="worship-calendar-grid">
+                        {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (
+                          <div key={d} className="worship-calendar-weekday">{d}</div>
+                        ))}
+                        {cells.map((day, i) => {
+                          const isToday =
+                            day !== null &&
+                            today.getFullYear() === year &&
+                            today.getMonth() === month &&
+                            today.getDate() === day;
+                          const dayEvents = day !== null ? (eventsByDay[day] ?? []) : [];
+                          return (
+                            <div key={i} className={`worship-calendar-cell${day === null ? " empty" : ""}${isToday ? " today" : ""}`}>
+                              {day !== null ? (
+                                <>
+                                  <span className="worship-calendar-day">{day}</span>
+                                  {dayEvents.map((evt) => (
+                                    <div
+                                      key={evt.id}
+                                      className="worship-calendar-event"
+                                      style={{ backgroundColor: evt.color ?? "#6d28d9", opacity: evt.status === "cancelado" ? 0.45 : 1 }}
+                                      title={`${evt.title}${evt.status === "cancelado" ? " (cancelado)" : ""}`}
+                                      onClick={() => canManageEvents && openEditEventForm(evt)}
+                                    >
+                                      {evt.title}
+                                    </div>
+                                  ))}
+                                </>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                /* Visão lista */
+                <div className="worship-event-list">
+                  {clientData.events.length === 0 ? (
+                    <div className="catalog-empty">Nenhum evento cadastrado. Clique em "Novo evento" para começar.</div>
+                  ) : null}
+
+                  {clientData.events.map((item) => {
+                    const eventDate = new Date(item.event_date);
+                    const isPast = eventDate < new Date();
+                    const typeLabels: Record<string, string> = {
+                      culto: "Culto", conferencia: "Conferência", retiro: "Retiro",
+                      jovens: "Jovens", infantil: "Infantil", social: "Social", outro: "Outro",
+                    };
+                    return (
+                      <section key={item.id} className="worship-event-card" style={{ opacity: item.status === "cancelado" || isPast ? 0.7 : 1 }}>
+                        <header>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                            <span
+                              style={{
+                                width: 12, height: 12, borderRadius: "50%", flexShrink: 0,
+                                backgroundColor: item.color ?? "#6d28d9",
+                                display: "inline-block",
+                              }}
+                            />
+                            <div>
+                              <strong>{item.title}</strong>
+                              <small>
+                                {eventDate.toLocaleString("pt-BR", { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                {item.ends_at ? ` até ${new Date(item.ends_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                                {item.location ? ` · ${item.location}` : ""}
+                              </small>
+                            </div>
+                          </div>
+                          <div className="worship-event-actions">
+                            <em
+                              className={
+                                item.status === "publicado" ? "success"
+                                : item.status === "cancelado" ? "error"
+                                : "warning"
+                              }
+                            >
+                              {item.status === "publicado" ? "Publicado" : item.status === "cancelado" ? "Cancelado" : "Rascunho"}
+                            </em>
+                            <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "2px 6px", borderRadius: 4 }}>
+                              {typeLabels[item.event_type] ?? item.event_type}
+                            </em>
+                            {canManageEvents && item.status === "publicado" ? (
+                              <button
+                                type="button"
+                                className="worship-email-btn"
+                                onClick={() => openEventNotifyModal(item)}
+                                title="Notificar membros"
+                              >
+                                <Send size={15} />
+                                <span>Notificar</span>
+                              </button>
+                            ) : null}
+                            {canManageEvents ? (
+                              <>
+                                <button type="button" className="worship-action-btn" onClick={() => openEditEventForm(item)} title="Editar">
+                                  <Edit3 size={14} />
+                                </button>
+                                <button type="button" className="worship-action-btn danger" onClick={() => handleDeleteEvent(item.id)} title="Excluir">
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </header>
+                        {item.description ? (
+                          <p style={{ margin: "8px 0 0", fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
+                            {item.description}
+                          </p>
+                        ) : null}
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
             </article>
           ) : null}
 
@@ -9927,6 +10180,235 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           </div>
         </div>
       ) : null}
+      {/* ── Modal: Formulário de Evento ─────────────────────────────────── */}
+      {isEventFormOpen ? (
+        <div className="modal-overlay" onClick={() => setIsEventFormOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <CalendarDays size={20} />
+                <strong>{eventForm.id ? "Editar evento" : "Novo evento"}</strong>
+              </div>
+              <button type="button" onClick={() => setIsEventFormOpen(false)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleEventSubmit}>
+              <div className="modal-body">
+                <label>
+                  <span>Título *</span>
+                  <input
+                    className="catalog-input"
+                    placeholder="Ex.: Culto de Domingo, Conferência de Jovens"
+                    value={eventForm.title}
+                    onChange={(e) => updateEventForm("title", e.target.value)}
+                    required
+                  />
+                </label>
+
+                <div className="modal-grid">
+                  <label>
+                    <span>Início *</span>
+                    <input
+                      className="catalog-input"
+                      type="datetime-local"
+                      value={eventForm.event_date}
+                      onChange={(e) => updateEventForm("event_date", e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Término (opcional)</span>
+                    <input
+                      className="catalog-input"
+                      type="datetime-local"
+                      value={eventForm.ends_at ?? ""}
+                      onChange={(e) => updateEventForm("ends_at", e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  <span>Local</span>
+                  <input
+                    className="catalog-input"
+                    placeholder="Ex.: Templo principal, Salão B"
+                    value={eventForm.location ?? ""}
+                    onChange={(e) => updateEventForm("location", e.target.value)}
+                  />
+                </label>
+
+                <label>
+                  <span>Descrição</span>
+                  <textarea
+                    className="catalog-input catalog-textarea"
+                    placeholder="Detalhes do evento (opcional)"
+                    rows={3}
+                    value={eventForm.description ?? ""}
+                    onChange={(e) => updateEventForm("description", e.target.value)}
+                  />
+                </label>
+
+                <div className="modal-grid">
+                  <label>
+                    <span>Tipo</span>
+                    <select
+                      className="catalog-input"
+                      value={eventForm.event_type}
+                      onChange={(e) => updateEventForm("event_type", e.target.value)}
+                    >
+                      <option value="culto">Culto</option>
+                      <option value="conferencia">Conferência</option>
+                      <option value="retiro">Retiro</option>
+                      <option value="jovens">Jovens</option>
+                      <option value="infantil">Infantil</option>
+                      <option value="social">Social</option>
+                      <option value="outro">Outro</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Status</span>
+                    <select
+                      className="catalog-input"
+                      value={eventForm.status}
+                      onChange={(e) => updateEventForm("status", e.target.value)}
+                    >
+                      <option value="rascunho">Rascunho (não visível)</option>
+                      <option value="publicado">Publicado (visível a todos)</option>
+                      <option value="cancelado">Cancelado</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label>
+                  <span>Cor no calendário</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="color"
+                      value={eventForm.color ?? "#6d28d9"}
+                      onChange={(e) => updateEventForm("color", e.target.value)}
+                      style={{ width: 40, height: 36, borderRadius: 6, border: "1px solid var(--color-border)", cursor: "pointer", padding: 2 }}
+                    />
+                    <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+                      Cor exibida no calendário para identificar o evento
+                    </span>
+                  </div>
+                </label>
+
+                {eventSaveMessage ? (
+                  <p className={`login-feedback ${eventSaveStatus}`}>{eventSaveMessage}</p>
+                ) : null}
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setIsEventFormOpen(false)}>
+                  Cancelar
+                </button>
+                <Button type="submit" disabled={eventSaveStatus === "loading"} icon={<CheckCircle2 size={18} />}>
+                  {eventSaveStatus === "loading" ? "Salvando..." : eventForm.id ? "Salvar alterações" : "Criar evento"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Modal: Notificações de Evento ────────────────────────────────── */}
+      {eventNotifyOpen && eventNotifyTarget ? (
+        <div className="modal-overlay" onClick={() => setEventNotifyOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div>
+                <Send size={20} />
+                <strong>Notificar membros</strong>
+              </div>
+              <button type="button" onClick={() => setEventNotifyOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ background: "var(--color-bg-subtle)", borderRadius: 8, padding: "12px 16px", marginBottom: 16 }}>
+                <strong style={{ fontSize: "0.95rem" }}>{eventNotifyTarget.title}</strong>
+                <p style={{ margin: "4px 0 0", fontSize: "0.825rem", color: "var(--color-text-secondary)" }}>
+                  {new Date(eventNotifyTarget.event_date).toLocaleString("pt-BR", {
+                    weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+                  })}
+                  {eventNotifyTarget.location ? ` · ${eventNotifyTarget.location}` : ""}
+                </p>
+              </div>
+
+              <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: 16 }}>
+                Escolha como deseja notificar todos os membros ativos da igreja sobre este evento:
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* E-mail */}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Mail size={18} style={{ color: "var(--color-primary)" }} />
+                      <strong style={{ fontSize: "0.9rem" }}>E-mail</strong>
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={eventNotifyStatus === "loading"}
+                      onClick={handleEventSendEmail}
+                    >
+                      {eventNotifyStatus === "loading" ? "Enviando..." : "Enviar e-mails"}
+                    </Button>
+                  </div>
+                  <small style={{ color: "var(--color-text-secondary)" }}>
+                    Envia e-mail para todos os membros ativos com endereço de e-mail cadastrado.
+                  </small>
+                </div>
+
+                {/* WhatsApp */}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <MessageCircle size={18} style={{ color: "#25d366" }} />
+                      <strong style={{ fontSize: "0.9rem" }}>WhatsApp</strong>
+                    </div>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `📅 *${eventNotifyTarget.title}*\n\n🗓️ ${new Date(eventNotifyTarget.event_date).toLocaleString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}${eventNotifyTarget.ends_at ? ` até ${new Date(eventNotifyTarget.ends_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}${eventNotifyTarget.location ? `\n📍 ${eventNotifyTarget.location}` : ""}${eventNotifyTarget.description ? `\n\n${eventNotifyTarget.description}` : ""}\n\nEste comunicado foi enviado pela gestão da igreja.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        background: "#25d366", color: "#fff", borderRadius: 6,
+                        padding: "6px 14px", fontSize: "0.85rem", fontWeight: 600,
+                        textDecoration: "none",
+                      }}
+                    >
+                      Abrir WhatsApp
+                    </a>
+                  </div>
+                  <small style={{ color: "var(--color-text-secondary)" }}>
+                    Abre o WhatsApp com mensagem pré-preenchida para envio manual.
+                  </small>
+                </div>
+
+                {/* Push */}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px", opacity: 0.55 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <Bell size={18} />
+                    <strong style={{ fontSize: "0.9rem" }}>Push notification</strong>
+                    <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>Em breve</em>
+                  </div>
+                  <small style={{ color: "var(--color-text-secondary)" }}>
+                    Disponível quando o aplicativo móvel (Etapa 14) for lançado.
+                  </small>
+                </div>
+              </div>
+
+              {eventNotifyMessage ? (
+                <p className={`login-feedback ${eventNotifyStatus}`} style={{ marginTop: 12 }}>
+                  {eventNotifyMessage}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </main>
   );
 }
