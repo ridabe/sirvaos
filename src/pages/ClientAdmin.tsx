@@ -1548,6 +1548,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [worshipEmailFeedbackType, setWorshipEmailFeedbackType] = useState<"success" | "error">("success");
   const [worshipEmailCampaignsByEventId, setWorshipEmailCampaignsByEventId] = useState<Record<string, WorshipEmailCampaign[]>>({});
   const [editingWorshipEventId, setEditingWorshipEventId] = useState<string | null>(null);
+  const [worshipFlowStep, setWorshipFlowStep] = useState<1 | 2>(1);
   const [worshipViewMode, setWorshipViewMode] = useState<"list" | "calendar">("list");
   const [worshipCalendarMonth, setWorshipCalendarMonth] = useState(() => {
     const now = new Date();
@@ -4010,6 +4011,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       notes: worshipEvent.notes ?? "",
       status: worshipEvent.status,
     });
+    setWorshipFlowStep(1);
     setWorshipSaveStatus("idle");
     setWorshipSaveMessage("");
   }
@@ -4017,6 +4019,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   function cancelEditWorshipEvent() {
     setEditingWorshipEventId(null);
     setWorshipEventForm(emptyWorshipEventForm);
+    setWorshipFlowStep(1);
     setWorshipSaveStatus("idle");
     setWorshipSaveMessage("");
   }
@@ -4073,8 +4076,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         setClientData((current) =>
           current ? { ...current, worshipEvents: [...current.worshipEvents, row] } : current,
         );
+        setWorshipAssignmentForm((current) => ({ ...current, event_id: row.id }));
+        setWorshipFlowStep(2);
         setWorshipSaveStatus("success");
-        setWorshipSaveMessage("Evento de louvor criado.");
+        setWorshipSaveMessage("Evento criado! Agora adicione os escalados.");
       }
       setWorshipEventForm(emptyWorshipEventForm);
       return;
@@ -4101,11 +4106,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const { error } = await supabase.from("worship_events").insert({
+    const { data: newEventRow, error } = await supabase.from("worship_events").insert({
       tenant_id: clientData.tenant.id,
       ...payload,
       created_by: profile.id,
-    });
+    }).select("id").single();
 
     if (error) {
       setWorshipSaveStatus("error");
@@ -4113,9 +4118,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
+    if (newEventRow) {
+      setWorshipAssignmentForm((current) => ({ ...current, event_id: newEventRow.id }));
+    }
+    setWorshipFlowStep(2);
     setWorshipEventForm(emptyWorshipEventForm);
     setWorshipSaveStatus("success");
-    setWorshipSaveMessage("Evento de louvor criado.");
+    setWorshipSaveMessage("Evento criado! Agora adicione os escalados.");
     await loadClientData(profile.id);
   }
 
@@ -6197,24 +6206,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <span>Louvor</span>
                   <h4>Escalas de culto e ensaio</h4>
                 </div>
-                <div className="worship-view-toggle">
-                  <button
-                    type="button"
-                    className={worshipViewMode === "list" ? "active" : ""}
-                    onClick={() => setWorshipViewMode("list")}
-                    title="Visualizar lista"
-                  >
-                    Lista
-                  </button>
-                  <button
-                    type="button"
-                    className={worshipViewMode === "calendar" ? "active" : ""}
-                    onClick={() => setWorshipViewMode("calendar")}
-                    title="Visualizar calendário"
-                  >
-                    Calendário
-                  </button>
-                </div>
               </div>
 
               {worshipSaveMessage ? (
@@ -6290,163 +6281,260 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 );
               })()}
 
-              {canManageWorship ? (
-                <div className="worship-forms">
-                  <form className="worship-form" onSubmit={handleWorshipEventSubmit}>
-                    <div className="modal-section-header">
-                      <strong>{editingWorshipEventId ? "Editar evento" : "Novo evento de louvor"}</strong>
-                      <small>{editingWorshipEventId ? "Atualize os dados do evento selecionado." : "Crie culto, ensaio ou reuniao operacional."}</small>
-                    </div>
-                    <input
-                      className="catalog-input"
-                      placeholder="Nome do evento"
-                      value={worshipEventForm.title}
-                      onChange={(event) => setWorshipEventForm((current) => ({ ...current, title: event.target.value }))}
-                    />
-                    <div className="modal-grid">
-                      <select
-                        className="catalog-input"
-                        value={worshipEventForm.event_type}
-                        onChange={(event) =>
-                          setWorshipEventForm((current) => ({
-                            ...current,
-                            event_type: event.target.value as WorshipEventFormState["event_type"],
-                          }))
-                        }
+              <div className="worship-flow-layout">
+                {canManageWorship ? (
+                  <div className="worship-flow-form-col">
+                    <div className="worship-steps">
+                      <button
+                        type="button"
+                        className={`worship-step-btn${worshipFlowStep === 1 ? " active" : ""}`}
+                        onClick={() => setWorshipFlowStep(1)}
                       >
-                        <option value="service">Culto</option>
-                        <option value="rehearsal">Ensaio</option>
-                        <option value="meeting">Reuniao</option>
-                        <option value="other">Outro</option>
-                      </select>
-                      <select
-                        className="catalog-input"
-                        value={worshipEventForm.status}
-                        onChange={(event) =>
-                          setWorshipEventForm((current) => ({
-                            ...current,
-                            status: event.target.value as WorshipEventFormState["status"],
-                          }))
-                        }
+                        <span className="worship-step-num">1</span>
+                        <div>
+                          <strong>Criar evento</strong>
+                          <small>Culto, ensaio ou reunião</small>
+                        </div>
+                      </button>
+                      <div className="worship-step-connector" />
+                      <button
+                        type="button"
+                        className={`worship-step-btn${worshipFlowStep === 2 ? " active" : ""}${clientData.worshipEvents.length === 0 ? " locked" : ""}`}
+                        onClick={() => { if (clientData.worshipEvents.length > 0) setWorshipFlowStep(2); }}
                       >
-                        <option value="published">Publicado</option>
-                        <option value="draft">Rascunho</option>
-                        <option value="completed">Concluido</option>
-                        <option value="cancelled">Cancelado</option>
-                      </select>
+                        <span className="worship-step-num">2</span>
+                        <div>
+                          <strong>Adicionar escalados</strong>
+                          <small>Funções e horários</small>
+                        </div>
+                      </button>
                     </div>
-                    <div className="modal-grid">
-                      <input
-                        className="catalog-input"
-                        type="datetime-local"
-                        value={worshipEventForm.starts_at}
-                        onChange={(event) => setWorshipEventForm((current) => ({ ...current, starts_at: event.target.value }))}
-                      />
-                      <input
-                        className="catalog-input"
-                        type="datetime-local"
-                        value={worshipEventForm.ends_at}
-                        onChange={(event) => setWorshipEventForm((current) => ({ ...current, ends_at: event.target.value }))}
-                      />
-                    </div>
-                    <input
-                      className="catalog-input"
-                      placeholder="Local"
-                      value={worshipEventForm.location}
-                      onChange={(event) => setWorshipEventForm((current) => ({ ...current, location: event.target.value }))}
-                    />
-                    <textarea
-                      className="catalog-input catalog-textarea"
-                      placeholder="Observacoes da escala"
-                      value={worshipEventForm.notes}
-                      onChange={(event) => setWorshipEventForm((current) => ({ ...current, notes: event.target.value }))}
-                      rows={3}
-                    />
-                    <div className="worship-form-actions">
-                      <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<Plus size={18} />}>
-                        {editingWorshipEventId ? "Salvar alterações" : "Criar evento"}
-                      </Button>
-                      {editingWorshipEventId ? (
-                        <Button type="button" variant="secondary" onClick={cancelEditWorshipEvent}>
-                          Cancelar
-                        </Button>
-                      ) : null}
-                    </div>
-                  </form>
 
-                  <form className="worship-form" onSubmit={handleWorshipAssignmentSubmit}>
-                    <div className="modal-section-header">
-                      <strong>Adicionar escalado</strong>
-                      <small>Liste somente membros de arte, louvor, dança, mídia, teatro e som.</small>
-                    </div>
-                    <select
-                      className="catalog-input"
-                      value={worshipAssignmentForm.event_id}
-                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, event_id: event.target.value }))}
-                    >
-                      <option value="">Selecionar evento</option>
-                      {clientData.worshipEvents.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="catalog-input"
-                      value={worshipAssignmentForm.member_id}
-                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, member_id: event.target.value }))}
-                    >
-                      <option value="">Selecionar membro</option>
-                      {worshipAssignableMembers.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.name} - {memberSummaryById[member.id] ?? "Vínculo artístico"}
-                        </option>
-                      ))}
-                      {worshipAssignableMembers.length === 0 ? (
-                        <option value="" disabled>
-                          Nenhum membro elegível encontrado
-                        </option>
-                      ) : null}
-                    </select>
-                    <div className="modal-grid">
-                      <select
-                        className="catalog-input"
-                        value={worshipAssignmentForm.role_id}
-                        onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, role_id: event.target.value, role_name: "" }))}
+                    {worshipFlowStep === 1 ? (
+                      <form className="worship-form" onSubmit={handleWorshipEventSubmit}>
+                        <div className="worship-form-header">
+                          <span className="worship-form-icon"><Music size={16} /></span>
+                          <div>
+                            <strong>{editingWorshipEventId ? "Editar evento" : "Novo evento de louvor"}</strong>
+                            <small>{editingWorshipEventId ? "Atualize os dados do evento." : "Preencha e avance para escalar membros."}</small>
+                          </div>
+                        </div>
+                        <div className="worship-field">
+                          <label>Nome do evento</label>
+                          <input
+                            className="catalog-input"
+                            placeholder="Ex: Culto domingo manhã"
+                            value={worshipEventForm.title}
+                            onChange={(event) => setWorshipEventForm((current) => ({ ...current, title: event.target.value }))}
+                          />
+                        </div>
+                        <div className="modal-grid">
+                          <div className="worship-field">
+                            <label>Tipo</label>
+                            <select
+                              className="catalog-input"
+                              value={worshipEventForm.event_type}
+                              onChange={(event) =>
+                                setWorshipEventForm((current) => ({
+                                  ...current,
+                                  event_type: event.target.value as WorshipEventFormState["event_type"],
+                                }))
+                              }
+                            >
+                              <option value="service">Culto</option>
+                              <option value="rehearsal">Ensaio</option>
+                              <option value="meeting">Reuniao</option>
+                              <option value="other">Outro</option>
+                            </select>
+                          </div>
+                          <div className="worship-field">
+                            <label>Status</label>
+                            <select
+                              className="catalog-input"
+                              value={worshipEventForm.status}
+                              onChange={(event) =>
+                                setWorshipEventForm((current) => ({
+                                  ...current,
+                                  status: event.target.value as WorshipEventFormState["status"],
+                                }))
+                              }
+                            >
+                              <option value="published">Publicado</option>
+                              <option value="draft">Rascunho</option>
+                              <option value="completed">Concluido</option>
+                              <option value="cancelled">Cancelado</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="modal-grid">
+                          <div className="worship-field">
+                            <label>Início</label>
+                            <input
+                              className="catalog-input"
+                              type="datetime-local"
+                              value={worshipEventForm.starts_at}
+                              onChange={(event) => setWorshipEventForm((current) => ({ ...current, starts_at: event.target.value }))}
+                            />
+                          </div>
+                          <div className="worship-field">
+                            <label>Término</label>
+                            <input
+                              className="catalog-input"
+                              type="datetime-local"
+                              value={worshipEventForm.ends_at}
+                              onChange={(event) => setWorshipEventForm((current) => ({ ...current, ends_at: event.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        <div className="worship-field">
+                          <label>Local</label>
+                          <input
+                            className="catalog-input"
+                            placeholder="Ex: Auditório principal"
+                            value={worshipEventForm.location}
+                            onChange={(event) => setWorshipEventForm((current) => ({ ...current, location: event.target.value }))}
+                          />
+                        </div>
+                        <div className="worship-field">
+                          <label>Observações</label>
+                          <textarea
+                            className="catalog-input catalog-textarea"
+                            placeholder="Informações adicionais sobre a escala..."
+                            value={worshipEventForm.notes}
+                            onChange={(event) => setWorshipEventForm((current) => ({ ...current, notes: event.target.value }))}
+                            rows={3}
+                          />
+                        </div>
+                        <div className="worship-form-actions">
+                          <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<Plus size={18} />}>
+                            {editingWorshipEventId ? "Salvar alterações" : "Criar e escalar membros →"}
+                          </Button>
+                          {editingWorshipEventId ? (
+                            <Button type="button" variant="secondary" onClick={cancelEditWorshipEvent}>
+                              Cancelar
+                            </Button>
+                          ) : null}
+                        </div>
+                      </form>
+                    ) : (
+                      <form className="worship-form" onSubmit={handleWorshipAssignmentSubmit}>
+                        <div className="worship-form-header">
+                          <span className="worship-form-icon"><UserPlus size={16} /></span>
+                          <div>
+                            <strong>Adicionar escalado</strong>
+                            <small>Membros de arte, louvor, dança, mídia, teatro e som.</small>
+                          </div>
+                        </div>
+                        <div className="worship-field">
+                          <label>Evento</label>
+                          <select
+                            className="catalog-input"
+                            value={worshipAssignmentForm.event_id}
+                            onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, event_id: event.target.value }))}
+                          >
+                            <option value="">Selecionar evento</option>
+                            {clientData.worshipEvents.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="worship-field">
+                          <label>Membro</label>
+                          <select
+                            className="catalog-input"
+                            value={worshipAssignmentForm.member_id}
+                            onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, member_id: event.target.value }))}
+                          >
+                            <option value="">Selecionar membro</option>
+                            {worshipAssignableMembers.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {member.name} - {memberSummaryById[member.id] ?? "Vínculo artístico"}
+                              </option>
+                            ))}
+                            {worshipAssignableMembers.length === 0 ? (
+                              <option value="" disabled>
+                                Nenhum membro elegível encontrado
+                              </option>
+                            ) : null}
+                          </select>
+                        </div>
+                        <div className="worship-field">
+                          <label>Função</label>
+                          <div className="modal-grid">
+                            <select
+                              className="catalog-input"
+                              value={worshipAssignmentForm.role_id}
+                              onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, role_id: event.target.value, role_name: "" }))}
+                            >
+                              <option value="">Função cadastrada</option>
+                              {clientData.worshipRoles.map((role) => (
+                                <option key={role.id} value={role.id}>
+                                  {role.name}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              className="catalog-input"
+                              placeholder="Ou função manual"
+                              value={worshipAssignmentForm.role_name}
+                              onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, role_name: event.target.value, role_id: "" }))}
+                            />
+                          </div>
+                        </div>
+                        <div className="worship-field">
+                          <label>Horário de chegada</label>
+                          <input
+                            className="catalog-input"
+                            type="datetime-local"
+                            value={worshipAssignmentForm.arrival_at}
+                            onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, arrival_at: event.target.value }))}
+                          />
+                        </div>
+                        <div className="worship-field">
+                          <label>Observações</label>
+                          <textarea
+                            className="catalog-input catalog-textarea"
+                            placeholder="Instruções ou informações para este escalado..."
+                            value={worshipAssignmentForm.notes}
+                            onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, notes: event.target.value }))}
+                            rows={3}
+                          />
+                        </div>
+                        <div className="worship-form-actions">
+                          <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<UserPlus size={18} />}>
+                            Adicionar escalado
+                          </Button>
+                          <Button type="button" variant="secondary" onClick={() => setWorshipFlowStep(1)}>
+                            ← Novo evento
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="worship-flow-list-col">
+                  <div className="worship-flow-list-head">
+                    <strong>Escalas criadas</strong>
+                    <div className="worship-view-toggle">
+                      <button
+                        type="button"
+                        className={worshipViewMode === "list" ? "active" : ""}
+                        onClick={() => setWorshipViewMode("list")}
                       >
-                        <option value="">Funcao cadastrada</option>
-                        {clientData.worshipRoles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        className="catalog-input"
-                        placeholder="Ou funcao manual"
-                        value={worshipAssignmentForm.role_name}
-                        onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, role_name: event.target.value, role_id: "" }))}
-                      />
+                        Lista
+                      </button>
+                      <button
+                        type="button"
+                        className={worshipViewMode === "calendar" ? "active" : ""}
+                        onClick={() => setWorshipViewMode("calendar")}
+                      >
+                        Calendário
+                      </button>
                     </div>
-                    <input
-                      className="catalog-input"
-                      type="datetime-local"
-                      value={worshipAssignmentForm.arrival_at}
-                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, arrival_at: event.target.value }))}
-                    />
-                    <textarea
-                      className="catalog-input catalog-textarea"
-                      placeholder="Observacoes para este escalado"
-                      value={worshipAssignmentForm.notes}
-                      onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, notes: event.target.value }))}
-                      rows={3}
-                    />
-                    <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<UserPlus size={18} />}>
-                      Adicionar escalado
-                    </Button>
-                  </form>
-                </div>
-              ) : null}
+                  </div>
 
               {worshipEmailModalEventId ? (() => {
                 const modalEvent = clientData.worshipEvents.find((e) => e.id === worshipEmailModalEventId);
@@ -6728,6 +6816,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   })}
                 </div>
               )}
+                </div>
+              </div>
             </article>
           ) : null}
 

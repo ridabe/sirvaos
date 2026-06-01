@@ -177,7 +177,21 @@ Objetivo: preparar para clientes reais.
 - Termos/política por tenant.
 - Documentação técnica.
 
-## Etapa 12 - Portal do Membro APP mobile
+## Etapa 12 - modulo de eventos
+
+Objetivo: criar agenda de eventos da igreja e poder disponibilizar para todos os membros que acessarem o sistema indepenendente de permissoes, todos terao a visao do evento.
+
+- Cadastro de evento.
+- Opçãoes de envios por email, whatsapp(para todos os membros da igreja) e push para quem estiver usando ao app(App ainda sera desenvolvido).
+
+## Etapa 13 - modulo de Comunicados
+
+Objetivo: criar comunicados da igreja e poder disponibilizar para todos os membros que acessarem o sistema indepenendente de permissoes, todos terao a visao do comunicado.
+
+- Cadastro de comunicado com opção de criar com imagens e tags, tratamento de cores d fonte, negrito.
+- Opçãoes de envios por email, whatsapp(para todos os membros da igreja) e push para quem estiver usando ao app(App ainda sera desenvolvido).
+
+## Etapa 14 - Portal do Membro APP mobile
 
 Objetivo: entregar valor para membros.
 
@@ -224,3 +238,4 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 - Pendente: notificações push no app mobile (Etapa 12), integração WhatsApp Business API (melhoria futura).
 - Etapa 8 concluída (2026-05-31): Módulo Kids com melhorias em reacao as instruções iniciais
 - Etapa 9 concluída (2026-06-01): Módulo Escola Biblica
+- Etapa 10 concluída (2026-06-01): Módulo Relatorio e Auditoria
