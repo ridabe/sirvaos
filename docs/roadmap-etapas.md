@@ -41,7 +41,7 @@ Objetivo: criar o painel da igreja contratante.
 - Gestão de permissões.
 - Gestão de membros.
 - Visualização dos módulos ativos.
-- Calendário central.
+- Eventos (calendário central da igreja — módulo de Eventos).
 - Comunicados gerais.
 
 Aqui entra o white-label.
@@ -188,10 +188,16 @@ Objetivo: criar agenda de eventos da igreja (nao confundir com eventos da area d
 
 Objetivo: criar comunicados da igreja e poder disponibilizar para todos os membros que acessarem o sistema indepenendente de permissoes, todos terao a visao do comunicado.
 
-- Cadastro de comunicado com opção de criar com imagens e tags, tratamento de cores d fonte, negrito.
+- Cadastro de comunicado, tratamento de cores d fonte, negritoetc, na descrição
 - Opçãoes de envios por email, whatsapp(para todos os membros da igreja) e push para quem estiver usando ao app(App ainda sera desenvolvido).
 
-## Etapa 14 - Portal do Membro APP mobile
+## Etapa 14 - modulo de Midias sociais
+
+Objetivo: criar uma area onde o admin da igreja podera vincular com videos/playlist de um canal do youtube, e os videos deste canal devera ser listado neste modulo para que possa ser visto de dentro do sistema por todos os usuaarios do sistema sem necessidade de permissao.
+
+- Cadastro (CRUD) de canal de midia social
+
+## Etapa 15 - Portal do Membro APP mobile
 
 Objetivo: entregar valor para membros.
 
@@ -241,3 +247,4 @@ Começa como app único modular. A arquitetura deve ficar preparada para separar
 - Etapa 10 concluída (2026-06-01): Módulo Relatorio e Auditoria
 - Etapa 11 concluída (2026-06-01): Produção e Escala — ErrorBoundary global com log no Supabase (`app_error_logs`), LGPD com consentimentos e solicitação de exclusão no portal do membro, termos/política por tenant com versionamento e modal de aceite obrigatório, tab "Política & LGPD" no ClientAdmin, migration `20260604100000_stage_11_production.sql`.
 - Etapa 12 concluída (2026-06-01): Módulo de Eventos — migration `20260605100000_events_stage_12.sql` (ALTER tenant_events com event_type/color/status/ends_at, tabela event_notifications_log, módulo `events` no catálogo); tab "Eventos" no ClientAdmin com calendário mensal, lista com status/tipo/cor, formulário completo, modal de notificações (e-mail via Edge Function send-event-emails + link WhatsApp + push em breve); seção "Próximos eventos" no MemberPortal visível para todos os membros sem restrição de permissão.
+- Etapa 13 concluída (2026-06-01): Módulo de Comunicados — migration `20260606100000_announcements_stage_13.sql` (coluna message_html em tenant_announcements, tabela announcement_notifications_log, módulo `announcements` no catálogo, RLS atualizado); Edge Function `send-announcement-emails` para envio de e-mail HTML com rich text; ClientAdmin com tab "Comunicados" completo: rich text editor, pré-visualização, modal de notificação (e-mail, WhatsApp, push em breve), edição, exclusão; MemberPortal com seção "Comunicados" visível a todos os membros e modal de leitura completa. "Calendário Central" substituído pelo módulo de Eventos já existente (docs atualizados).

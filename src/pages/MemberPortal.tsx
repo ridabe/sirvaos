@@ -1,5 +1,6 @@
 import {
   Baby,
+  Bell,
   BookOpen,
   CalendarCheck,
   CalendarDays,
@@ -88,6 +89,15 @@ type PortalEventRecord = {
 type PortalTenantInfo = {
   name: string;
   contact_phone: string | null;
+};
+
+type PortalAnnouncementRecord = {
+  id: string;
+  title: string;
+  message: string;
+  message_html: string | null;
+  published_at: string;
+  expires_at: string | null;
 };
 
 function normalizeAccessLabel(value: string | null | undefined) {
@@ -311,8 +321,11 @@ export function MemberPortal() {
   const [portalTenantInfo, setPortalTenantInfo] = useState<PortalTenantInfo | null>(null);
   const [eventPreviewOpen, setEventPreviewOpen] = useState(false);
   const [eventPreviewTarget, setEventPreviewTarget] = useState<PortalEventRecord | null>(null);
+  const [announcementPreviewOpen, setAnnouncementPreviewOpen] = useState(false);
+  const [announcementPreviewTarget, setAnnouncementPreviewTarget] = useState<PortalAnnouncementRecord | null>(null);
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
   const [portalEvents, setPortalEvents] = useState<PortalEventRecord[]>([]);
+  const [portalAnnouncements, setPortalAnnouncements] = useState<PortalAnnouncementRecord[]>([]);
   const [memberMinistries, setMemberMinistries] = useState<PortalMinistryRecord[]>([]);
   const [moduleAdminAccesses, setModuleAdminAccesses] = useState<PortalModuleAccessRecord[]>([]);
   const [canManageMembers, setCanManageMembers] = useState(false);
@@ -545,7 +558,7 @@ export function MemberPortal() {
     // Tenant info e eventos são públicos para todo membro do tenant — carregamos
     // antes de qualquer guarda de member_id ou módulo específico.
     if (profileData.tenant_id) {
-      const [tenantInfoRes, eventsRes] = await Promise.all([
+      const [tenantInfoRes, eventsRes, announcementsRes] = await Promise.all([
         supabase
           .from("tenants")
           .select("name, contact_phone")
@@ -560,9 +573,18 @@ export function MemberPortal() {
           .order("event_date", { ascending: true })
           .limit(20)
           .returns<PortalEventRecord[]>(),
+        supabase
+          .from("tenant_announcements")
+          .select("id, title, message, message_html, published_at, expires_at")
+          .eq("tenant_id", profileData.tenant_id)
+          .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+          .order("published_at", { ascending: false })
+          .limit(20)
+          .returns<PortalAnnouncementRecord[]>(),
       ]);
       setPortalTenantInfo(tenantInfoRes.data ?? null);
       setPortalEvents(eventsRes.data ?? []);
+      setPortalAnnouncements(announcementsRes.data ?? []);
     }
 
     if (!profileData.member_id || !profileData.tenant_id) {
@@ -1747,6 +1769,46 @@ export function MemberPortal() {
                     </div>
                     <span style={{ fontSize: "0.72rem", background: "var(--color-bg-subtle)", padding: "2px 8px", borderRadius: 4, color: "var(--color-text-secondary)", flexShrink: 0, whiteSpace: "nowrap" }}>
                       {typeLabels[evt.event_type] ?? evt.event_type}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── Seção: Comunicados ───────────────────────────────────────── */}
+        {portalAnnouncements.length > 0 ? (
+          <section className="member-portal-section">
+            <div className="member-portal-section-head">
+              <div>
+                <h2><Bell size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Comunicados</h2>
+                <p>Avisos e recados da sua igreja.</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {portalAnnouncements.map((ann) => {
+                const excerpt = ann.message.length > 110 ? ann.message.slice(0, 110) + "…" : ann.message;
+                return (
+                  <button
+                    key={ann.id}
+                    type="button"
+                    onClick={() => { setAnnouncementPreviewTarget(ann); setAnnouncementPreviewOpen(true); }}
+                    style={{
+                      width: "100%", textAlign: "left", cursor: "pointer",
+                      background: "var(--color-white)", border: "1px solid var(--color-border)",
+                      borderRadius: 10, padding: "14px 16px",
+                      display: "flex", flexDirection: "column", gap: 4,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <strong style={{ fontSize: "0.9rem" }}>{ann.title}</strong>
+                      <span style={{ fontSize: "0.72rem", background: "var(--color-bg-subtle)", padding: "2px 8px", borderRadius: 4, color: "var(--color-text-secondary)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                        {new Date(ann.published_at).toLocaleDateString("pt-BR")}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                      {excerpt}
                     </span>
                   </button>
                 );
@@ -2955,6 +3017,44 @@ export function MemberPortal() {
 
       {profile?.tenant_id ? (
         <PolicyFooter tenantId={profile.tenant_id} />
+      ) : null}
+
+      {/* ── Modal: Detalhe do Comunicado ────────────────────────────────── */}
+      {announcementPreviewOpen && announcementPreviewTarget ? (
+        <div className="modal-overlay" onClick={() => setAnnouncementPreviewOpen(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Bell size={20} style={{ color: "var(--color-brand-primary)" }} />
+                <strong>Comunicado</strong>
+              </div>
+              <button type="button" onClick={() => setAnnouncementPreviewOpen(false)}><X size={18} /></button>
+            </div>
+            <div style={{ overflowY: "auto", maxHeight: "78vh" }}>
+              <div style={{
+                background: "linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)",
+                padding: "18px 22px",
+              }}>
+                <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#e9d5ff" }}>
+                  📢 Comunicado
+                </p>
+                <h2 style={{ margin: 0, color: "#fff", fontSize: "1.15rem", lineHeight: 1.3 }}>
+                  {announcementPreviewTarget.title}
+                </h2>
+                <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "#c4b5fd" }}>
+                  Publicado em {new Date(announcementPreviewTarget.published_at).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+              <div style={{ padding: "20px 22px", fontSize: "0.95rem", lineHeight: 1.75, color: "#374151" }}>
+                {announcementPreviewTarget.message_html ? (
+                  <div dangerouslySetInnerHTML={{ __html: announcementPreviewTarget.message_html }} />
+                ) : (
+                  <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{announcementPreviewTarget.message}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* ── Modal: Detalhe do Evento ─────────────────────────────────────── */}

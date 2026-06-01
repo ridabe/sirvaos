@@ -45,7 +45,7 @@ Planos:
 Catálogo inicial de módulos:
 
 - Membresia
-- Calendário Central
+- Eventos (substitui Calendário Central)
 - Comunicados
 - Louvor
 - Financeiro

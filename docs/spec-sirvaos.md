@@ -311,7 +311,7 @@ Obrigatórios para todos os tenants:
 - Configuração do tenant.
 - Tema/white-label.
 - Notificações.
-- Calendário central.
+- Eventos (calendário central da igreja).
 - Auditoria.
 - Arquivos/anexos.
 

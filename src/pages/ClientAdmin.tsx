@@ -117,7 +117,9 @@ type AnnouncementRecord = {
   id: string;
   title: string;
   message: string;
+  message_html: string | null;
   published_at: string;
+  expires_at: string | null;
   created_at: string;
 };
 
@@ -656,7 +658,9 @@ const emptyAnnouncementForm: AnnouncementFormState = {
   id: "",
   title: "",
   message: "",
+  message_html: null,
   published_at: new Date().toISOString(),
+  expires_at: null,
   tenant_id: "",
 };
 
@@ -1598,10 +1602,17 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const announcementEditorRef = useRef<HTMLDivElement | null>(null);
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementFormState>(emptyAnnouncementForm);
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
   const [announcementSaveStatus, setAnnouncementSaveStatus] = useState<LoginStatus>("idle");
   const [announcementSaveMessage, setAnnouncementSaveMessage] = useState("");
+  const [announcementNotifyOpen, setAnnouncementNotifyOpen] = useState(false);
+  const [announcementNotifyTarget, setAnnouncementNotifyTarget] = useState<AnnouncementRecord | null>(null);
+  const [announcementNotifyStatus, setAnnouncementNotifyStatus] = useState<LoginStatus>("idle");
+  const [announcementNotifyMessage, setAnnouncementNotifyMessage] = useState("");
+  const [announcementPreviewOpen, setAnnouncementPreviewOpen] = useState(false);
+  const [announcementPreviewTarget, setAnnouncementPreviewTarget] = useState<AnnouncementRecord | null>(null);
   const [themeForm, setThemeForm] = useState<ThemeFormState>(emptyThemeForm);
   const [themeSaveStatus, setThemeSaveStatus] = useState<LoginStatus>("idle");
   const [themeSaveMessage, setThemeSaveMessage] = useState("");
@@ -2295,7 +2306,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .returns<EventRecord[]>(),
         supabase
           .from("tenant_announcements")
-          .select("id, title, message, published_at, created_at")
+          .select("id, title, message, message_html, published_at, expires_at, created_at")
           .eq("tenant_id", tenantId)
           .order("published_at", { ascending: false })
           .returns<AnnouncementRecord[]>(),
@@ -4689,10 +4700,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function openCreateAnnouncementForm() {
-    if (!canManageAnnouncements) {
-      return;
-    }
-
+    if (!canManageAnnouncements) return;
     setAnnouncementForm({
       ...emptyAnnouncementForm,
       tenant_id: clientData?.tenant.id ?? "",
@@ -4701,24 +4709,55 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setAnnouncementSaveStatus("idle");
     setAnnouncementSaveMessage("");
     setIsAnnouncementFormOpen(true);
+    setTimeout(() => {
+      if (announcementEditorRef.current) announcementEditorRef.current.innerHTML = "";
+    }, 0);
   }
 
   function openEditAnnouncementForm(announcement: AnnouncementRecord) {
-    if (!canManageAnnouncements) {
-      return;
-    }
-
-    setAnnouncementForm({
-      ...announcement,
-      tenant_id: clientData?.tenant.id ?? "",
-    });
+    if (!canManageAnnouncements) return;
+    setAnnouncementForm({ ...announcement, tenant_id: clientData?.tenant.id ?? "" });
     setAnnouncementSaveStatus("idle");
     setAnnouncementSaveMessage("");
     setIsAnnouncementFormOpen(true);
+    setTimeout(() => {
+      if (announcementEditorRef.current) {
+        announcementEditorRef.current.innerHTML =
+          sanitizeRichHtml(announcement.message_html) ||
+          (announcement.message ? `<p>${announcement.message}</p>` : "");
+      }
+    }, 0);
   }
 
   function updateAnnouncementForm(field: keyof AnnouncementFormState, value: string) {
     setAnnouncementForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function syncAnnouncementFromEditor() {
+    const editor = announcementEditorRef.current;
+    if (!editor) return;
+    const rawHtml = editor.innerHTML ?? "";
+    const sanitized = sanitizeRichHtml(rawHtml);
+    const plain = editor.textContent ?? "";
+    setAnnouncementForm((current) => ({
+      ...current,
+      message_html: sanitized || null,
+      message: plain.trim(),
+    }));
+  }
+
+  function applyAnnouncementRichCommand(command: string, value?: string) {
+    if (!announcementEditorRef.current) return;
+    announcementEditorRef.current.focus();
+    document.execCommand(command, false, value);
+    syncAnnouncementFromEditor();
+  }
+
+  async function handleDeleteAnnouncement(id: string) {
+    if (!canManageAnnouncements) return;
+    if (!window.confirm("Excluir este comunicado?")) return;
+    await supabase.from("tenant_announcements").delete().eq("id", id);
+    if (profile) await loadClientData(profile.id);
   }
 
   async function handleAnnouncementSubmit(event: FormEvent<HTMLFormElement>) {
@@ -4732,18 +4771,22 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    if (!announcementForm.title.trim() || !announcementForm.message.trim()) {
+    const title = announcementForm.title.trim();
+    const message = announcementForm.message.trim();
+
+    if (!title || !message) {
       setAnnouncementSaveStatus("error");
       setAnnouncementSaveMessage("Informe título e mensagem.");
       return;
     }
 
     const payload = {
-      id: announcementForm.id || undefined,
       tenant_id: clientData?.tenant.id,
-      title: announcementForm.title.trim(),
-      message: announcementForm.message.trim(),
+      title,
+      message,
+      message_html: announcementForm.message_html || null,
       published_at: announcementForm.published_at || new Date().toISOString(),
+      expires_at: announcementForm.expires_at || null,
     };
 
     const result = announcementForm.id
@@ -4760,8 +4803,45 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setAnnouncementSaveMessage(announcementForm.id ? "Comunicado atualizado." : "Comunicado criado.");
     setIsAnnouncementFormOpen(false);
     setAnnouncementForm({ ...emptyAnnouncementForm, tenant_id: clientData?.tenant.id ?? "" });
-    if (profile) {
-      await loadClientData(profile.id);
+    if (profile) await loadClientData(profile.id);
+  }
+
+  async function handleAnnouncementSendEmail() {
+    if (!announcementNotifyTarget || !profile) return;
+    setAnnouncementNotifyStatus("loading");
+    setAnnouncementNotifyMessage("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error("Sessão inválida.");
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-announcement-emails`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ announcement_id: announcementNotifyTarget.id }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Erro ao enviar.");
+
+      await supabase.from("announcement_notifications_log").insert({
+        tenant_id: clientData?.tenant.id,
+        announcement_id: announcementNotifyTarget.id,
+        channel: "email",
+        recipient_count: json.sent ?? 0,
+        sent_by: profile.id,
+        notes: `${json.sent} enviados, ${json.failed} falhos`,
+      });
+
+      setAnnouncementNotifyStatus("success");
+      setAnnouncementNotifyMessage(`E-mails enviados: ${json.sent}. Falhos: ${json.failed}.`);
+    } catch (err) {
+      setAnnouncementNotifyStatus("error");
+      setAnnouncementNotifyMessage(err instanceof Error ? err.message : "Erro ao enviar e-mails.");
     }
   }
 
@@ -9414,30 +9494,111 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="panel-heading">
                 <div>
                   <span>Comunicados gerais</span>
-                  <h4>Mensagens para membros</h4>
+                  <h4>Mensagens para a comunidade</h4>
                 </div>
-                {isTenantAdmin ? (
+                {canManageAnnouncements ? (
                   <button type="button" onClick={openCreateAnnouncementForm}>Novo comunicado</button>
                 ) : null}
               </div>
 
-              <div className="notification-list">
-                {clientData.announcements.map((item) => (
-                  <div key={item.id}>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <small>{new Date(item.published_at).toLocaleDateString("pt-BR")}</small>
-                    </div>
-                    {canManageAnnouncements ? (
-                      <div className="member-actions">
-                        <button type="button" onClick={() => openEditAnnouncementForm(item)}>
-                          <Edit3 size={16} />
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+              {clientData.announcements.length === 0 ? (
+                <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                  <Bell size={32} />
+                  <strong>Nenhum comunicado publicado</strong>
+                  <span>Crie o primeiro comunicado para os membros da igreja.</span>
+                </div>
+              ) : (
+                <div className="notification-list">
+                  {(() => {
+                    const now = new Date();
+                    const active = clientData.announcements.filter(
+                      (a) => !a.expires_at || new Date(a.expires_at) > now
+                    );
+                    const expired = clientData.announcements.filter(
+                      (a) => a.expires_at && new Date(a.expires_at) <= now
+                    );
+                    return [...active, ...expired].map((item) => {
+                      const isExpired = !!item.expires_at && new Date(item.expires_at) <= now;
+                      const excerpt = item.message.length > 120 ? item.message.slice(0, 120) + "…" : item.message;
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            flexDirection: "column", alignItems: "flex-start", gap: 6,
+                            opacity: isExpired ? 0.6 : 1,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <strong style={{ color: isExpired ? "var(--color-text-secondary)" : undefined }}>
+                                {item.title}
+                              </strong>
+                              {isExpired ? (
+                                <em style={{
+                                  fontSize: "0.7rem", fontStyle: "normal", fontWeight: 600,
+                                  background: "var(--color-bg-subtle)", color: "var(--color-text-secondary)",
+                                  padding: "1px 7px", borderRadius: 4,
+                                }}>
+                                  Encerrado
+                                </em>
+                              ) : item.expires_at ? (
+                                <em style={{
+                                  fontSize: "0.7rem", fontStyle: "normal",
+                                  color: "var(--color-text-secondary)",
+                                }}>
+                                  até {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                                </em>
+                              ) : null}
+                              <small>{new Date(item.published_at).toLocaleDateString("pt-BR")}</small>
+                            </div>
+                            <div className="member-actions" style={{ gap: 4 }}>
+                              <button
+                                type="button"
+                                title="Pré-visualizar"
+                                onClick={() => { setAnnouncementPreviewTarget(item); setAnnouncementPreviewOpen(true); }}
+                              >
+                                <Eye size={15} />
+                              </button>
+                              {canManageAnnouncements ? (
+                                <>
+                                  {!isExpired ? (
+                                    <button
+                                      type="button"
+                                      title="Notificar membros"
+                                      onClick={() => {
+                                        setAnnouncementNotifyTarget(item);
+                                        setAnnouncementNotifyStatus("idle");
+                                        setAnnouncementNotifyMessage("");
+                                        setAnnouncementNotifyOpen(true);
+                                      }}
+                                    >
+                                      <Send size={15} />
+                                    </button>
+                                  ) : null}
+                                  <button type="button" title="Editar" onClick={() => openEditAnnouncementForm(item)}>
+                                    <Edit3 size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Excluir"
+                                    style={{ color: "var(--color-error)" }}
+                                    onClick={() => handleDeleteAnnouncement(item.id)}
+                                  >
+                                    <X size={15} />
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                            {excerpt}
+                          </p>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
             </article>
           ) : null}
 
@@ -10667,6 +10828,245 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   {eventNotifyMessage}
                 </p>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Modal: Criar / Editar Comunicado ────────────────────────────── */}
+      {isAnnouncementFormOpen ? (
+        <div className="modal-overlay" onClick={() => setIsAnnouncementFormOpen(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <div>
+                <Bell size={20} />
+                <strong>{announcementForm.id ? "Editar comunicado" : "Novo comunicado"}</strong>
+              </div>
+              <button type="button" onClick={() => setIsAnnouncementFormOpen(false)}><X size={18} /></button>
+            </div>
+            <form className="modal-body" onSubmit={handleAnnouncementSubmit}>
+              <label>
+                <span>Título</span>
+                <input
+                  className="catalog-input"
+                  required
+                  placeholder="Título do comunicado"
+                  value={announcementForm.title}
+                  onChange={(e) => updateAnnouncementForm("title", e.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>Mensagem</span>
+                <div className="rich-editor">
+                  <div className="rich-editor-toolbar" role="toolbar" aria-label="Formatar mensagem">
+                    <button type="button" onClick={() => applyAnnouncementRichCommand("bold")} aria-label="Negrito">
+                      <strong>B</strong>
+                    </button>
+                    <button type="button" onClick={() => applyAnnouncementRichCommand("italic")} aria-label="Itálico">
+                      <em>I</em>
+                    </button>
+                    <button type="button" onClick={() => applyAnnouncementRichCommand("underline")} aria-label="Sublinhar">
+                      <span style={{ textDecoration: "underline", fontWeight: 700 }}>U</span>
+                    </button>
+                    <button type="button" onClick={() => applyAnnouncementRichCommand("insertUnorderedList")} aria-label="Lista">
+                      •
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = prompt("Link (https://...)");
+                        if (url) applyAnnouncementRichCommand("createLink", url);
+                      }}
+                      aria-label="Inserir link"
+                    >
+                      Link
+                    </button>
+                  </div>
+                  <div
+                    ref={announcementEditorRef}
+                    className="rich-editor-area"
+                    contentEditable
+                    onInput={syncAnnouncementFromEditor}
+                    onBlur={syncAnnouncementFromEditor}
+                    data-placeholder="Escreva o comunicado aqui..."
+                  />
+                </div>
+              </label>
+
+              <div className="modal-grid">
+                <label>
+                  <span>Data de publicação</span>
+                  <input
+                    type="datetime-local"
+                    className="catalog-input"
+                    value={announcementForm.published_at ? announcementForm.published_at.slice(0, 16) : ""}
+                    onChange={(e) => updateAnnouncementForm("published_at", e.target.value ? new Date(e.target.value).toISOString() : new Date().toISOString())}
+                  />
+                </label>
+                <label>
+                  <span>Válido até (opcional)</span>
+                  <input
+                    type="datetime-local"
+                    className="catalog-input"
+                    value={announcementForm.expires_at ? announcementForm.expires_at.slice(0, 16) : ""}
+                    onChange={(e) => updateAnnouncementForm("expires_at", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                  />
+                  <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
+                    Após esta data o comunicado some para os membros.
+                  </small>
+                </label>
+              </div>
+
+              {announcementSaveMessage ? (
+                <p className={`login-feedback ${announcementSaveStatus}`}>{announcementSaveMessage}</p>
+              ) : null}
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setIsAnnouncementFormOpen(false)}>
+                  Cancelar
+                </button>
+                <Button type="submit" disabled={announcementSaveStatus === "loading"} icon={<ScrollText size={16} />}>
+                  {announcementSaveStatus === "loading" ? "Salvando..." : announcementForm.id ? "Salvar alterações" : "Publicar comunicado"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Modal: Notificar membros (comunicado) ───────────────────────── */}
+      {announcementNotifyOpen && announcementNotifyTarget ? (
+        <div className="modal-overlay" onClick={() => setAnnouncementNotifyOpen(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div>
+                <Send size={20} />
+                <strong>Notificar membros</strong>
+              </div>
+              <button type="button" onClick={() => setAnnouncementNotifyOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ background: "var(--color-bg-subtle)", borderRadius: 8, padding: "12px 16px", marginBottom: 16 }}>
+                <strong style={{ fontSize: "0.95rem" }}>{announcementNotifyTarget.title}</strong>
+                <p style={{ margin: "4px 0 0", fontSize: "0.825rem", color: "var(--color-text-secondary)" }}>
+                  Publicado em {new Date(announcementNotifyTarget.published_at).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+
+              <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: 16 }}>
+                Escolha como deseja notificar todos os membros ativos sobre este comunicado:
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* E-mail */}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Mail size={18} style={{ color: "var(--color-primary)" }} />
+                      <strong style={{ fontSize: "0.9rem" }}>E-mail</strong>
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={announcementNotifyStatus === "loading"}
+                      onClick={handleAnnouncementSendEmail}
+                    >
+                      {announcementNotifyStatus === "loading" ? "Enviando..." : "Enviar e-mails"}
+                    </Button>
+                  </div>
+                  <small style={{ color: "var(--color-text-secondary)" }}>
+                    Envia e-mail para todos os membros ativos com endereço cadastrado.
+                  </small>
+                </div>
+
+                {/* WhatsApp */}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <MessageCircle size={18} style={{ color: "#25d366" }} />
+                      <strong style={{ fontSize: "0.9rem" }}>WhatsApp</strong>
+                    </div>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `📢 *${announcementNotifyTarget.title}*\n\n${announcementNotifyTarget.message}\n\nEste comunicado foi enviado pela gestão da igreja.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        background: "#25d366", color: "#fff", borderRadius: 6,
+                        padding: "6px 14px", fontSize: "0.85rem", fontWeight: 600,
+                        textDecoration: "none",
+                      }}
+                    >
+                      Abrir WhatsApp
+                    </a>
+                  </div>
+                  <small style={{ color: "var(--color-text-secondary)" }}>
+                    Abre o WhatsApp com mensagem pré-preenchida para envio manual.
+                  </small>
+                </div>
+
+                {/* Push */}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px", opacity: 0.55 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <Bell size={18} />
+                    <strong style={{ fontSize: "0.9rem" }}>Push notification</strong>
+                    <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>Em breve</em>
+                  </div>
+                  <small style={{ color: "var(--color-text-secondary)" }}>
+                    Disponível quando o aplicativo móvel (Etapa 14) for lançado.
+                  </small>
+                </div>
+              </div>
+
+              {announcementNotifyMessage ? (
+                <p className={`login-feedback ${announcementNotifyStatus}`} style={{ marginTop: 12 }}>
+                  {announcementNotifyMessage}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Modal: Pré-visualização de Comunicado ───────────────────────── */}
+      {announcementPreviewOpen && announcementPreviewTarget ? (
+        <div className="modal-overlay" onClick={() => setAnnouncementPreviewOpen(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Eye size={20} />
+                <strong>Pré-visualização</strong>
+              </div>
+              <button type="button" onClick={() => setAnnouncementPreviewOpen(false)}><X size={18} /></button>
+            </div>
+            <div style={{ padding: "20px 22px", overflowY: "auto", maxHeight: "75vh" }}>
+              <div style={{
+                background: "linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)",
+                borderRadius: "10px 10px 0 0",
+                padding: "18px 22px",
+              }}>
+                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#e9d5ff" }}>
+                  📢 Comunicado
+                </p>
+                <h2 style={{ margin: 0, color: "#fff", fontSize: "1.25rem" }}>{announcementPreviewTarget.title}</h2>
+                <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "#c4b5fd" }}>
+                  Publicado em {new Date(announcementPreviewTarget.published_at).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+              <div style={{
+                border: "1px solid #e5e7eb", borderTop: "none",
+                borderRadius: "0 0 10px 10px",
+                padding: "20px 22px",
+                fontSize: "0.95rem", lineHeight: 1.75, color: "#374151",
+              }}>
+                {announcementPreviewTarget.message_html ? (
+                  <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(announcementPreviewTarget.message_html) }} />
+                ) : (
+                  <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{announcementPreviewTarget.message}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
