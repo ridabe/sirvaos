@@ -24,7 +24,6 @@ export function PolicyFooter({ tenantId, entityName, variant = "standalone" }: P
 
   useEffect(() => {
     void loadPolicy();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
   async function loadPolicy() {

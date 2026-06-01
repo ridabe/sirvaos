@@ -6,11 +6,13 @@ interface EventRow {
   id: string;
   title: string;
   description: string | null;
+  description_html?: string | null;
   location: string | null;
   event_date: string;
   ends_at: string | null;
   event_type: string;
   tenant_id: string;
+  cover_image_url?: string | null;
 }
 
 interface MemberRow {
@@ -21,6 +23,7 @@ interface MemberRow {
 
 interface TenantRow {
   name: string;
+  contact_phone?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -86,7 +89,7 @@ Deno.serve(async (req) => {
   // Buscar evento
   const { data: event, error: eventError } = await supabase
     .from('tenant_events')
-    .select('id, title, description, location, event_date, ends_at, event_type, tenant_id')
+    .select('id, title, description, description_html, location, event_date, ends_at, event_type, tenant_id, cover_image_url')
     .eq('id', event_id)
     .single<EventRow>();
 
@@ -100,7 +103,7 @@ Deno.serve(async (req) => {
   // Buscar nome do tenant
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('name')
+    .select('name, contact_phone')
     .eq('id', event.tenant_id)
     .single<TenantRow>();
 
@@ -146,12 +149,14 @@ Deno.serve(async (req) => {
     const emailHtml = buildEmailHtml({
       memberName: member.name,
       tenantName: fromName,
+      tenantPhone: tenant?.contact_phone ?? null,
       eventTitle: event.title,
       eventDate: eventDateFormatted,
       endsAt: endsAtFormatted,
       location: event.location,
       description: event.description,
-      eventType: event.event_type,
+      descriptionHtml: event.description_html ?? null,
+      bannerUrl: resolveEventBannerUrl(supabaseUrl, event.cover_image_url ?? null),
     });
 
     try {
@@ -191,20 +196,20 @@ Deno.serve(async (req) => {
 function buildEmailHtml(params: {
   memberName: string;
   tenantName: string;
+  tenantPhone: string | null;
   eventTitle: string;
   eventDate: string;
   endsAt: string | null;
   location: string | null;
   description: string | null;
-  eventType: string;
+  descriptionHtml: string | null;
+  bannerUrl: string | null;
 }): string {
-  const { memberName, tenantName, eventTitle, eventDate, endsAt, location, description, eventType } = params;
-
-  const typeLabels: Record<string, string> = {
-    culto: 'Culto', conferencia: 'Conferência', retiro: 'Retiro',
-    jovens: 'Jovens', infantil: 'Infantil', social: 'Social', outro: 'Evento',
-  };
-  const typeLabel = typeLabels[eventType] ?? 'Evento';
+  const { memberName, tenantName, tenantPhone, eventTitle, eventDate, endsAt, location, description, descriptionHtml, bannerUrl } = params;
+  const safeRich = sanitizeRichHtml(descriptionHtml);
+  const safePlain = description ? escapeHtml(description) : '';
+  const detailsHtml = safeRich || (safePlain ? `<p style="margin:0;">${safePlain}</p>` : '');
+  const contactPhone = (tenantPhone ?? '').trim();
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -217,62 +222,32 @@ function buildEmailHtml(params: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;">
-          <!-- Header -->
+        <table width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
           <tr>
-            <td style="background:#6d28d9;padding:32px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${escapeHtml(tenantName)}</h1>
-              <p style="margin:8px 0 0;color:#e9d5ff;font-size:14px;">Agenda da Igreja</p>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px;">
+            <td style="padding:0 0 14px;">
               <p style="margin:0 0 8px;font-size:16px;color:#374151;">Olá, <strong>${escapeHtml(memberName)}</strong>!</p>
-              <p style="margin:0 0 24px;font-size:15px;color:#6b7280;">
-                Você está convidado(a) para o próximo evento:
-              </p>
-
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:8px 0;">
-                    <span style="font-size:11px;font-weight:600;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;">${typeLabel}</span>
-                    <p style="margin:4px 0 0;font-size:18px;font-weight:700;color:#111827;">${escapeHtml(eventTitle)}</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:8px 0;border-top:1px solid #e5e7eb;">
-                    <span style="font-size:11px;font-weight:600;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;">📅 Data e Hora</span>
-                    <p style="margin:4px 0 0;font-size:14px;color:#374151;">
-                      ${escapeHtml(eventDate)}${endsAt ? ` até ${escapeHtml(endsAt)}` : ''}
-                    </p>
-                  </td>
-                </tr>
-                ${location ? `
-                <tr>
-                  <td style="padding:8px 0;border-top:1px solid #e5e7eb;">
-                    <span style="font-size:11px;font-weight:600;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;">📍 Local</span>
-                    <p style="margin:4px 0 0;font-size:14px;color:#374151;">${escapeHtml(location)}</p>
-                  </td>
-                </tr>` : ''}
-                ${description ? `
-                <tr>
-                  <td style="padding:8px 0;border-top:1px solid #e5e7eb;">
-                    <span style="font-size:11px;font-weight:600;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;">ℹ️ Detalhes</span>
-                    <p style="margin:4px 0 0;font-size:14px;color:#374151;">${escapeHtml(description)}</p>
-                  </td>
-                </tr>` : ''}
-              </table>
-
-              <p style="margin:0;font-size:14px;color:#9ca3af;">
-                Este e-mail foi enviado pela administração de ${escapeHtml(tenantName)} via SirvaOS.
+              <p style="margin:0;font-size:15px;color:#6b7280;">
+                Confira os detalhes do próximo evento:
               </p>
             </td>
           </tr>
-          <!-- Footer -->
           <tr>
-            <td style="padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;">© SirvaOS · Gestão de igrejas</p>
+            <td>
+              ${buildEventCardHtml({
+                tenantName,
+                tenantPhone: contactPhone || null,
+                eventTitle,
+                eventDate,
+                endsAt,
+                location,
+                detailsHtml,
+                bannerUrl,
+              })}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 0 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">Este e-mail foi enviado pela administração de ${escapeHtml(tenantName)} via SirvaOS.</p>
             </td>
           </tr>
         </table>
@@ -281,6 +256,84 @@ function buildEmailHtml(params: {
   </table>
 </body>
 </html>`;
+}
+
+function resolveEventBannerUrl(supabaseUrl: string, value: string | null): string | null {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/event-banners/${value}`;
+}
+
+function sanitizeRichHtml(input: string | null): string {
+  const html = String(input ?? '').trim();
+  if (!html) return '';
+
+  const withoutDanger = html
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/\s*>/gi, '')
+    .replace(/\son\w+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, '')
+    .replace(/\s(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, '')
+    .replace(/\shref\s*=\s*(["'])(?!https?:\/\/|mailto:)[\s\S]*?\1/gi, '');
+
+  const strippedUnknownTags = withoutDanger
+    .replace(/<(?!\/?(p|br|strong|em|u|ul|ol|li|a)\b)[^>]*>/gi, '')
+    .replace(/<\/(?!p|br|strong|em|u|ul|ol|li|a\b)[^>]*>/gi, '');
+
+  return strippedUnknownTags.trim();
+}
+
+function buildEventCardHtml(params: {
+  tenantName: string;
+  tenantPhone: string | null;
+  eventTitle: string;
+  eventDate: string;
+  endsAt: string | null;
+  location: string | null;
+  detailsHtml: string;
+  bannerUrl: string | null;
+}): string {
+  const { tenantName, tenantPhone, eventTitle, eventDate, endsAt, location, detailsHtml, bannerUrl } = params;
+
+  return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+  ${bannerUrl ? `
+  <tr>
+    <td style="padding:0;">
+      <img src="${escapeHtml(bannerUrl)}" alt="${escapeHtml(eventTitle)}" style="display:block;width:100%;height:auto;max-height:260px;object-fit:cover;" />
+    </td>
+  </tr>` : ''}
+  <tr>
+    <td style="padding:22px 22px 16px;">
+      <div style="font-size:22px;line-height:1.25;font-weight:800;color:#111827;margin:0 0 8px;">
+        ${escapeHtml(eventTitle)}
+      </div>
+      <div style="font-size:13px;line-height:1.4;color:#6b7280;">
+        <div style="margin:0 0 4px;">📅 ${escapeHtml(eventDate)}${endsAt ? ` até ${escapeHtml(endsAt)}` : ''}</div>
+        ${location ? `<div style="margin:0;">📍 ${escapeHtml(location)}</div>` : ''}
+      </div>
+    </td>
+  </tr>
+  ${detailsHtml ? `
+  <tr>
+    <td style="padding:0 22px 18px;">
+      <div style="font-size:14px;line-height:1.6;color:#374151;">
+        ${detailsHtml}
+      </div>
+    </td>
+  </tr>` : ''}
+  <tr>
+    <td style="padding:14px 22px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td style="font-size:12px;color:#6b7280;">
+            <strong style="color:#111827;">${escapeHtml(tenantName)}</strong>
+          </td>
+          ${tenantPhone ? `<td align="right" style="font-size:12px;color:#6b7280;">☎ ${escapeHtml(tenantPhone)}</td>` : `<td></td>`}
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`.trim();
 }
 
 function escapeHtml(str: string): string {

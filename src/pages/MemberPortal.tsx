@@ -22,6 +22,7 @@ import {
 import { useEffect, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
+import { renderEventCardHtml } from "../lib/eventCardTemplate";
 import { supabase } from "../lib/supabase";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
@@ -75,11 +76,18 @@ type PortalEventRecord = {
   id: string;
   title: string;
   description: string | null;
+  description_html?: string | null;
   location: string | null;
   event_date: string;
   ends_at: string | null;
   event_type: string;
   color: string;
+  cover_image_url?: string | null;
+};
+
+type PortalTenantInfo = {
+  name: string;
+  contact_phone: string | null;
 };
 
 function normalizeAccessLabel(value: string | null | undefined) {
@@ -300,6 +308,7 @@ export function MemberPortal() {
   const [loginMessage, setLoginMessage] = useState("");
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
+  const [portalTenantInfo, setPortalTenantInfo] = useState<PortalTenantInfo | null>(null);
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
   const [portalEvents, setPortalEvents] = useState<PortalEventRecord[]>([]);
   const [memberMinistries, setMemberMinistries] = useState<PortalMinistryRecord[]>([]);
@@ -367,7 +376,6 @@ export function MemberPortal() {
     if (loadStatus === "ready" && profile?.tenant_id) {
       void checkPolicyAcceptance(profile.tenant_id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadStatus, profile?.tenant_id]);
 
   async function checkPolicyAcceptance(tenantId: string) {
@@ -770,10 +778,17 @@ export function MemberPortal() {
 
     setSelectedBibleSchoolClassId((current) => current ?? bibleClasses[0]!.id);
 
+    const tenantInfoResult = await supabase
+      .from("tenants")
+      .select("name, contact_phone")
+      .eq("id", profileData.tenant_id)
+      .single<PortalTenantInfo>();
+    setPortalTenantInfo(tenantInfoResult.data ?? null);
+
     // Eventos públicos (todos os membros veem independente de permissão)
     const eventsResult = await supabase
       .from("tenant_events")
-      .select("id, title, description, location, event_date, ends_at, event_type, color")
+      .select("id, title, description, description_html, location, event_date, ends_at, event_type, color, cover_image_url")
       .eq("tenant_id", profileData.tenant_id)
       .eq("status", "publicado")
       .gte("event_date", new Date().toISOString())
@@ -1695,49 +1710,33 @@ export function MemberPortal() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {portalEvents.map((evt) => {
-                const eventDate = new Date(evt.event_date);
-                const typeLabels: Record<string, string> = {
-                  culto: "Culto", conferencia: "Conferência", retiro: "Retiro",
-                  jovens: "Jovens", infantil: "Infantil", social: "Social", outro: "Evento",
-                };
-                const typeLabel = typeLabels[evt.event_type] ?? "Evento";
+                const tenantName = portalTenantInfo?.name ?? "Igreja";
+                const tenantPhone = portalTenantInfo?.contact_phone ?? null;
+                const cover = evt.cover_image_url ?? null;
+                const bannerUrl = cover
+                  ? /^https?:\/\//i.test(cover)
+                    ? cover
+                    : supabase.storage.from("event-banners").getPublicUrl(cover).data.publicUrl
+                  : null;
+                const cardHtml = renderEventCardHtml(
+                  {
+                    title: evt.title,
+                    event_date: evt.event_date,
+                    ends_at: evt.ends_at,
+                    location: evt.location,
+                    description: evt.description,
+                    description_html: evt.description_html ?? null,
+                    cover_image_url: evt.cover_image_url ?? null,
+                  },
+                  { name: tenantName, contact_phone: tenantPhone },
+                  { bannerUrl },
+                );
                 return (
                   <div
                     key={evt.id}
-                    style={{
-                      display: "flex", gap: 14, alignItems: "flex-start",
-                      background: "var(--color-bg-subtle)", borderRadius: 10,
-                      padding: "14px 16px",
-                      borderLeft: `4px solid ${evt.color ?? "#6d28d9"}`,
-                    }}
-                  >
-                    <div style={{ textAlign: "center", minWidth: 44 }}>
-                      <div style={{ fontSize: "1.4rem", fontWeight: 700, color: evt.color ?? "#6d28d9", lineHeight: 1 }}>
-                        {eventDate.getDate()}
-                      </div>
-                      <div style={{ fontSize: "0.7rem", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-                        {eventDate.toLocaleString("pt-BR", { month: "short" })}
-                      </div>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                        <strong style={{ fontSize: "0.95rem" }}>{evt.title}</strong>
-                        <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg)", padding: "1px 7px", borderRadius: 4, fontStyle: "normal" }}>
-                          {typeLabel}
-                        </em>
-                      </div>
-                      <div style={{ fontSize: "0.825rem", color: "var(--color-text-secondary)" }}>
-                        {eventDate.toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
-                        {evt.ends_at ? ` às ${new Date(evt.ends_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
-                        {evt.location ? ` · ${evt.location}` : ""}
-                      </div>
-                      {evt.description ? (
-                        <div style={{ fontSize: "0.825rem", color: "var(--color-text-secondary)", marginTop: 4 }}>
-                          {evt.description}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+                    style={{ display: "flex", justifyContent: "center" }}
+                    dangerouslySetInnerHTML={{ __html: cardHtml }}
+                  ></div>
                 );
               })}
             </div>

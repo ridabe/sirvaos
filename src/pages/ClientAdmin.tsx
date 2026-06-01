@@ -41,6 +41,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
+import { htmlToPlainText, sanitizeRichHtml } from "../lib/eventCardTemplate";
 import { supabase } from "../lib/supabase";
 import {
   createWorshipEmailCampaign,
@@ -101,6 +102,7 @@ type EventRecord = {
   id: string;
   title: string;
   description: string | null;
+  description_html?: string | null;
   location: string | null;
   event_date: string;
   ends_at: string | null;
@@ -639,6 +641,7 @@ const emptyEventForm: EventFormState = {
   id: "",
   title: "",
   description: "",
+  description_html: null,
   location: "",
   event_date: "",
   ends_at: null,
@@ -1561,6 +1564,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [eventSaveStatus, setEventSaveStatus] = useState<LoginStatus>("idle");
   const [eventSaveMessage, setEventSaveMessage] = useState("");
+  const [eventBannerFile, setEventBannerFile] = useState<File | null>(null);
+  const [eventBannerPreviewUrl, setEventBannerPreviewUrl] = useState<string | null>(null);
+  const [eventBannerUploadStatus, setEventBannerUploadStatus] = useState<LoginStatus>("idle");
+  const [eventBannerUploadMessage, setEventBannerUploadMessage] = useState("");
+  const eventDescriptionEditorRef = useRef<HTMLDivElement | null>(null);
   const [eventViewMode, setEventViewMode] = useState<"list" | "calendar">("list");
   const [eventCalendarMonth, setEventCalendarMonth] = useState(() => {
     const now = new Date();
@@ -2007,7 +2015,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   useEffect(() => {
     if (activeTab !== "policies" || demoMode || !profile?.tenant_id) return;
     void loadPolicies(profile.tenant_id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, demoMode, profile?.tenant_id]);
 
   async function loadPolicies(tenantId: string) {
@@ -2280,7 +2287,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .returns<FamilyMemberRecord[]>(),
         supabase
           .from("tenant_events")
-          .select("id, title, description, location, event_date, ends_at, event_type, color, status, cover_image_url, created_at")
+          .select("id, title, description, description_html, location, event_date, ends_at, event_type, color, status, cover_image_url, created_at")
           .eq("tenant_id", tenantId)
           .order("event_date", { ascending: true })
           .returns<EventRecord[]>(),
@@ -4039,6 +4046,136 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
   }
 
+  const EVENT_BANNERS_BUCKET = "event-banners";
+
+  function resolveEventBannerUrl(value: string | null): string | null {
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    const { data } = supabase.storage.from(EVENT_BANNERS_BUCKET).getPublicUrl(value);
+    return data?.publicUrl ?? null;
+  }
+
+  function escapePlainTextAsHtml(text: string): string {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function syncEventDescriptionFromEditor() {
+    const editor = eventDescriptionEditorRef.current;
+    if (!editor) return;
+    const sanitized = sanitizeRichHtml(editor.innerHTML);
+    const plain = sanitized ? htmlToPlainText(sanitized) : "";
+    setEventForm((current) => ({
+      ...current,
+      description_html: sanitized || null,
+      description: plain,
+    }));
+  }
+
+  function applyEventRichCommand(command: string, value?: string) {
+    if (!eventDescriptionEditorRef.current) return;
+    eventDescriptionEditorRef.current.focus();
+    document.execCommand(command, false, value);
+    syncEventDescriptionFromEditor();
+  }
+
+  async function uploadEventBanner(file: File, eventId: string) {
+    if (!clientData?.tenant?.id || !eventId) {
+      return { ok: false as const, message: "Dados do tenant ou evento inválidos." };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      setEventBannerUploadStatus("error");
+      setEventBannerUploadMessage("Sessão expirada. Faça login novamente para enviar a imagem do evento.");
+      return { ok: false as const, message: "NO_SESSION" };
+    }
+
+    setEventBannerUploadStatus("loading");
+    setEventBannerUploadMessage("");
+
+    const safeName = (file.name || "banner").replace(/[^\w.-]+/g, "-");
+    const objectKey = `${clientData.tenant.id}/${eventId}/${Date.now()}-${safeName}`;
+    const uploadResult = await supabase.storage.from(EVENT_BANNERS_BUCKET).upload(objectKey, file, {
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+
+    if (uploadResult.error) {
+      const rawError = uploadResult.error.message ?? "UPLOAD_ERROR";
+      const looksLikeSchemaError = /invalid or incompatible/i.test(rawError);
+      if (looksLikeSchemaError) {
+        const fallbackBucket = "tenant-logos";
+        const fallbackKey = `${clientData.tenant.id}/events/${eventId}/banner`;
+        const fallbackUpload = await supabase.storage.from(fallbackBucket).upload(fallbackKey, file, {
+          upsert: true,
+          contentType: file.type || undefined,
+        });
+
+        if (!fallbackUpload.error) {
+          const fallbackPublicUrl = supabase.storage.from(fallbackBucket).getPublicUrl(fallbackKey).data.publicUrl;
+          setEventForm((current) => ({ ...current, cover_image_url: fallbackPublicUrl }));
+          setEventBannerUploadStatus("success");
+          setEventBannerUploadMessage("Imagem enviada.");
+          return { ok: true as const, objectKey: fallbackPublicUrl };
+        }
+      }
+
+      setEventBannerUploadStatus("error");
+      const details = uploadResult.error.message ? ` Detalhes: ${uploadResult.error.message}` : "";
+      const debug = ` (tenant=${clientData.tenant.id} event=${eventId} path=${objectKey})`;
+      setEventBannerUploadMessage(
+        `Não foi possível enviar a imagem do evento. Verifique o bucket \`${EVENT_BANNERS_BUCKET}\` e políticas de acesso.${details}${debug}`,
+      );
+      return { ok: false as const, message: uploadResult.error.message ?? "UPLOAD_ERROR" };
+    }
+
+    setEventForm((current) => ({ ...current, cover_image_url: objectKey }));
+    setEventBannerUploadStatus("success");
+    setEventBannerUploadMessage("Imagem enviada.");
+
+    return { ok: true as const, objectKey };
+  }
+
+  async function handleEventBannerChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setEventBannerFile(file);
+    setEventBannerPreviewUrl(previewUrl);
+    setEventBannerUploadStatus("idle");
+    setEventBannerUploadMessage("");
+
+    if (eventForm.id) {
+      await uploadEventBanner(file, eventForm.id);
+    }
+  }
+
+  async function handleRemoveEventBanner() {
+    setEventBannerUploadStatus("loading");
+    setEventBannerUploadMessage("");
+
+    const path = eventForm.cover_image_url;
+    if (path && !/^https?:\/\//i.test(path)) {
+      await supabase.storage.from(EVENT_BANNERS_BUCKET).remove([path]);
+    }
+
+    if (eventForm.id) {
+      await supabase.from("tenant_events").update({ cover_image_url: null, updated_at: new Date().toISOString() }).eq("id", eventForm.id);
+    }
+
+    setEventForm((current) => ({ ...current, cover_image_url: null }));
+    setEventBannerFile(null);
+    setEventBannerPreviewUrl(null);
+    setEventBannerUploadStatus("success");
+    setEventBannerUploadMessage("Imagem removida.");
+  }
+
   function openCreateEventForm() {
     if (!canManageEvents) {
       return;
@@ -4047,6 +4184,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventForm({ ...emptyEventForm, tenant_id: clientData?.tenant.id ?? "" });
     setEventSaveStatus("idle");
     setEventSaveMessage("");
+    setEventBannerFile(null);
+    setEventBannerPreviewUrl(null);
+    setEventBannerUploadStatus("idle");
+    setEventBannerUploadMessage("");
     setIsEventFormOpen(true);
   }
 
@@ -4058,12 +4199,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventForm({ ...eventRecord, tenant_id: clientData?.tenant.id ?? "" });
     setEventSaveStatus("idle");
     setEventSaveMessage("");
+    setEventBannerFile(null);
+    setEventBannerPreviewUrl(resolveEventBannerUrl(eventRecord.cover_image_url));
+    setEventBannerUploadStatus("idle");
+    setEventBannerUploadMessage("");
     setIsEventFormOpen(true);
   }
 
   function updateEventForm(field: keyof EventFormState, value: string) {
     setEventForm((current) => ({ ...current, [field]: value }));
   }
+
+  useEffect(() => {
+    if (!isEventFormOpen) return;
+    const editor = eventDescriptionEditorRef.current;
+    if (!editor) return;
+    const initial = sanitizeRichHtml(eventForm.description_html) || (eventForm.description ? `<p>${escapePlainTextAsHtml(eventForm.description)}</p>` : "");
+    editor.innerHTML = initial;
+  }, [isEventFormOpen, eventForm.id]);
 
   async function handleEventSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4082,10 +4235,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
+    const rawEditorHtml = eventDescriptionEditorRef.current?.innerHTML ?? eventForm.description_html ?? "";
+    const descriptionHtml = sanitizeRichHtml(rawEditorHtml);
+    const descriptionPlain = (descriptionHtml ? htmlToPlainText(descriptionHtml) : eventForm.description ?? "").trim();
+
     const payload = {
       tenant_id: clientData?.tenant.id,
       title: eventForm.title.trim(),
-      description: eventForm.description?.trim() || null,
+      description: descriptionPlain || null,
+      description_html: descriptionHtml || null,
       location: eventForm.location?.trim() || null,
       event_date: eventForm.event_date,
       ends_at: eventForm.ends_at || null,
@@ -4096,20 +4254,57 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       updated_at: new Date().toISOString(),
     };
 
-    const result = eventForm.id
-      ? await supabase.from("tenant_events").update(payload).eq("id", eventForm.id)
-      : await supabase.from("tenant_events").insert({ ...payload, created_by: profile?.id });
+    if (eventForm.id) {
+      const result = await supabase.from("tenant_events").update(payload).eq("id", eventForm.id);
+      if (result.error) {
+        setEventSaveStatus("error");
+        setEventSaveMessage("Não foi possível salvar o evento.");
+        return;
+      }
+    } else {
+      const insertResult = await supabase
+        .from("tenant_events")
+        .insert({ ...payload, created_by: profile?.id, cover_image_url: null })
+        .select("id")
+        .single<{ id: string }>();
 
-    if (result.error) {
-      setEventSaveStatus("error");
-      setEventSaveMessage("Não foi possível salvar o evento.");
-      return;
+      if (insertResult.error || !insertResult.data?.id) {
+        setEventSaveStatus("error");
+        setEventSaveMessage("Não foi possível salvar o evento.");
+        return;
+      }
+
+      const createdEventId = insertResult.data.id;
+      if (eventBannerFile) {
+        const uploadResult = await uploadEventBanner(eventBannerFile, createdEventId);
+        if (uploadResult.ok) {
+          const updateBannerResult = await supabase
+            .from("tenant_events")
+            .update({ cover_image_url: uploadResult.objectKey, updated_at: new Date().toISOString() })
+            .eq("id", createdEventId);
+          if (updateBannerResult.error) {
+            setEventSaveStatus("error");
+            setEventSaveMessage("Evento criado, mas não foi possível salvar o banner.");
+            setEventForm((current) => ({ ...current, id: createdEventId, cover_image_url: uploadResult.objectKey }));
+            return;
+          }
+        } else {
+          setEventSaveStatus("error");
+          setEventSaveMessage(`Evento criado, mas não foi possível enviar o banner. ${uploadResult.message ?? ""}`.trim());
+          setEventForm((current) => ({ ...current, id: createdEventId }));
+          return;
+        }
+      }
     }
 
     setEventSaveStatus("success");
     setEventSaveMessage(eventForm.id ? "Evento atualizado." : "Evento criado.");
     setIsEventFormOpen(false);
     setEventForm({ ...emptyEventForm, tenant_id: clientData?.tenant.id ?? "" });
+    setEventBannerFile(null);
+    setEventBannerPreviewUrl(null);
+    setEventBannerUploadStatus("idle");
+    setEventBannerUploadMessage("");
     if (profile) {
       await loadClientData(profile.id);
     }
@@ -4145,7 +4340,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const token = sessionData?.session?.access_token;
 
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-event-emails`,
+        `${import.meta.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-event-emails`,
         {
           method: "POST",
           headers: {
@@ -10182,126 +10377,184 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       ) : null}
       {/* ── Modal: Formulário de Evento ─────────────────────────────────── */}
       {isEventFormOpen ? (
-        <div className="modal-overlay" onClick={() => setIsEventFormOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Cadastro de evento">
+          <div className="modal-card">
             <div className="modal-header">
               <div>
-                <CalendarDays size={20} />
-                <strong>{eventForm.id ? "Editar evento" : "Novo evento"}</strong>
+                <span>Módulo de Eventos</span>
+                <h2>{eventForm.id ? "Editar evento" : "Novo evento"}</h2>
               </div>
-              <button type="button" onClick={() => setIsEventFormOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setIsEventFormOpen(false)}>
+                <X size={18} />
+              </button>
             </div>
-            <form onSubmit={handleEventSubmit}>
-              <div className="modal-body">
-                <label>
-                  <span>Título *</span>
+
+            <form className="modal-body" onSubmit={handleEventSubmit}>
+              <label>
+                <span>Título *</span>
+                <input
+                  className="catalog-input"
+                  placeholder="Ex.: Culto de Domingo, Conferência de Jovens"
+                  value={eventForm.title}
+                  onChange={(e) => updateEventForm("title", e.target.value)}
+                  required
+                />
+              </label>
+
+              <div className="modal-section">
+                <div className="modal-section-header">
+                  <strong>Banner do evento (opcional)</strong>
+                  <small>Imagem exibida no topo do card do evento (e-mail e portal do membro).</small>
+                </div>
+                {eventBannerPreviewUrl ? (
+                  <img src={eventBannerPreviewUrl} alt="Banner do evento" className="event-banner-preview" />
+                ) : null}
+                <div className="event-banner-actions">
                   <input
                     className="catalog-input"
-                    placeholder="Ex.: Culto de Domingo, Conferência de Jovens"
-                    value={eventForm.title}
-                    onChange={(e) => updateEventForm("title", e.target.value)}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEventBannerChange}
+                  />
+                  {eventForm.cover_image_url || eventBannerPreviewUrl ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleRemoveEventBanner}
+                      disabled={eventBannerUploadStatus === "loading"}
+                    >
+                      Remover
+                    </Button>
+                  ) : null}
+                </div>
+                {!eventForm.id && eventBannerFile ? (
+                  <small className="event-banner-hint">O upload do banner é concluído após criar o evento.</small>
+                ) : null}
+                {eventBannerUploadMessage ? <p className={`login-feedback ${eventBannerUploadStatus}`}>{eventBannerUploadMessage}</p> : null}
+              </div>
+
+              <div className="modal-grid">
+                <label>
+                  <span>Início *</span>
+                  <input
+                    className="catalog-input"
+                    type="datetime-local"
+                    value={eventForm.event_date}
+                    onChange={(e) => updateEventForm("event_date", e.target.value)}
                     required
                   />
                 </label>
-
-                <div className="modal-grid">
-                  <label>
-                    <span>Início *</span>
-                    <input
-                      className="catalog-input"
-                      type="datetime-local"
-                      value={eventForm.event_date}
-                      onChange={(e) => updateEventForm("event_date", e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    <span>Término (opcional)</span>
-                    <input
-                      className="catalog-input"
-                      type="datetime-local"
-                      value={eventForm.ends_at ?? ""}
-                      onChange={(e) => updateEventForm("ends_at", e.target.value)}
-                    />
-                  </label>
-                </div>
-
                 <label>
-                  <span>Local</span>
+                  <span>Término (opcional)</span>
                   <input
                     className="catalog-input"
-                    placeholder="Ex.: Templo principal, Salão B"
-                    value={eventForm.location ?? ""}
-                    onChange={(e) => updateEventForm("location", e.target.value)}
+                    type="datetime-local"
+                    value={eventForm.ends_at ?? ""}
+                    onChange={(e) => updateEventForm("ends_at", e.target.value)}
                   />
                 </label>
-
-                <label>
-                  <span>Descrição</span>
-                  <textarea
-                    className="catalog-input catalog-textarea"
-                    placeholder="Detalhes do evento (opcional)"
-                    rows={3}
-                    value={eventForm.description ?? ""}
-                    onChange={(e) => updateEventForm("description", e.target.value)}
-                  />
-                </label>
-
-                <div className="modal-grid">
-                  <label>
-                    <span>Tipo</span>
-                    <select
-                      className="catalog-input"
-                      value={eventForm.event_type}
-                      onChange={(e) => updateEventForm("event_type", e.target.value)}
-                    >
-                      <option value="culto">Culto</option>
-                      <option value="conferencia">Conferência</option>
-                      <option value="retiro">Retiro</option>
-                      <option value="jovens">Jovens</option>
-                      <option value="infantil">Infantil</option>
-                      <option value="social">Social</option>
-                      <option value="outro">Outro</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Status</span>
-                    <select
-                      className="catalog-input"
-                      value={eventForm.status}
-                      onChange={(e) => updateEventForm("status", e.target.value)}
-                    >
-                      <option value="rascunho">Rascunho (não visível)</option>
-                      <option value="publicado">Publicado (visível a todos)</option>
-                      <option value="cancelado">Cancelado</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label>
-                  <span>Cor no calendário</span>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      type="color"
-                      value={eventForm.color ?? "#6d28d9"}
-                      onChange={(e) => updateEventForm("color", e.target.value)}
-                      style={{ width: 40, height: 36, borderRadius: 6, border: "1px solid var(--color-border)", cursor: "pointer", padding: 2 }}
-                    />
-                    <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
-                      Cor exibida no calendário para identificar o evento
-                    </span>
-                  </div>
-                </label>
-
-                {eventSaveMessage ? (
-                  <p className={`login-feedback ${eventSaveStatus}`}>{eventSaveMessage}</p>
-                ) : null}
               </div>
 
+              <label>
+                <span>Local</span>
+                <input
+                  className="catalog-input"
+                  placeholder="Ex.: Templo principal, Salão B"
+                  value={eventForm.location ?? ""}
+                  onChange={(e) => updateEventForm("location", e.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>Descrição</span>
+                <div className="rich-editor">
+                  <div className="rich-editor-toolbar" role="toolbar" aria-label="Formatar descrição">
+                    <button type="button" onClick={() => applyEventRichCommand("bold")} aria-label="Negrito">
+                      <strong>B</strong>
+                    </button>
+                    <button type="button" onClick={() => applyEventRichCommand("italic")} aria-label="Itálico">
+                      <em>I</em>
+                    </button>
+                    <button type="button" onClick={() => applyEventRichCommand("underline")} aria-label="Sublinhar">
+                      <span style={{ textDecoration: "underline", fontWeight: 700 }}>U</span>
+                    </button>
+                    <button type="button" onClick={() => applyEventRichCommand("insertUnorderedList")} aria-label="Lista">
+                      •
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = prompt("Link (https://...)");
+                        if (url) applyEventRichCommand("createLink", url);
+                      }}
+                      aria-label="Inserir link"
+                    >
+                      Link
+                    </button>
+                  </div>
+                  <div
+                    ref={eventDescriptionEditorRef}
+                    className="rich-editor-area"
+                    contentEditable
+                    onInput={syncEventDescriptionFromEditor}
+                    onBlur={syncEventDescriptionFromEditor}
+                    data-placeholder="Detalhes do evento (opcional)"
+                  />
+                </div>
+              </label>
+
+              <div className="modal-grid">
+                <label>
+                  <span>Tipo</span>
+                  <select
+                    className="catalog-input"
+                    value={eventForm.event_type}
+                    onChange={(e) => updateEventForm("event_type", e.target.value)}
+                  >
+                    <option value="culto">Culto</option>
+                    <option value="conferencia">Conferência</option>
+                    <option value="retiro">Retiro</option>
+                    <option value="jovens">Jovens</option>
+                    <option value="infantil">Infantil</option>
+                    <option value="social">Social</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Status</span>
+                  <select
+                    className="catalog-input"
+                    value={eventForm.status}
+                    onChange={(e) => updateEventForm("status", e.target.value)}
+                  >
+                    <option value="rascunho">Rascunho (não visível)</option>
+                    <option value="publicado">Publicado (visível a todos)</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span>Cor no calendário</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="color"
+                    value={eventForm.color ?? "#6d28d9"}
+                    onChange={(e) => updateEventForm("color", e.target.value)}
+                    style={{ width: 40, height: 36, borderRadius: 6, border: "1px solid var(--color-border)", cursor: "pointer", padding: 2 }}
+                  />
+                  <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+                    Cor exibida no calendário para identificar o evento
+                  </span>
+                </div>
+              </label>
+
+              {eventSaveMessage ? <p className={`login-feedback ${eventSaveStatus}`}>{eventSaveMessage}</p> : null}
+
               <div className="modal-actions">
-                <button type="button" className="btn-secondary" onClick={() => setIsEventFormOpen(false)}>
+                <Button type="button" variant="secondary" onClick={() => setIsEventFormOpen(false)}>
                   Cancelar
-                </button>
+                </Button>
                 <Button type="submit" disabled={eventSaveStatus === "loading"} icon={<CheckCircle2 size={18} />}>
                   {eventSaveStatus === "loading" ? "Salvando..." : eventForm.id ? "Salvar alterações" : "Criar evento"}
                 </Button>
@@ -10314,7 +10567,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       {/* ── Modal: Notificações de Evento ────────────────────────────────── */}
       {eventNotifyOpen && eventNotifyTarget ? (
         <div className="modal-overlay" onClick={() => setEventNotifyOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
               <div>
                 <Send size={20} />

@@ -366,7 +366,6 @@ export function AdminGlobalAccess() {
       return config;
     }, {});
     setModuleConfig(freshConfig);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModulesTenantId]); // só dispara quando o TENANT muda, não a cada reload de dados
 
   const selectedTenant = useMemo(() => {
@@ -843,7 +842,7 @@ export function AdminGlobalAccess() {
     const token = sessionData?.session?.access_token;
 
     const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-global-admin`,
+      `${import.meta.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-global-admin`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
