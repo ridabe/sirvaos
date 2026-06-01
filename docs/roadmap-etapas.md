@@ -136,6 +136,9 @@ O moduloDevera tera estas funcionalidades:
 - Comunicados aos pais.
 - Atividades
 - Tias/tios na escala do dia(ADionar quem estara dando a aula para as criaçãs com data, este nome pode vir da lista de mebros que tem o cargo referente a area infantil)
+- Adicionar o modulo na tel de admin global para ser liberado para os cliente/tenant
+- Adicionar o modulo novo na area de adicionar membros, tanto na tela de admin global quanto no acesso pela admin do cliente
+- Adicionar as regras para acesso dos usuarios no menu lateral quando este modulo for liberado para ele
 
 ## Etapa 9 - Escola Bíblica
 
@@ -148,6 +151,9 @@ O moduloDevera tera estas funcionalidades:
 - Materiais.
 - Notas
 - Links de materias de apoio, como Videos, apostilas
+- Adicionar o modulo na tela de admin global para ser liberado para os cliente/tenant
+- Adicionar o modulo novo na area de adicionar membros, tanto na tela de admin global quanto no acesso pela admin do cliente
+- Adicionar as regras para acesso dos usuarios no menu lateral quando este modulo for liberado para ele
 
 ## Etapa 10 - Relatórios e Auditoria
 
@@ -159,6 +165,8 @@ Objetivo: maturidade administrativa.
 - Logs de atividade com dados e nomes humizados e nao nome de funcoes, tambelas e permissoes.
 - Auditoria de dados sensíveis.
 - Métricas de engajamento.
+- Adicionar o modulo na tela de admin global para ser liberado para os cliente/tenant
+- Adicionar as regras para acesso dos usuarios no menu lateral quando este modulo for liberado para ele
 
 ## Etapa 11 - Produção e Escala
 

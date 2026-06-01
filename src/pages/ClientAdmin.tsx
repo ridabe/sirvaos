@@ -1,6 +1,8 @@
 import {
   ArrowRight,
+  Baby,
   Bell,
+  BookOpen,
   CalendarCheck,
   CheckCircle2,
   Clock3,
@@ -13,6 +15,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  MessageCircle,
   Music,
   Palette,
   PanelLeftClose,
@@ -238,6 +241,98 @@ type FinancialTransactionRecord = {
   members: { name: string } | null;
 };
 
+type KidsGroupRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  age_min: number | null;
+  age_max: number | null;
+  color: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+type KidsChildRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  date_of_birth: string | null;
+  group_id: string | null;
+  member_id: string | null;
+  allergies: string | null;
+  special_needs: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  kids_groups: { name: string } | null;
+};
+
+type KidsGuardianRecord = {
+  id: string;
+  tenant_id: string;
+  child_id: string;
+  name: string;
+  phone: string | null;
+  relationship: "parent" | "grandparent" | "sibling" | "guardian" | "other";
+  member_id: string | null;
+  is_primary: boolean;
+  created_at: string;
+  kids_children: { name: string } | null;
+};
+
+type KidsTeacherScheduleRecord = {
+  id: string;
+  tenant_id: string;
+  schedule_date: string;
+  group_id: string | null;
+  member_id: string;
+  role_label: string | null;
+  notes: string | null;
+  created_at: string;
+  members: { name: string; phone: string | null } | null;
+  kids_groups: { name: string } | null;
+};
+
+type KidsAttendanceRecord = {
+  id: string;
+  tenant_id: string;
+  child_id: string;
+  group_id: string | null;
+  attendance_date: string;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+  guardian_name: string | null;
+  notes: string | null;
+  created_at: string;
+  kids_children: { name: string } | null;
+  kids_groups: { name: string } | null;
+};
+
+type KidsActivityRecord = {
+  id: string;
+  tenant_id: string;
+  group_id: string | null;
+  title: string;
+  description: string | null;
+  activity_date: string;
+  created_at: string;
+  kids_groups: { name: string } | null;
+};
+
+type KidsCommunicationRecord = {
+  id: string;
+  tenant_id: string;
+  child_id: string | null;
+  title: string;
+  message: string;
+  sent_via: "system" | "whatsapp" | "both";
+  sent_at: string;
+  created_at: string;
+  kids_children: { name: string } | null;
+};
+
 type ClientDashboardData = {
   profile: TenantProfile;
   tenant: TenantRecord;
@@ -259,6 +354,13 @@ type ClientDashboardData = {
   catalogMinistries: CatalogItemRecord[];
   financialCategories: FinancialCategoryRecord[];
   financialTransactions: FinancialTransactionRecord[];
+  kidsGroups: KidsGroupRecord[];
+  kidsChildren: KidsChildRecord[];
+  kidsGuardiansByChildId: Record<string, KidsGuardianRecord[]>;
+  kidsTeacherSchedule: KidsTeacherScheduleRecord[];
+  kidsAttendance: KidsAttendanceRecord[];
+  kidsActivities: KidsActivityRecord[];
+  kidsCommunications: KidsCommunicationRecord[];
   allPlatformModules: TenantModuleRecord[];
 };
 
@@ -431,6 +533,136 @@ const emptyFinancialCategoryForm: FinancialCategoryFormState = {
   name: "",
   type: "income",
   color: "#087C7A",
+};
+
+type KidsGroupFormState = {
+  id: string;
+  name: string;
+  description: string;
+  age_min: string;
+  age_max: string;
+  color: string;
+  is_active: boolean;
+};
+
+type KidsChildFormState = {
+  id: string;
+  name: string;
+  date_of_birth: string;
+  group_id: string;
+  member_id: string;
+  allergies: string;
+  special_needs: string;
+  notes: string;
+};
+
+type KidsGuardianFormState = {
+  id: string;
+  child_id: string;
+  name: string;
+  phone: string;
+  relationship: KidsGuardianRecord["relationship"];
+  member_id: string;
+  is_primary: boolean;
+};
+
+type KidsTeacherScheduleFormState = {
+  id: string;
+  schedule_date: string;
+  group_id: string;
+  member_id: string;
+  role_label: string;
+  notes: string;
+};
+
+type KidsAttendanceFormState = {
+  id: string;
+  child_id: string;
+  group_id: string;
+  attendance_date: string;
+  guardian_name: string;
+  notes: string;
+};
+
+type KidsActivityFormState = {
+  id: string;
+  group_id: string;
+  title: string;
+  description: string;
+  activity_date: string;
+};
+
+type KidsCommunicationFormState = {
+  id: string;
+  child_id: string;
+  title: string;
+  message: string;
+  sent_via: KidsCommunicationRecord["sent_via"];
+};
+
+const emptyKidsGroupForm: KidsGroupFormState = {
+  id: "",
+  name: "",
+  description: "",
+  age_min: "",
+  age_max: "",
+  color: "#5a8a2f",
+  is_active: true,
+};
+
+const emptyKidsChildForm: KidsChildFormState = {
+  id: "",
+  name: "",
+  date_of_birth: "",
+  group_id: "",
+  member_id: "",
+  allergies: "",
+  special_needs: "",
+  notes: "",
+};
+
+const emptyKidsGuardianForm: KidsGuardianFormState = {
+  id: "",
+  child_id: "",
+  name: "",
+  phone: "",
+  relationship: "parent",
+  member_id: "",
+  is_primary: false,
+};
+
+const emptyKidsTeacherScheduleForm: KidsTeacherScheduleFormState = {
+  id: "",
+  schedule_date: new Date().toISOString().slice(0, 10),
+  group_id: "",
+  member_id: "",
+  role_label: "",
+  notes: "",
+};
+
+const emptyKidsAttendanceForm: KidsAttendanceFormState = {
+  id: "",
+  child_id: "",
+  group_id: "",
+  attendance_date: new Date().toISOString().slice(0, 10),
+  guardian_name: "",
+  notes: "",
+};
+
+const emptyKidsActivityForm: KidsActivityFormState = {
+  id: "",
+  group_id: "",
+  title: "",
+  description: "",
+  activity_date: new Date().toISOString().slice(0, 10),
+};
+
+const emptyKidsCommunicationForm: KidsCommunicationFormState = {
+  id: "",
+  child_id: "",
+  title: "",
+  message: "",
+  sent_via: "system",
 };
 
 const sampleClientDashboardData: ClientDashboardData = {
@@ -614,6 +846,13 @@ const sampleClientDashboardData: ClientDashboardData = {
       description: "Dízimos, ofertas, receitas, despesas, categorias e relatórios.",
       status: "active",
     },
+    {
+      id: "module-6",
+      code: "kids",
+      name: "Kids / Infantil",
+      description: "Gestão do ministério infantil: crianças, turmas, presença e comunicados.",
+      status: "active",
+    },
   ],
   moduleAdminModuleIdsByProfileId: {
     "user-1": ["module-1", "module-2"],
@@ -637,6 +876,7 @@ const sampleClientDashboardData: ClientDashboardData = {
     { id: "module-3", code: "announcements", name: "Comunicados",        description: "Comunicados gerais para membros.",              status: "active" },
     { id: "module-4", code: "worship",       name: "Louvor",             description: "Escalas e confirmação de presença.",            status: "active" },
     { id: "module-5", code: "financial",     name: "Financeiro",         description: "Dízimos, ofertas e relatórios.",                status: "active" },
+    { id: "module-6", code: "kids",          name: "Kids / Infantil",    description: "Gestão do ministério infantil.",                status: "active" },
   ],
   financialCategories: [
     { id: "fin-cat-1", tenant_id: null, name: "Dízimos", type: "income", color: "#2f8a5f", is_system: true, sort_order: 10 },
@@ -723,6 +963,36 @@ const sampleClientDashboardData: ClientDashboardData = {
       members: { name: "Paulo Alves" },
     },
   ],
+  kidsGroups: [
+    { id: "kids-group-1", tenant_id: "demo-tenant", name: "Berçário", description: "Bebês de 0 a 2 anos", age_min: 0, age_max: 2, color: "#f9a825", is_active: true, sort_order: 10, created_at: new Date().toISOString() },
+    { id: "kids-group-2", tenant_id: "demo-tenant", name: "Maternal", description: "Crianças de 3 a 5 anos", age_min: 3, age_max: 5, color: "#42a5f5", is_active: true, sort_order: 20, created_at: new Date().toISOString() },
+    { id: "kids-group-3", tenant_id: "demo-tenant", name: "Primários", description: "Crianças de 6 a 9 anos", age_min: 6, age_max: 9, color: "#66bb6a", is_active: true, sort_order: 30, created_at: new Date().toISOString() },
+  ],
+  kidsChildren: [
+    { id: "kids-child-1", tenant_id: "demo-tenant", name: "Isabela Souza", date_of_birth: "2023-03-10", group_id: "kids-group-1", member_id: "member-1", allergies: null, special_needs: null, notes: null, is_active: true, created_at: new Date().toISOString(), kids_groups: { name: "Berçário" } },
+    { id: "kids-child-2", tenant_id: "demo-tenant", name: "Gabriel Alves", date_of_birth: "2021-07-22", group_id: "kids-group-2", member_id: null, allergies: "Amendoim", special_needs: null, notes: null, is_active: true, created_at: new Date().toISOString(), kids_groups: { name: "Maternal" } },
+    { id: "kids-child-3", tenant_id: "demo-tenant", name: "Layla Costa", date_of_birth: "2019-11-05", group_id: "kids-group-3", member_id: null, allergies: null, special_needs: null, notes: null, is_active: true, created_at: new Date().toISOString(), kids_groups: { name: "Primários" } },
+  ],
+  kidsGuardiansByChildId: {
+    "kids-child-1": [{ id: "kids-guard-1", tenant_id: "demo-tenant", child_id: "kids-child-1", name: "Mariana Souza", phone: "(11) 99999-0001", relationship: "parent", member_id: "member-1", is_primary: true, created_at: new Date().toISOString(), kids_children: { name: "Isabela Souza" } }],
+    "kids-child-2": [{ id: "kids-guard-2", tenant_id: "demo-tenant", child_id: "kids-child-2", name: "Paulo Alves", phone: "(11) 99999-0002", relationship: "parent", member_id: "member-2", is_primary: true, created_at: new Date().toISOString(), kids_children: { name: "Gabriel Alves" } }],
+    "kids-child-3": [{ id: "kids-guard-3", tenant_id: "demo-tenant", child_id: "kids-child-3", name: "Ana Costa", phone: "(11) 99999-0003", relationship: "parent", member_id: null, is_primary: true, created_at: new Date().toISOString(), kids_children: { name: "Layla Costa" } }],
+  },
+  kidsTeacherSchedule: [
+    { id: "kids-sched-1", tenant_id: "demo-tenant", schedule_date: new Date().toISOString().slice(0, 10), group_id: "kids-group-1", member_id: "member-3", role_label: "Professora", notes: null, created_at: new Date().toISOString(), members: { name: "Ana Lima", phone: null }, kids_groups: { name: "Berçário" } },
+    { id: "kids-sched-2", tenant_id: "demo-tenant", schedule_date: new Date().toISOString().slice(0, 10), group_id: "kids-group-2", member_id: "member-4", role_label: "Professor", notes: null, created_at: new Date().toISOString(), members: { name: "Carlos Dias", phone: null }, kids_groups: { name: "Maternal" } },
+  ],
+  kidsAttendance: [
+    { id: "kids-att-1", tenant_id: "demo-tenant", child_id: "kids-child-1", group_id: "kids-group-1", attendance_date: new Date().toISOString().slice(0, 10), checked_in_at: new Date().toISOString(), checked_out_at: null, guardian_name: "Mariana Souza", notes: null, created_at: new Date().toISOString(), kids_children: { name: "Isabela Souza" }, kids_groups: { name: "Berçário" } },
+    { id: "kids-att-2", tenant_id: "demo-tenant", child_id: "kids-child-2", group_id: "kids-group-2", attendance_date: new Date().toISOString().slice(0, 10), checked_in_at: new Date().toISOString(), checked_out_at: null, guardian_name: "Paulo Alves", notes: null, created_at: new Date().toISOString(), kids_children: { name: "Gabriel Alves" }, kids_groups: { name: "Maternal" } },
+  ],
+  kidsActivities: [
+    { id: "kids-act-1", tenant_id: "demo-tenant", group_id: "kids-group-2", title: "História de Davi e Golias", description: "Contação de história com fantoches. Material: bíblia ilustrada, fantoches.", activity_date: new Date().toISOString().slice(0, 10), created_at: new Date().toISOString(), kids_groups: { name: "Maternal" } },
+    { id: "kids-act-2", tenant_id: "demo-tenant", group_id: "kids-group-3", title: "Salmo 23 — memorização", description: "Atividade de memorização do Salmo 23 com música.", activity_date: new Date().toISOString().slice(0, 10), created_at: new Date().toISOString(), kids_groups: { name: "Primários" } },
+  ],
+  kidsCommunications: [
+    { id: "kids-comm-1", tenant_id: "demo-tenant", child_id: null, title: "Evento especial crianças", message: "Neste domingo teremos uma programação especial para as crianças! Traga seu filho(a).", sent_via: "system", sent_at: new Date().toISOString(), created_at: new Date().toISOString(), kids_children: null },
+  ],
 };
 
 const clientTabs = [
@@ -732,6 +1002,7 @@ const clientTabs = [
   { key: "events", label: "Calendário", icon: CalendarCheck },
   { key: "worship", label: "Louvor", icon: Music },
   { key: "financial", label: "Financeiro", icon: DollarSign },
+  { key: "kids", label: "Kids", icon: Baby },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
@@ -748,6 +1019,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   events: "calendar",
   worship: "worship",
   financial: "financial",
+  kids: "kids",
   notices: "announcements",
 };
 
@@ -1013,6 +1285,26 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [financialFilterCategoryId, setFinancialFilterCategoryId] = useState("");
   const [financialFilterMonth, setFinancialFilterMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [financialReceiptTransactionId, setFinancialReceiptTransactionId] = useState<string | null>(null);
+  const [kidsView, setKidsView] = useState<"dashboard" | "children" | "schedule" | "attendance" | "activities" | "communications">("dashboard");
+  const [kidsGroupForm, setKidsGroupForm] = useState<KidsGroupFormState>(emptyKidsGroupForm);
+  const [kidsChildForm, setKidsChildForm] = useState<KidsChildFormState>(emptyKidsChildForm);
+  const [kidsGuardianForm, setKidsGuardianForm] = useState<KidsGuardianFormState>(emptyKidsGuardianForm);
+  const [kidsTeacherScheduleForm, setKidsTeacherScheduleForm] = useState<KidsTeacherScheduleFormState>(emptyKidsTeacherScheduleForm);
+  const [kidsAttendanceForm, setKidsAttendanceForm] = useState<KidsAttendanceFormState>(emptyKidsAttendanceForm);
+  const [kidsActivityForm, setKidsActivityForm] = useState<KidsActivityFormState>(emptyKidsActivityForm);
+  const [kidsCommunicationForm, setKidsCommunicationForm] = useState<KidsCommunicationFormState>(emptyKidsCommunicationForm);
+  const [isKidsGroupFormOpen, setIsKidsGroupFormOpen] = useState(false);
+  const [isKidsChildFormOpen, setIsKidsChildFormOpen] = useState(false);
+  const [isKidsGuardianFormOpen, setIsKidsGuardianFormOpen] = useState(false);
+  const [isKidsTeacherScheduleFormOpen, setIsKidsTeacherScheduleFormOpen] = useState(false);
+  const [isKidsAttendanceFormOpen, setIsKidsAttendanceFormOpen] = useState(false);
+  const [isKidsActivityFormOpen, setIsKidsActivityFormOpen] = useState(false);
+  const [isKidsCommunicationFormOpen, setIsKidsCommunicationFormOpen] = useState(false);
+  const [kidsSaveStatus, setKidsSaveStatus] = useState<LoginStatus>("idle");
+  const [kidsSaveMessage, setKidsSaveMessage] = useState("");
+  const [kidsFilterGroupId, setKidsFilterGroupId] = useState("");
+  const [kidsAttendanceDate, setKidsAttendanceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [kidsSelectedChildId, setKidsSelectedChildId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -1072,6 +1364,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageEvents = canManageModuleCode("calendar");
   const canManageWorship = canManageModuleCode("worship");
   const canManageFinancial = canManageModuleCode("financial");
+  const canManageKids = canManageModuleCode("kids");
   const canManageAnnouncements = canManageModuleCode("announcements");
 
   const visibleClientTabs = useMemo(() => {
@@ -1400,6 +1693,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       catalogMinistriesResult,
       financialCategoriesResult,
       financialTransactionsResult,
+      kidsGroupsResult,
+      kidsChildrenResult,
+      kidsGuardiansResult,
+      kidsTeacherScheduleResult,
+      kidsAttendanceResult,
+      kidsActivitiesResult,
+      kidsCommunicationsResult,
       allPlatformModulesResult,
     ] = await Promise.all([
         supabase
@@ -1509,6 +1809,52 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .limit(300)
           .returns<FinancialTransactionRecord[]>(),
         supabase
+          .from("kids_groups")
+          .select("id, tenant_id, name, description, age_min, age_max, color, is_active, sort_order, created_at")
+          .eq("tenant_id", tenantId)
+          .order("sort_order", { ascending: true })
+          .returns<KidsGroupRecord[]>(),
+        supabase
+          .from("kids_children")
+          .select("id, tenant_id, name, date_of_birth, group_id, member_id, allergies, special_needs, notes, is_active, created_at, kids_groups (name)")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true)
+          .order("name", { ascending: true })
+          .returns<KidsChildRecord[]>(),
+        supabase
+          .from("kids_guardians")
+          .select("id, tenant_id, child_id, name, phone, relationship, member_id, is_primary, created_at, kids_children (name)")
+          .eq("tenant_id", tenantId)
+          .returns<KidsGuardianRecord[]>(),
+        supabase
+          .from("kids_teacher_schedule")
+          .select("id, tenant_id, schedule_date, group_id, member_id, role_label, notes, created_at, members (name, phone), kids_groups (name)")
+          .eq("tenant_id", tenantId)
+          .order("schedule_date", { ascending: false })
+          .limit(100)
+          .returns<KidsTeacherScheduleRecord[]>(),
+        supabase
+          .from("kids_attendance")
+          .select("id, tenant_id, child_id, group_id, attendance_date, checked_in_at, checked_out_at, guardian_name, notes, created_at, kids_children (name), kids_groups (name)")
+          .eq("tenant_id", tenantId)
+          .order("attendance_date", { ascending: false })
+          .limit(200)
+          .returns<KidsAttendanceRecord[]>(),
+        supabase
+          .from("kids_activities")
+          .select("id, tenant_id, group_id, title, description, activity_date, created_at, kids_groups (name)")
+          .eq("tenant_id", tenantId)
+          .order("activity_date", { ascending: false })
+          .limit(100)
+          .returns<KidsActivityRecord[]>(),
+        supabase
+          .from("kids_communications")
+          .select("id, tenant_id, child_id, title, message, sent_via, sent_at, created_at, kids_children (name)")
+          .eq("tenant_id", tenantId)
+          .order("sent_at", { ascending: false })
+          .limit(100)
+          .returns<KidsCommunicationRecord[]>(),
+        supabase
           .from("platform_modules")
           .select("id, code, name, description, status")
           .eq("status", "active")
@@ -1535,6 +1881,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       catalogMinistriesResult.error ||
       financialCategoriesResult.error ||
       financialTransactionsResult.error ||
+      kidsGroupsResult.error ||
+      kidsChildrenResult.error ||
+      kidsGuardiansResult.error ||
+      kidsTeacherScheduleResult.error ||
+      kidsAttendanceResult.error ||
+      kidsActivitiesResult.error ||
+      kidsCommunicationsResult.error ||
       allPlatformModulesResult.error
     ) {
       setDataStatus("error");
@@ -1621,6 +1974,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return acc;
     }, {});
 
+    const kidsGuardiansByChildId = (kidsGuardiansResult.data ?? []).reduce<Record<string, KidsGuardianRecord[]>>(
+      (acc, row) => {
+        if (!acc[row.child_id]) acc[row.child_id] = [];
+        acc[row.child_id].push(row);
+        return acc;
+      },
+      {},
+    );
+
     setClientData({
       profile: currentProfile,
       tenant: tenantResult.data,
@@ -1642,6 +2004,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       catalogMinistries: catalogMinistriesResult.data ?? [],
       financialCategories: financialCategoriesResult.data ?? [],
       financialTransactions: financialTransactionsResult.data ?? [],
+      kidsGroups: kidsGroupsResult.data ?? [],
+      kidsChildren: kidsChildrenResult.data ?? [],
+      kidsGuardiansByChildId,
+      kidsTeacherSchedule: kidsTeacherScheduleResult.data ?? [],
+      kidsAttendance: kidsAttendanceResult.data ?? [],
+      kidsActivities: kidsActivitiesResult.data ?? [],
+      kidsCommunications: kidsCommunicationsResult.data ?? [],
       allPlatformModules: allPlatformModulesResult.data ?? [],
     });
 
@@ -3298,6 +3667,406 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
   }
 
+  async function handleKidsGroupSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsGroupForm;
+    const isEditing = Boolean(form.id);
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const record: KidsGroupRecord = {
+        id: form.id || `kids-group-${Date.now()}`,
+        tenant_id: tenantId,
+        name: form.name,
+        description: form.description || null,
+        age_min: form.age_min ? Number(form.age_min) : null,
+        age_max: form.age_max ? Number(form.age_max) : null,
+        color: form.color || null,
+        is_active: form.is_active,
+        sort_order: 100,
+        created_at: new Date().toISOString(),
+      };
+      setClientData((c) => {
+        if (!c) return c;
+        const groups = isEditing ? c.kidsGroups.map((g) => (g.id === record.id ? record : g)) : [...c.kidsGroups, record];
+        return { ...c, kidsGroups: groups };
+      });
+      setKidsSaveStatus("success");
+      setKidsSaveMessage(isEditing ? "Turma atualizada." : "Turma criada.");
+      setKidsGroupForm(emptyKidsGroupForm);
+      setIsKidsGroupFormOpen(false);
+      return;
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      name: form.name,
+      description: form.description || null,
+      age_min: form.age_min ? Number(form.age_min) : null,
+      age_max: form.age_max ? Number(form.age_max) : null,
+      color: form.color || null,
+      is_active: form.is_active,
+    };
+
+    const result = isEditing
+      ? await supabase.from("kids_groups").update(payload).eq("id", form.id)
+      : await supabase.from("kids_groups").insert(payload);
+
+    if (result.error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível salvar a turma.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage(isEditing ? "Turma atualizada." : "Turma criada.");
+    setKidsGroupForm(emptyKidsGroupForm);
+    setIsKidsGroupFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
+  async function handleKidsChildSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsChildForm;
+    const isEditing = Boolean(form.id);
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const grp = clientData.kidsGroups.find((g) => g.id === form.group_id);
+      const record: KidsChildRecord = {
+        id: form.id || `kids-child-${Date.now()}`,
+        tenant_id: tenantId,
+        name: form.name,
+        date_of_birth: form.date_of_birth || null,
+        group_id: form.group_id || null,
+        member_id: form.member_id || null,
+        allergies: form.allergies || null,
+        special_needs: form.special_needs || null,
+        notes: form.notes || null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        kids_groups: grp ? { name: grp.name } : null,
+      };
+      setClientData((c) => {
+        if (!c) return c;
+        const children = isEditing ? c.kidsChildren.map((ch) => (ch.id === record.id ? record : ch)) : [...c.kidsChildren, record];
+        return { ...c, kidsChildren: children };
+      });
+      setKidsSaveStatus("success");
+      setKidsSaveMessage(isEditing ? "Criança atualizada." : "Criança cadastrada.");
+      setKidsChildForm(emptyKidsChildForm);
+      setIsKidsChildFormOpen(false);
+      return;
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      name: form.name,
+      date_of_birth: form.date_of_birth || null,
+      group_id: form.group_id || null,
+      member_id: form.member_id || null,
+      allergies: form.allergies || null,
+      special_needs: form.special_needs || null,
+      notes: form.notes || null,
+    };
+
+    const result = isEditing
+      ? await supabase.from("kids_children").update(payload).eq("id", form.id)
+      : await supabase.from("kids_children").insert(payload);
+
+    if (result.error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível salvar o cadastro.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage(isEditing ? "Criança atualizada." : "Criança cadastrada.");
+    setKidsChildForm(emptyKidsChildForm);
+    setIsKidsChildFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
+  async function handleKidsGuardianSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsGuardianForm;
+    const isEditing = Boolean(form.id);
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const child = clientData.kidsChildren.find((c) => c.id === form.child_id);
+      const record: KidsGuardianRecord = {
+        id: form.id || `kids-guard-${Date.now()}`,
+        tenant_id: tenantId,
+        child_id: form.child_id,
+        name: form.name,
+        phone: form.phone || null,
+        relationship: form.relationship,
+        member_id: form.member_id || null,
+        is_primary: form.is_primary,
+        created_at: new Date().toISOString(),
+        kids_children: child ? { name: child.name } : null,
+      };
+      setClientData((c) => {
+        if (!c) return c;
+        const prev = c.kidsGuardiansByChildId[form.child_id] ?? [];
+        const next = isEditing ? prev.map((g) => (g.id === record.id ? record : g)) : [...prev, record];
+        return { ...c, kidsGuardiansByChildId: { ...c.kidsGuardiansByChildId, [form.child_id]: next } };
+      });
+      setKidsSaveStatus("success");
+      setKidsSaveMessage(isEditing ? "Responsável atualizado." : "Responsável adicionado.");
+      setKidsGuardianForm(emptyKidsGuardianForm);
+      setIsKidsGuardianFormOpen(false);
+      return;
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      child_id: form.child_id,
+      name: form.name,
+      phone: form.phone || null,
+      relationship: form.relationship,
+      member_id: form.member_id || null,
+      is_primary: form.is_primary,
+    };
+
+    const result = isEditing
+      ? await supabase.from("kids_guardians").update(payload).eq("id", form.id)
+      : await supabase.from("kids_guardians").insert(payload);
+
+    if (result.error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível salvar o responsável.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage(isEditing ? "Responsável atualizado." : "Responsável adicionado.");
+    setKidsGuardianForm(emptyKidsGuardianForm);
+    setIsKidsGuardianFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
+  async function handleKidsTeacherScheduleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsTeacherScheduleForm;
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const member = clientData.members.find((m) => m.id === form.member_id);
+      const grp = clientData.kidsGroups.find((g) => g.id === form.group_id);
+      const record: KidsTeacherScheduleRecord = {
+        id: `kids-sched-${Date.now()}`,
+        tenant_id: tenantId,
+        schedule_date: form.schedule_date,
+        group_id: form.group_id || null,
+        member_id: form.member_id,
+        role_label: form.role_label || null,
+        notes: form.notes || null,
+        created_at: new Date().toISOString(),
+        members: member ? { name: member.name, phone: member.phone } : null,
+        kids_groups: grp ? { name: grp.name } : null,
+      };
+      setClientData((c) => c ? { ...c, kidsTeacherSchedule: [record, ...c.kidsTeacherSchedule] } : c);
+      setKidsSaveStatus("success");
+      setKidsSaveMessage("Professor(a) escalado(a).");
+      setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm);
+      setIsKidsTeacherScheduleFormOpen(false);
+      return;
+    }
+
+    const { error } = await supabase.from("kids_teacher_schedule").insert({
+      tenant_id: tenantId,
+      schedule_date: form.schedule_date,
+      group_id: form.group_id || null,
+      member_id: form.member_id,
+      role_label: form.role_label || null,
+      notes: form.notes || null,
+    });
+
+    if (error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível salvar a escala.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage("Professor(a) escalado(a).");
+    setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm);
+    setIsKidsTeacherScheduleFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
+  async function handleKidsAttendanceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsAttendanceForm;
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const child = clientData.kidsChildren.find((c) => c.id === form.child_id);
+      const grp = clientData.kidsGroups.find((g) => g.id === form.group_id);
+      const record: KidsAttendanceRecord = {
+        id: `kids-att-${Date.now()}`,
+        tenant_id: tenantId,
+        child_id: form.child_id,
+        group_id: form.group_id || null,
+        attendance_date: form.attendance_date,
+        checked_in_at: new Date().toISOString(),
+        checked_out_at: null,
+        guardian_name: form.guardian_name || null,
+        notes: form.notes || null,
+        created_at: new Date().toISOString(),
+        kids_children: child ? { name: child.name } : null,
+        kids_groups: grp ? { name: grp.name } : null,
+      };
+      setClientData((c) => c ? { ...c, kidsAttendance: [record, ...c.kidsAttendance] } : c);
+      setKidsSaveStatus("success");
+      setKidsSaveMessage("Presença registrada.");
+      setKidsAttendanceForm(emptyKidsAttendanceForm);
+      setIsKidsAttendanceFormOpen(false);
+      return;
+    }
+
+    const { error } = await supabase.from("kids_attendance").insert({
+      tenant_id: tenantId,
+      child_id: form.child_id,
+      group_id: form.group_id || null,
+      attendance_date: form.attendance_date,
+      checked_in_at: new Date().toISOString(),
+      guardian_name: form.guardian_name || null,
+      notes: form.notes || null,
+    });
+
+    if (error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage(error.code === "23505" ? "Criança já registrada nesta data." : "Não foi possível registrar a presença.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage("Presença registrada.");
+    setKidsAttendanceForm(emptyKidsAttendanceForm);
+    setIsKidsAttendanceFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
+  async function handleKidsActivitySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsActivityForm;
+    const isEditing = Boolean(form.id);
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const grp = clientData.kidsGroups.find((g) => g.id === form.group_id);
+      const record: KidsActivityRecord = {
+        id: form.id || `kids-act-${Date.now()}`,
+        tenant_id: tenantId,
+        group_id: form.group_id || null,
+        title: form.title,
+        description: form.description || null,
+        activity_date: form.activity_date,
+        created_at: new Date().toISOString(),
+        kids_groups: grp ? { name: grp.name } : null,
+      };
+      setClientData((c) => {
+        if (!c) return c;
+        const acts = isEditing ? c.kidsActivities.map((a) => (a.id === record.id ? record : a)) : [record, ...c.kidsActivities];
+        return { ...c, kidsActivities: acts };
+      });
+      setKidsSaveStatus("success");
+      setKidsSaveMessage(isEditing ? "Atividade atualizada." : "Atividade criada.");
+      setKidsActivityForm(emptyKidsActivityForm);
+      setIsKidsActivityFormOpen(false);
+      return;
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      group_id: form.group_id || null,
+      title: form.title,
+      description: form.description || null,
+      activity_date: form.activity_date,
+    };
+
+    const result = isEditing
+      ? await supabase.from("kids_activities").update(payload).eq("id", form.id)
+      : await supabase.from("kids_activities").insert(payload);
+
+    if (result.error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível salvar a atividade.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage(isEditing ? "Atividade atualizada." : "Atividade criada.");
+    setKidsActivityForm(emptyKidsActivityForm);
+    setIsKidsActivityFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
+  async function handleKidsCommunicationSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientData || !profile || !canManageKids) return;
+    const tenantId = clientData.tenant.id;
+    const form = kidsCommunicationForm;
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      const child = form.child_id ? clientData.kidsChildren.find((c) => c.id === form.child_id) : null;
+      const record: KidsCommunicationRecord = {
+        id: `kids-comm-${Date.now()}`,
+        tenant_id: tenantId,
+        child_id: form.child_id || null,
+        title: form.title,
+        message: form.message,
+        sent_via: form.sent_via,
+        sent_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        kids_children: child ? { name: child.name } : null,
+      };
+      setClientData((c) => c ? { ...c, kidsCommunications: [record, ...c.kidsCommunications] } : c);
+      setKidsSaveStatus("success");
+      setKidsSaveMessage("Comunicado enviado.");
+      setKidsCommunicationForm(emptyKidsCommunicationForm);
+      setIsKidsCommunicationFormOpen(false);
+      return;
+    }
+
+    const { error } = await supabase.from("kids_communications").insert({
+      tenant_id: tenantId,
+      child_id: form.child_id || null,
+      title: form.title,
+      message: form.message,
+      sent_via: form.sent_via,
+      created_by: profile.id,
+    });
+
+    if (error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível enviar o comunicado.");
+      return;
+    }
+    setKidsSaveStatus("success");
+    setKidsSaveMessage("Comunicado enviado.");
+    setKidsCommunicationForm(emptyKidsCommunicationForm);
+    setIsKidsCommunicationFormOpen(false);
+    await loadClientData(profile.id);
+  }
+
   const tenant = clientData?.tenant;
 
   if (!tenant || dataStatus === "error") {
@@ -4926,6 +5695,773 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     </div>
                   </div>
                 ) : null}
+              </article>
+            );
+          })() : null}
+
+          {activeTab === "kids" ? (() => {
+            const allChildren = clientData.kidsChildren;
+            const allGroups = clientData.kidsGroups;
+            const allSchedule = clientData.kidsTeacherSchedule;
+            const allAttendance = clientData.kidsAttendance;
+            const allActivities = clientData.kidsActivities;
+            const allComms = clientData.kidsCommunications;
+
+            const filteredChildren = kidsFilterGroupId
+              ? allChildren.filter((c) => c.group_id === kidsFilterGroupId)
+              : allChildren;
+
+            const todaySchedule = allSchedule.filter((s) => s.schedule_date === kidsAttendanceDate);
+            const todayAttendance = allAttendance.filter((a) => a.attendance_date === kidsAttendanceDate);
+
+            const groupNameById = allGroups.reduce<Record<string, string>>((acc, g) => { acc[g.id] = g.name; return acc; }, {});
+
+            const relationshipLabel = (r: KidsGuardianRecord["relationship"]) => {
+              const map: Record<string, string> = { parent: "Pai/Mãe", grandparent: "Avô/Avó", sibling: "Irmão/Irmã", guardian: "Responsável", other: "Outro" };
+              return map[r] ?? r;
+            };
+
+            const sentViaLabel = (v: KidsCommunicationRecord["sent_via"]) => {
+              const map: Record<string, string> = { system: "Sistema", whatsapp: "WhatsApp", both: "Sistema + WhatsApp" };
+              return map[v] ?? v;
+            };
+
+            const calcAge = (dob: string | null) => {
+              if (!dob) return null;
+              const birth = new Date(dob + "T12:00:00");
+              const now = new Date();
+              let age = now.getFullYear() - birth.getFullYear();
+              if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+              return age;
+            };
+
+            const selectedChild = kidsSelectedChildId ? allChildren.find((c) => c.id === kidsSelectedChildId) : null;
+            const selectedChildGuardians = kidsSelectedChildId ? (clientData.kidsGuardiansByChildId[kidsSelectedChildId] ?? []) : [];
+
+            return (
+              <article className="panel full-width financial-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span>Kids / Infantil</span>
+                    <h4>Gestão do ministério infantil</h4>
+                  </div>
+                  <div className="worship-view-toggle">
+                    {(["dashboard", "children", "schedule", "attendance", "activities", "communications"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={kidsView === v ? "active" : ""}
+                        onClick={() => setKidsView(v)}
+                      >
+                        {v === "dashboard" ? "Visão geral" : v === "children" ? "Crianças" : v === "schedule" ? "Escala" : v === "attendance" ? "Presença" : v === "activities" ? "Atividades" : "Comunicados"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {kidsSaveMessage ? (
+                  <p className={`login-feedback ${kidsSaveStatus}`}>{kidsSaveMessage}</p>
+                ) : null}
+
+                {/* ── Modal: turma ── */}
+                {isKidsGroupFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <Baby size={20} />
+                        <div>
+                          <strong>{kidsGroupForm.id ? "Editar turma" : "Nova turma"}</strong>
+                          <small>Defina nome, faixa etária e cor da turma.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsGroupSubmit}>
+                        <label>
+                          <span>Nome da turma</span>
+                          <input className="catalog-input" required placeholder="Ex.: Berçário, Maternal, Primários" value={kidsGroupForm.name} onChange={(e) => setKidsGroupForm((c) => ({ ...c, name: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Descrição</span>
+                          <input className="catalog-input" placeholder="Descrição opcional" value={kidsGroupForm.description} onChange={(e) => setKidsGroupForm((c) => ({ ...c, description: e.target.value }))} />
+                        </label>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Idade mínima</span>
+                            <input className="catalog-input" type="number" min="0" max="18" placeholder="0" value={kidsGroupForm.age_min} onChange={(e) => setKidsGroupForm((c) => ({ ...c, age_min: e.target.value }))} />
+                          </label>
+                          <label>
+                            <span>Idade máxima</span>
+                            <input className="catalog-input" type="number" min="0" max="18" placeholder="12" value={kidsGroupForm.age_max} onChange={(e) => setKidsGroupForm((c) => ({ ...c, age_max: e.target.value }))} />
+                          </label>
+                        </div>
+                        <label>
+                          <span>Cor da turma</span>
+                          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                            <input type="color" value={kidsGroupForm.color} onChange={(e) => setKidsGroupForm((c) => ({ ...c, color: e.target.value }))} style={{ width: 40, height: 32, border: "none", cursor: "pointer", borderRadius: 4 }} />
+                            <input className="catalog-input" value={kidsGroupForm.color} onChange={(e) => setKidsGroupForm((c) => ({ ...c, color: e.target.value }))} style={{ flex: 1 }} />
+                          </div>
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsGroupFormOpen(false); setKidsGroupForm(emptyKidsGroupForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsGroupForm.id ? "Salvar" : "Criar turma"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: criança ── */}
+                {isKidsChildFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <Baby size={20} />
+                        <div>
+                          <strong>{kidsChildForm.id ? "Editar criança" : "Cadastrar criança"}</strong>
+                          <small>
+                            Dica: se os pais já são membros, você pode vincular o cadastro da criança ao membro responsável usando o campo abaixo.
+                          </small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsChildSubmit}>
+                        <label>
+                          <span>Nome completo</span>
+                          <input className="catalog-input" required placeholder="Nome da criança" value={kidsChildForm.name} onChange={(e) => setKidsChildForm((c) => ({ ...c, name: e.target.value }))} />
+                        </label>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Data de nascimento</span>
+                            <input className="catalog-input" type="date" value={kidsChildForm.date_of_birth} onChange={(e) => setKidsChildForm((c) => ({ ...c, date_of_birth: e.target.value }))} />
+                          </label>
+                          <label>
+                            <span>Turma</span>
+                            <select className="catalog-input" value={kidsChildForm.group_id} onChange={(e) => setKidsChildForm((c) => ({ ...c, group_id: e.target.value }))}>
+                              <option value="">Sem turma</option>
+                              {allGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <label>
+                          <span>Vincular a membro (opcional)</span>
+                          <select className="catalog-input" value={kidsChildForm.member_id} onChange={(e) => setKidsChildForm((c) => ({ ...c, member_id: e.target.value }))}>
+                            <option value="">Nenhum vínculo</option>
+                            {clientData.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Alergias</span>
+                          <input className="catalog-input" placeholder="Ex.: amendoim, látex" value={kidsChildForm.allergies} onChange={(e) => setKidsChildForm((c) => ({ ...c, allergies: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Necessidades especiais</span>
+                          <input className="catalog-input" placeholder="Descreva se houver" value={kidsChildForm.special_needs} onChange={(e) => setKidsChildForm((c) => ({ ...c, special_needs: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Observações</span>
+                          <textarea className="catalog-input catalog-textarea" rows={2} value={kidsChildForm.notes} onChange={(e) => setKidsChildForm((c) => ({ ...c, notes: e.target.value }))} />
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsChildForm.id ? "Salvar" : "Cadastrar"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: responsável ── */}
+                {isKidsGuardianFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <Users2 size={20} />
+                        <div>
+                          <strong>{kidsGuardianForm.id ? "Editar responsável" : "Adicionar responsável"}</strong>
+                          <small>Informe os dados de quem irá buscar ou deixar a criança.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsGuardianSubmit}>
+                        <label>
+                          <span>Criança</span>
+                          <select className="catalog-input" required value={kidsGuardianForm.child_id} onChange={(e) => setKidsGuardianForm((c) => ({ ...c, child_id: e.target.value }))}>
+                            <option value="">Selecione</option>
+                            {allChildren.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                          </select>
+                        </label>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Nome do responsável</span>
+                            <input className="catalog-input" required placeholder="Nome completo" value={kidsGuardianForm.name} onChange={(e) => setKidsGuardianForm((c) => ({ ...c, name: e.target.value }))} />
+                          </label>
+                          <label>
+                            <span>Telefone / WhatsApp</span>
+                            <input className="catalog-input" placeholder="(00) 00000-0000" value={kidsGuardianForm.phone} onChange={(e) => setKidsGuardianForm((c) => ({ ...c, phone: e.target.value }))} />
+                          </label>
+                        </div>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Parentesco</span>
+                            <select className="catalog-input" value={kidsGuardianForm.relationship} onChange={(e) => setKidsGuardianForm((c) => ({ ...c, relationship: e.target.value as KidsGuardianRecord["relationship"] }))}>
+                              <option value="parent">Pai/Mãe</option>
+                              <option value="grandparent">Avô/Avó</option>
+                              <option value="sibling">Irmão/Irmã</option>
+                              <option value="guardian">Responsável legal</option>
+                              <option value="other">Outro</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>Vincular a membro</span>
+                            <select className="catalog-input" value={kidsGuardianForm.member_id} onChange={(e) => setKidsGuardianForm((c) => ({ ...c, member_id: e.target.value }))}>
+                              <option value="">Nenhum vínculo</option>
+                              {clientData.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                          <input type="checkbox" checked={kidsGuardianForm.is_primary} onChange={(e) => setKidsGuardianForm((c) => ({ ...c, is_primary: e.target.checked }))} />
+                          <span>Responsável principal</span>
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsGuardianFormOpen(false); setKidsGuardianForm(emptyKidsGuardianForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsGuardianForm.id ? "Salvar" : "Adicionar"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: escala professor ── */}
+                {isKidsTeacherScheduleFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <CalendarCheck size={20} />
+                        <div>
+                          <strong>Escalar professor(a)</strong>
+                          <small>Adicione um membro como professor(a) da Escolinha para a data selecionada.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsTeacherScheduleSubmit}>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Data</span>
+                            <input className="catalog-input" type="date" required value={kidsTeacherScheduleForm.schedule_date} onChange={(e) => setKidsTeacherScheduleForm((c) => ({ ...c, schedule_date: e.target.value }))} />
+                          </label>
+                          <label>
+                            <span>Turma</span>
+                            <select className="catalog-input" value={kidsTeacherScheduleForm.group_id} onChange={(e) => setKidsTeacherScheduleForm((c) => ({ ...c, group_id: e.target.value }))}>
+                              <option value="">Todas as turmas</option>
+                              {allGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <label>
+                          <span>Membro escalado</span>
+                          <select className="catalog-input" required value={kidsTeacherScheduleForm.member_id} onChange={(e) => setKidsTeacherScheduleForm((c) => ({ ...c, member_id: e.target.value }))}>
+                            <option value="">Selecione</option>
+                            {clientData.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Função / Papel</span>
+                          <input className="catalog-input" placeholder="Ex.: Professora, Auxiliar, Coordenadora" value={kidsTeacherScheduleForm.role_label} onChange={(e) => setKidsTeacherScheduleForm((c) => ({ ...c, role_label: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Observações</span>
+                          <input className="catalog-input" placeholder="Opcional" value={kidsTeacherScheduleForm.notes} onChange={(e) => setKidsTeacherScheduleForm((c) => ({ ...c, notes: e.target.value }))} />
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsTeacherScheduleFormOpen(false); setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : "Escalar"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: presença ── */}
+                {isKidsAttendanceFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <CheckCircle2 size={20} />
+                        <div>
+                          <strong>Registrar presença</strong>
+                          <small>Registre o check-in de uma criança na Escolinha.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsAttendanceSubmit}>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Data</span>
+                            <input className="catalog-input" type="date" required value={kidsAttendanceForm.attendance_date} onChange={(e) => setKidsAttendanceForm((c) => ({ ...c, attendance_date: e.target.value }))} />
+                          </label>
+                          <label>
+                            <span>Turma</span>
+                            <select className="catalog-input" value={kidsAttendanceForm.group_id} onChange={(e) => setKidsAttendanceForm((c) => ({ ...c, group_id: e.target.value }))}>
+                              <option value="">Sem turma</option>
+                              {allGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <label>
+                          <span>Criança</span>
+                          <select className="catalog-input" required value={kidsAttendanceForm.child_id} onChange={(e) => setKidsAttendanceForm((c) => ({ ...c, child_id: e.target.value }))}>
+                            <option value="">Selecione</option>
+                            {allChildren.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}{ch.kids_groups ? ` — ${ch.kids_groups.name}` : ""}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Responsável que entregou</span>
+                          <input className="catalog-input" placeholder="Nome de quem deixou a criança" value={kidsAttendanceForm.guardian_name} onChange={(e) => setKidsAttendanceForm((c) => ({ ...c, guardian_name: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Observações</span>
+                          <input className="catalog-input" placeholder="Opcional" value={kidsAttendanceForm.notes} onChange={(e) => setKidsAttendanceForm((c) => ({ ...c, notes: e.target.value }))} />
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsAttendanceFormOpen(false); setKidsAttendanceForm(emptyKidsAttendanceForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<CheckCircle2 size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : "Registrar check-in"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: atividade ── */}
+                {isKidsActivityFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <BookOpen size={20} />
+                        <div>
+                          <strong>{kidsActivityForm.id ? "Editar atividade" : "Nova atividade"}</strong>
+                          <small>Registre a atividade ou lição do dia para uma turma.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsActivitySubmit}>
+                        <div className="modal-grid">
+                          <label>
+                            <span>Data</span>
+                            <input className="catalog-input" type="date" required value={kidsActivityForm.activity_date} onChange={(e) => setKidsActivityForm((c) => ({ ...c, activity_date: e.target.value }))} />
+                          </label>
+                          <label>
+                            <span>Turma</span>
+                            <select className="catalog-input" value={kidsActivityForm.group_id} onChange={(e) => setKidsActivityForm((c) => ({ ...c, group_id: e.target.value }))}>
+                              <option value="">Todas as turmas</option>
+                              {allGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <label>
+                          <span>Título</span>
+                          <input className="catalog-input" required placeholder="Ex.: História de Davi e Golias" value={kidsActivityForm.title} onChange={(e) => setKidsActivityForm((c) => ({ ...c, title: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Descrição / Materiais</span>
+                          <textarea className="catalog-input catalog-textarea" rows={3} placeholder="Descreva a atividade, materiais necessários, links de apoio..." value={kidsActivityForm.description} onChange={(e) => setKidsActivityForm((c) => ({ ...c, description: e.target.value }))} />
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsActivityFormOpen(false); setKidsActivityForm(emptyKidsActivityForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsActivityForm.id ? "Salvar" : "Criar atividade"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Modal: comunicado ── */}
+                {isKidsCommunicationFormOpen ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet">
+                      <div className="modal-section-header">
+                        <MessageCircle size={20} />
+                        <div>
+                          <strong>Novo comunicado</strong>
+                          <small>Envie uma mensagem para os responsáveis de uma criança ou para todos.</small>
+                        </div>
+                      </div>
+                      <form className="modal-body" onSubmit={handleKidsCommunicationSubmit}>
+                        <label>
+                          <span>Criança (deixe em branco para comunicado geral)</span>
+                          <select className="catalog-input" value={kidsCommunicationForm.child_id} onChange={(e) => setKidsCommunicationForm((c) => ({ ...c, child_id: e.target.value }))}>
+                            <option value="">Todos (comunicado geral)</option>
+                            {allChildren.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Assunto</span>
+                          <input className="catalog-input" required placeholder="Assunto do comunicado" value={kidsCommunicationForm.title} onChange={(e) => setKidsCommunicationForm((c) => ({ ...c, title: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Mensagem</span>
+                          <textarea className="catalog-input catalog-textarea" required rows={4} placeholder="Escreva a mensagem..." value={kidsCommunicationForm.message} onChange={(e) => setKidsCommunicationForm((c) => ({ ...c, message: e.target.value }))} />
+                        </label>
+                        <label>
+                          <span>Enviar via</span>
+                          <select className="catalog-input" value={kidsCommunicationForm.sent_via} onChange={(e) => setKidsCommunicationForm((c) => ({ ...c, sent_via: e.target.value as KidsCommunicationRecord["sent_via"] }))}>
+                            <option value="system">Sistema (app)</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="both">Sistema + WhatsApp</option>
+                          </select>
+                        </label>
+                        <div className="modal-actions">
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsCommunicationFormOpen(false); setKidsCommunicationForm(emptyKidsCommunicationForm); }}>Cancelar</button>
+                          <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Send size={16} />}>{kidsSaveStatus === "loading" ? "Enviando..." : "Enviar comunicado"}</Button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Painel de detalhes da criança ── */}
+                {selectedChild ? (
+                  <div className="modal-backdrop">
+                    <section className="modal-sheet worship-email-modal">
+                      <div className="modal-section-header">
+                        <Baby size={20} />
+                        <div>
+                          <strong>{selectedChild.name}</strong>
+                          <small>
+                            {selectedChild.date_of_birth
+                              ? `${new Date(selectedChild.date_of_birth + "T12:00:00").toLocaleDateString("pt-BR")} · ${calcAge(selectedChild.date_of_birth)} anos`
+                              : "Sem data de nascimento"}
+                            {selectedChild.kids_groups ? ` · ${selectedChild.kids_groups.name}` : ""}
+                          </small>
+                        </div>
+                      </div>
+                      {selectedChild.allergies ? (
+                        <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 6, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}>
+                          <strong>⚠ Alergias:</strong> {selectedChild.allergies}
+                        </div>
+                      ) : null}
+                      {selectedChild.special_needs ? (
+                        <div style={{ background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 6, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}>
+                          <strong>ℹ Necessidades especiais:</strong> {selectedChild.special_needs}
+                        </div>
+                      ) : null}
+                      {selectedChildGuardians.length > 0 ? (
+                        <div className="worship-email-summary">
+                          {selectedChildGuardians.map((g) => (
+                            <div key={g.id}>
+                              <span>{relationshipLabel(g.relationship)}{g.is_primary ? " (principal)" : ""}</span>
+                              <strong>
+                                {g.name}
+                                {g.phone ? (
+                                  <a
+                                    href={`https://wa.me/55${g.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá ${g.name}, temos um recado sobre ${selectedChild.name} na Escolinha!`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ marginLeft: "0.5rem", fontSize: "0.8rem", color: "#25D366" }}
+                                  >
+                                    WhatsApp
+                                  </a>
+                                ) : null}
+                              </strong>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Nenhum responsável cadastrado.</p>
+                      )}
+                      <div className="modal-actions">
+                        <button type="button" className="btn btn-secondary" onClick={() => {
+                          setKidsGuardianForm({ ...emptyKidsGuardianForm, child_id: selectedChild.id });
+                          setIsKidsGuardianFormOpen(true);
+                        }}>
+                          + Responsável
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={() => {
+                          setKidsChildForm({
+                            id: selectedChild.id,
+                            name: selectedChild.name,
+                            date_of_birth: selectedChild.date_of_birth ?? "",
+                            group_id: selectedChild.group_id ?? "",
+                            member_id: selectedChild.member_id ?? "",
+                            allergies: selectedChild.allergies ?? "",
+                            special_needs: selectedChild.special_needs ?? "",
+                            notes: selectedChild.notes ?? "",
+                          });
+                          setKidsSelectedChildId(null);
+                          setIsKidsChildFormOpen(true);
+                        }}>
+                          Editar
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={() => setKidsSelectedChildId(null)}>Fechar</button>
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+
+                {/* ── Dashboard ── */}
+                {kidsView === "dashboard" ? (
+                  <div>
+                    <div className="financial-metrics">
+                      <div className="financial-metric-card">
+                        <span>Total de crianças</span>
+                        <strong>{allChildren.length}</strong>
+                      </div>
+                      <div className="financial-metric-card">
+                        <span>Turmas ativas</span>
+                        <strong>{allGroups.filter((g) => g.is_active).length}</strong>
+                      </div>
+                      <div className="financial-metric-card">
+                        <span>Presença hoje</span>
+                        <strong>{todayAttendance.length}</strong>
+                      </div>
+                      <div className="financial-metric-card">
+                        <span>Professores hoje</span>
+                        <strong>{todaySchedule.length}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "1.5rem" }}>
+                      <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
+                        <strong>Turmas</strong>
+                        <button type="button" onClick={() => { setKidsGroupForm(emptyKidsGroupForm); setIsKidsGroupFormOpen(true); }}>+ Nova turma</button>
+                      </div>
+                      {allGroups.length === 0 ? (
+                        <div className="catalog-empty">Nenhuma turma cadastrada. Crie a primeira turma para começar.</div>
+                      ) : (
+                        <div className="catalog-list">
+                          {allGroups.map((g) => (
+                            <div key={g.id} className="catalog-row">
+                              <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                {g.color ? <span style={{ width: 12, height: 12, borderRadius: "50%", background: g.color, flexShrink: 0, display: "inline-block" }} /> : null}
+                                <strong>{g.name}</strong>
+                                {g.age_min != null && g.age_max != null ? <small style={{ color: "var(--color-neutral-500)" }}>{g.age_min}–{g.age_max} anos</small> : null}
+                              </span>
+                              <span style={{ color: "var(--color-neutral-500)", fontSize: "0.85rem" }}>
+                                {allChildren.filter((c) => c.group_id === g.id).length} criança(s)
+                              </span>
+                              <button type="button" className="btn-icon-ghost" onClick={() => {
+                                setKidsGroupForm({ id: g.id, name: g.name, description: g.description ?? "", age_min: g.age_min != null ? String(g.age_min) : "", age_max: g.age_max != null ? String(g.age_max) : "", color: g.color ?? "#5a8a2f", is_active: g.is_active });
+                                setIsKidsGroupFormOpen(true);
+                              }}>
+                                <Edit3 size={15} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: "1.5rem" }}>
+                      <strong style={{ display: "block", marginBottom: "0.5rem" }}>Professores escalados para hoje</strong>
+                      {todaySchedule.length === 0 ? (
+                        <div className="catalog-empty">Nenhum professor escalado para hoje.</div>
+                      ) : (
+                        <div className="catalog-list">
+                          {todaySchedule.map((s) => (
+                            <div key={s.id} className="catalog-row">
+                              <span>
+                                <strong>{s.members?.name ?? "—"}</strong>
+                                {s.role_label ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{s.role_label}</small> : null}
+                              </span>
+                              {s.kids_groups ? <em style={{ fontSize: "0.8rem", color: "var(--color-neutral-500)" }}>{s.kids_groups.name}</em> : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* ── Crianças ── */}
+                {kidsView === "children" ? (
+                  <div>
+                    <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
+                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <select className="catalog-input" style={{ width: "auto" }} value={kidsFilterGroupId} onChange={(e) => setKidsFilterGroupId(e.target.value)}>
+                          <option value="">Todas as turmas</option>
+                          {allGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                      </div>
+                      <button type="button" onClick={() => { setKidsChildForm(emptyKidsChildForm); setIsKidsChildFormOpen(true); }}>+ Cadastrar criança</button>
+                    </div>
+                    {filteredChildren.length === 0 ? (
+                      <div className="catalog-empty">Nenhuma criança cadastrada ainda.</div>
+                    ) : (
+                      <div className="catalog-list">
+                        {filteredChildren.map((ch) => {
+                          const age = calcAge(ch.date_of_birth);
+                          const guardians = clientData.kidsGuardiansByChildId[ch.id] ?? [];
+                          return (
+                            <div key={ch.id} className="catalog-row" style={{ cursor: "pointer" }} onClick={() => setKidsSelectedChildId(ch.id)}>
+                              <span>
+                                <strong>{ch.name}</strong>
+                                {age !== null ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{age} anos</small> : null}
+                                {ch.allergies ? <em style={{ marginLeft: "0.4rem", fontSize: "0.75rem", color: "#c23b3b" }}>⚠ Alergia</em> : null}
+                              </span>
+                              <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
+                                {ch.kids_groups?.name ?? "Sem turma"} · {guardians.length} responsável(is)
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* ── Escala do dia ── */}
+                {kidsView === "schedule" ? (
+                  <div>
+                    <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
+                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                        <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.9rem" }}>
+                          <span>Data:</span>
+                          <input className="catalog-input" type="date" value={kidsAttendanceDate} onChange={(e) => setKidsAttendanceDate(e.target.value)} style={{ width: "auto" }} />
+                        </label>
+                      </div>
+                      <button type="button" onClick={() => { setKidsTeacherScheduleForm({ ...emptyKidsTeacherScheduleForm, schedule_date: kidsAttendanceDate }); setIsKidsTeacherScheduleFormOpen(true); }}>+ Escalar professor(a)</button>
+                    </div>
+                    {allSchedule.filter((s) => s.schedule_date === kidsAttendanceDate).length === 0 ? (
+                      <div className="catalog-empty">Nenhum professor escalado para esta data.</div>
+                    ) : (
+                      <div className="catalog-list">
+                        {allSchedule.filter((s) => s.schedule_date === kidsAttendanceDate).map((s) => (
+                          <div key={s.id} className="catalog-row">
+                            <span>
+                              <strong>{s.members?.name ?? "—"}</strong>
+                              {s.role_label ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{s.role_label}</small> : null}
+                            </span>
+                            <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
+                              {s.kids_groups?.name ?? "Todas as turmas"}
+                              {s.members?.phone ? (
+                                <a
+                                  href={`https://wa.me/55${s.members.phone.replace(/\D/g, "")}?text=${encodeURIComponent("Olá! Você está escalado(a) hoje na Escolinha.")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ marginLeft: "0.5rem", color: "#25D366", fontSize: "0.8rem" }}
+                                >
+                                  WhatsApp
+                                </a>
+                              ) : null}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: "1.5rem" }}>
+                      <strong style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem" }}>Histórico recente de escalas</strong>
+                      {allSchedule.length === 0 ? (
+                        <div className="catalog-empty">Nenhuma escala registrada.</div>
+                      ) : (
+                        <div className="catalog-list">
+                          {allSchedule.slice(0, 20).map((s) => (
+                            <div key={s.id} className="catalog-row">
+                              <span>
+                                <strong>{s.members?.name ?? "—"}</strong>
+                                {s.role_label ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{s.role_label}</small> : null}
+                              </span>
+                              <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
+                                {new Date(s.schedule_date + "T12:00:00").toLocaleDateString("pt-BR")} · {s.kids_groups?.name ?? "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* ── Presença ── */}
+                {kidsView === "attendance" ? (
+                  <div>
+                    <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
+                      <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.9rem" }}>
+                        <span>Data:</span>
+                        <input className="catalog-input" type="date" value={kidsAttendanceDate} onChange={(e) => setKidsAttendanceDate(e.target.value)} style={{ width: "auto" }} />
+                      </label>
+                      <button type="button" onClick={() => { setKidsAttendanceForm({ ...emptyKidsAttendanceForm, attendance_date: kidsAttendanceDate }); setIsKidsAttendanceFormOpen(true); }}>+ Registrar check-in</button>
+                    </div>
+                    {allAttendance.filter((a) => a.attendance_date === kidsAttendanceDate).length === 0 ? (
+                      <div className="catalog-empty">Nenhuma presença registrada para esta data.</div>
+                    ) : (
+                      <div className="catalog-list">
+                        {allAttendance.filter((a) => a.attendance_date === kidsAttendanceDate).map((a) => (
+                          <div key={a.id} className="catalog-row">
+                            <span>
+                              <strong>{a.kids_children?.name ?? "—"}</strong>
+                              {a.kids_groups ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{a.kids_groups.name}</small> : null}
+                            </span>
+                            <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
+                              {a.checked_in_at ? `Entrada: ${new Date(a.checked_in_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "—"}
+                              {a.guardian_name ? ` · Responsável: ${a.guardian_name}` : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* ── Atividades ── */}
+                {kidsView === "activities" ? (
+                  <div>
+                    <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
+                      <strong>Atividades e lições</strong>
+                      <button type="button" onClick={() => { setKidsActivityForm(emptyKidsActivityForm); setIsKidsActivityFormOpen(true); }}>+ Nova atividade</button>
+                    </div>
+                    {allActivities.length === 0 ? (
+                      <div className="catalog-empty">Nenhuma atividade registrada ainda.</div>
+                    ) : (
+                      <div className="catalog-list">
+                        {allActivities.map((a) => (
+                          <div key={a.id} className="catalog-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.25rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                              <strong>{a.title}</strong>
+                              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                                <small style={{ color: "var(--color-neutral-500)" }}>{new Date(a.activity_date + "T12:00:00").toLocaleDateString("pt-BR")}</small>
+                                {a.kids_groups ? <em style={{ fontSize: "0.78rem", color: "var(--color-neutral-500)" }}>{a.kids_groups.name}</em> : null}
+                                <button type="button" className="btn-icon-ghost" onClick={() => {
+                                  setKidsActivityForm({ id: a.id, group_id: a.group_id ?? "", title: a.title, description: a.description ?? "", activity_date: a.activity_date });
+                                  setIsKidsActivityFormOpen(true);
+                                }}>
+                                  <Edit3 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            {a.description ? <small style={{ color: "var(--color-neutral-500)", lineHeight: 1.4 }}>{a.description}</small> : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* ── Comunicados ── */}
+                {kidsView === "communications" ? (
+                  <div>
+                    <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
+                      <strong>Comunicados aos pais</strong>
+                      <button type="button" onClick={() => { setKidsCommunicationForm(emptyKidsCommunicationForm); setIsKidsCommunicationFormOpen(true); }}>+ Novo comunicado</button>
+                    </div>
+                    {allComms.length === 0 ? (
+                      <div className="catalog-empty">Nenhum comunicado enviado ainda.</div>
+                    ) : (
+                      <div className="catalog-list">
+                        {allComms.map((comm) => (
+                          <div key={comm.id} className="catalog-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.25rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                              <strong>{comm.title}</strong>
+                              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                                <small style={{ color: "var(--color-neutral-500)" }}>{new Date(comm.sent_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</small>
+                                <em style={{ fontSize: "0.78rem", background: "var(--color-neutral-100)", padding: "0 0.4rem", borderRadius: 4 }}>{sentViaLabel(comm.sent_via)}</em>
+                              </div>
+                            </div>
+                            <small style={{ color: "var(--color-neutral-500)" }}>
+                              {comm.kids_children ? `Para: ${comm.kids_children.name}` : "Para: todos os responsáveis"}
+                            </small>
+                            <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--color-text)" }}>{comm.message}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
               </article>
             );
           })() : null}
