@@ -1196,7 +1196,7 @@ export function MemberPortal() {
               <Music size={28} />
               <div>
                 <strong>Portal do Membro</strong>
-                <span>Confirme sua participação nas escalas</span>
+                <span>Tenha acesso as principais áreas do sistema</span>
               </div>
             </div>
 

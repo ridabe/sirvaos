@@ -434,6 +434,17 @@ type BibleSchoolGradeRecord = {
   created_at: string;
 };
 
+type TenantAuditLogRecord = {
+  id: number;
+  tenant_id: string | null;
+  actor_user_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 type BibleSchoolClassFormState = {
   id: string | null;
   name: string;
@@ -1184,6 +1195,7 @@ const sampleClientDashboardData: ClientDashboardData = {
 
 const clientTabs = [
   { key: "overview", label: "Visão geral", icon: LayoutDashboard },
+  { key: "reports", label: "Relatórios", icon: Receipt },
   { key: "members", label: "Membros", icon: UsersRound },
   { key: "families", label: "Famílias", icon: Users2 },
   { key: "events", label: "Calendário", icon: CalendarCheck },
@@ -1391,6 +1403,88 @@ function worshipAssignmentStatusLabel(status: WorshipAssignmentRecord["status"])
   return "Pendente";
 }
 
+function toCsvValue(value: unknown) {
+  const raw = value === null || value === undefined ? "" : String(value);
+  const normalized = raw.replace(/\r?\n/g, " ").trim();
+  if (/[",;\n]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+  return normalized;
+}
+
+function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
+  const headers = Array.from(
+    rows.reduce<Set<string>>((acc, row) => {
+      for (const key of Object.keys(row)) acc.add(key);
+      return acc;
+    }, new Set<string>()),
+  );
+
+  const lines: string[] = [];
+  lines.push(headers.map(toCsvValue).join(";"));
+  for (const row of rows) {
+    lines.push(headers.map((key) => toCsvValue(row[key])).join(";"));
+  }
+
+  const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function openPrintableTable(title: string, headers: string[], rows: string[][]) {
+  const popup = window.open("", "_blank", "noopener,noreferrer");
+  if (!popup) return;
+
+  const escape = (v: string) =>
+    v
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escape(title)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; text-align: left; vertical-align: top; }
+    th { background: #f5f5f5; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>${escape(title)}</h1>
+  <div class="meta">Gerado em ${escape(new Date().toLocaleString("pt-BR"))}</div>
+  <table>
+    <thead>
+      <tr>${headers.map((h) => `<th>${escape(h)}</th>`).join("")}</tr>
+    </thead>
+    <tbody>
+      ${rows
+        .map((row) => `<tr>${row.map((cell) => `<td>${escape(cell)}</td>`).join("")}</tr>`)
+        .join("")}
+    </tbody>
+  </table>
+  <script>window.print();</script>
+</body>
+</html>`;
+
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
+}
+
 export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -1523,6 +1617,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [isBibleSchoolMaterialFormOpen, setIsBibleSchoolMaterialFormOpen] = useState(false);
   const [bibleSchoolGradeForm, setBibleSchoolGradeForm] = useState<BibleSchoolGradeFormState>(emptyBibleSchoolGradeForm);
   const [isBibleSchoolGradeFormOpen, setIsBibleSchoolGradeFormOpen] = useState(false);
+  const [tenantAuditLogs, setTenantAuditLogs] = useState<TenantAuditLogRecord[]>([]);
+  const [tenantAuditStatus, setTenantAuditStatus] = useState<LoadStatus>("idle");
+  const [tenantAuditMessage, setTenantAuditMessage] = useState("");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -1590,6 +1687,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     return clientTabs.filter((tab) => {
       if (defaultClientTabs.has(tab.key)) {
         return true;
+      }
+
+      if (tab.key === "reports") {
+        return isTenantAdmin || currentUserModuleAdminIds.length > 0;
       }
 
       if (tenantAdminOnlyTabs.has(tab.key)) {
@@ -1859,6 +1960,53 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setMustChangePassword(false);
     setPasswordDraft("");
     setPasswordDraftConfirm("");
+  }
+
+  async function loadTenantAuditLogs(tenantId: string) {
+    if (demoMode) {
+      setTenantAuditLogs([]);
+      setTenantAuditStatus("ready");
+      setTenantAuditMessage("");
+      return;
+    }
+
+    setTenantAuditStatus("loading");
+    setTenantAuditMessage("");
+
+    const result = await supabase
+      .from("audit_logs")
+      .select("id, tenant_id, actor_user_id, action, entity_type, entity_id, metadata, created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .returns<TenantAuditLogRecord[]>();
+
+    if (result.error) {
+      setTenantAuditLogs([]);
+      setTenantAuditStatus("error");
+      setTenantAuditMessage("Não foi possível carregar auditoria.");
+      return;
+    }
+
+    setTenantAuditLogs(result.data ?? []);
+    setTenantAuditStatus("ready");
+  }
+
+  async function recordTenantAuditLog(payload: {
+    tenant_id: string;
+    action: string;
+    entity_type: string;
+    entity_id?: string | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    if (demoMode) return;
+    await supabase.rpc("audit_log", {
+      tenant_id: payload.tenant_id,
+      action: payload.action,
+      entity_type: payload.entity_type,
+      entity_id: payload.entity_id ?? null,
+      metadata: payload.metadata ?? {},
+    });
   }
 
   async function loadClientData(userId: string) {
@@ -2248,6 +2396,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       footer_color: tenantResult.data.footer_color,
     });
 
+    void loadTenantAuditLogs(tenantId);
+
     if (modules.some((item) => item.code === "bible-school")) {
       void loadBibleSchoolData(tenantId);
     } else {
@@ -2547,6 +2697,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setIsBibleSchoolClassFormOpen(false);
     setBibleSchoolClassForm(emptyBibleSchoolClassForm);
     setBibleSchoolStatus("ready");
+    await recordTenantAuditLog({
+      tenant_id: tenantId,
+      action: bibleSchoolClassForm.id ? "Escola Bíblica · Turma atualizada" : "Escola Bíblica · Turma criada",
+      entity_type: "Escola Bíblica",
+      entity_id: classId,
+      metadata: { name: payload.name, is_active: payload.is_active },
+    });
     await loadBibleSchoolData(tenantId);
     setSelectedBibleSchoolClassId(classId);
   }
@@ -2642,6 +2799,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setIsBibleSchoolStudentFormOpen(false);
     setBibleSchoolStudentForm(emptyBibleSchoolStudentForm);
     setBibleSchoolStatus("ready");
+    await recordTenantAuditLog({
+      tenant_id: tenantId,
+      action: "Escola Bíblica · Matrícula criada",
+      entity_type: "Escola Bíblica",
+      entity_id: enrollmentResult.data.id,
+      metadata: { class_id: selectedBibleSchoolClassId, student_id: studentId },
+    });
     await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
   }
 
@@ -2692,6 +2856,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setIsBibleSchoolSessionFormOpen(false);
     setBibleSchoolSessionForm(emptyBibleSchoolSessionForm);
     setBibleSchoolStatus("ready");
+    await recordTenantAuditLog({
+      tenant_id: tenantId,
+      action: bibleSchoolSessionForm.id ? "Escola Bíblica · Aula atualizada" : "Escola Bíblica · Aula criada",
+      entity_type: "Escola Bíblica",
+      entity_id: bibleSchoolSessionForm.id,
+      metadata: { class_id: selectedBibleSchoolClassId, session_date: payload.session_date, topic: payload.topic },
+    });
     await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
   }
 
@@ -2729,6 +2900,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     setBibleSchoolStatus("ready");
+    await recordTenantAuditLog({
+      tenant_id: tenantId,
+      action: "Escola Bíblica · Presença registrada",
+      entity_type: "Escola Bíblica",
+      entity_id: existing?.id ?? null,
+      metadata: { session_id: selectedBibleSchoolSessionId, enrollment_id: enrollmentId, status: nextStatus },
+    });
     await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
   }
 
@@ -2810,6 +2988,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setIsBibleSchoolMaterialFormOpen(false);
       setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
       setBibleSchoolStatus("ready");
+      await recordTenantAuditLog({
+        tenant_id: tenantId,
+        action: "Escola Bíblica · Material (arquivo) enviado",
+        entity_type: "Escola Bíblica",
+        entity_id: materialId,
+        metadata: { class_id: selectedBibleSchoolClassId, title, object_key: objectKey },
+      });
       await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
       return;
     }
@@ -2836,6 +3021,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setIsBibleSchoolMaterialFormOpen(false);
     setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
     setBibleSchoolStatus("ready");
+    await recordTenantAuditLog({
+      tenant_id: tenantId,
+      action: bibleSchoolMaterialForm.id ? "Escola Bíblica · Material atualizado" : "Escola Bíblica · Material criado",
+      entity_type: "Escola Bíblica",
+      entity_id: bibleSchoolMaterialForm.id,
+      metadata: { class_id: selectedBibleSchoolClassId, title: payload.title, kind: payload.kind },
+    });
     await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
   }
 
@@ -2903,6 +3095,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setIsBibleSchoolGradeFormOpen(false);
     setBibleSchoolGradeForm(emptyBibleSchoolGradeForm);
     setBibleSchoolStatus("ready");
+    await recordTenantAuditLog({
+      tenant_id: tenantId,
+      action: "Escola Bíblica · Nota lançada",
+      entity_type: "Escola Bíblica",
+      entity_id: null,
+      metadata: { enrollment_id: enrollmentId, title, score, max_score: maxScore },
+    });
     await loadBibleSchoolClassDetails(tenantId, selectedBibleSchoolClassId);
   }
 
@@ -5560,6 +5759,225 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 </div>
               </article>
             </>
+          ) : null}
+
+          {activeTab === "reports" ? (
+            <article className="panel full-width">
+              <div className="panel-heading">
+                <div>
+                  <span>Relatórios</span>
+                  <h4>Exportação e auditoria</h4>
+                </div>
+                <Receipt size={20} />
+              </div>
+
+              <div style={{ padding: 16, display: "grid", gap: 16 }}>
+                <div className="client-stats" style={{ marginTop: 0 }}>
+                  <article>
+                    <span>Membros</span>
+                    <strong>{clientData.members.length}</strong>
+                    <small>Cadastros no tenant</small>
+                  </article>
+                  <article>
+                    <span>Famílias</span>
+                    <strong>{clientData.families.length}</strong>
+                    <small>Estrutura familiar</small>
+                  </article>
+                  <article>
+                    <span>Eventos</span>
+                    <strong>{clientData.events.length}</strong>
+                    <small>Itens do calendário</small>
+                  </article>
+                  <article>
+                    <span>Financeiro</span>
+                    <strong>{clientData.financialTransactions.length}</strong>
+                    <small>Lançamentos carregados</small>
+                  </article>
+                </div>
+
+                <section className="panel" style={{ padding: 16 }}>
+                  <div className="panel-heading">
+                    <div>
+                      <span>Exportação</span>
+                      <h4>CSV</h4>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        downloadCsv(
+                          `membros-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                          clientData.members.map((m) => ({
+                            id: m.id,
+                            name: m.name,
+                            email: m.email,
+                            phone: m.phone,
+                            status: m.status,
+                            status_v2: m.status_v2,
+                            created_at: m.created_at,
+                          })),
+                        )
+                      }
+                    >
+                      Exportar membros
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        downloadCsv(
+                          `familias-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                          clientData.families.map((f) => ({
+                            id: f.id,
+                            name: f.name,
+                            notes: f.notes,
+                            created_at: f.created_at,
+                            updated_at: f.updated_at,
+                          })),
+                        )
+                      }
+                    >
+                      Exportar famílias
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        downloadCsv(
+                          `eventos-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                          clientData.events.map((e) => ({
+                            id: e.id,
+                            title: e.title,
+                            location: e.location,
+                            event_date: e.event_date,
+                            created_at: e.created_at,
+                          })),
+                        )
+                      }
+                    >
+                      Exportar eventos
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        downloadCsv(
+                          `financeiro-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                          clientData.financialTransactions.map((t) => ({
+                            id: t.id,
+                            type: t.type,
+                            amount: t.amount,
+                            description: t.description,
+                            date: t.date,
+                            payment_method: t.payment_method,
+                            category: t.financial_categories?.name ?? null,
+                            member: t.members?.name ?? null,
+                            notes: t.notes,
+                            created_at: t.created_at,
+                          })),
+                        )
+                      }
+                    >
+                      Exportar financeiro
+                    </Button>
+                  </div>
+                </section>
+
+                <section className="panel" style={{ padding: 16 }}>
+                  <div className="panel-heading">
+                    <div>
+                      <span>Auditoria</span>
+                      <h4>Atividades recentes</h4>
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          if (clientData?.tenant.id) {
+                            void loadTenantAuditLogs(clientData.tenant.id);
+                          }
+                        }}
+                        disabled={tenantAuditStatus === "loading"}
+                      >
+                        {tenantAuditStatus === "loading" ? "Carregando..." : "Recarregar"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() =>
+                          downloadCsv(
+                            `auditoria-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                            tenantAuditLogs.map((log) => ({
+                              id: log.id,
+                              action: log.action,
+                              entity_type: log.entity_type,
+                              entity_id: log.entity_id,
+                              created_at: log.created_at,
+                            })),
+                          )
+                        }
+                        disabled={tenantAuditLogs.length === 0}
+                      >
+                        Exportar auditoria
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() =>
+                          openPrintableTable(
+                            `Auditoria · ${tenant.name}`,
+                            ["Data", "Ação", "Entidade", "ID"],
+                            tenantAuditLogs.slice(0, 80).map((log) => [
+                              new Date(log.created_at).toLocaleString("pt-BR"),
+                              log.action,
+                              log.entity_type,
+                              log.entity_id ?? "",
+                            ]),
+                          )
+                        }
+                        disabled={tenantAuditLogs.length === 0}
+                      >
+                        Imprimir
+                      </Button>
+                    </div>
+                  </div>
+
+                  {tenantAuditMessage ? (
+                    <p className={`login-feedback ${tenantAuditStatus === "error" ? "error" : "success"}`}>{tenantAuditMessage}</p>
+                  ) : null}
+
+                  {tenantAuditLogs.length === 0 ? (
+                    <div className="catalog-empty" style={{ marginTop: 12 }}>
+                      Nenhum evento registrado ainda.
+                    </div>
+                  ) : (
+                    <div className="catalog-list" style={{ marginTop: 12 }}>
+                      {tenantAuditLogs.slice(0, 25).map((log) => (
+                        <div key={log.id} className="catalog-row">
+                          <div style={{ display: "grid", gap: 4 }}>
+                            <strong style={{ fontSize: "0.95rem" }}>{log.action}</strong>
+                            <small style={{ color: "var(--color-neutral-500)" }}>
+                              {log.entity_type}
+                              {log.entity_id ? ` · ${log.entity_id}` : ""}
+                            </small>
+                          </div>
+                          <span style={{ color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>
+                            {new Date(log.created_at).toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            </article>
           ) : null}
 
           {activeTab === "members" ? (

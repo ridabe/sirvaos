@@ -68,6 +68,109 @@ type FirstAccessCompleteResponse = {
   alreadyActive?: boolean;
 };
 
+type FirstAccessErrorResponse = {
+  ok?: boolean;
+  code?: string;
+  message?: string;
+};
+
+function extractFunctionErrorMessage(error: unknown) {
+  const anyError = error as {
+    message?: unknown;
+    status?: unknown;
+    cause?: { status?: unknown } | unknown;
+    context?: {
+      status?: unknown;
+      body?: unknown;
+    };
+  };
+
+  const contextStatus =
+    anyError?.context?.status ??
+    anyError?.status ??
+    (typeof anyError?.cause === "object" && anyError.cause ? (anyError.cause as { status?: unknown }).status : undefined);
+  const contextBody = anyError?.context?.body;
+  const status =
+    typeof contextStatus === "number"
+      ? contextStatus
+      : typeof contextStatus === "string"
+        ? Number(contextStatus)
+        : null;
+
+  const statusFallback =
+    typeof status === "number" && !Number.isNaN(status)
+      ? `Não foi possível concluir o primeiro acesso (status ${status}).`
+      : null;
+
+  if (typeof contextBody === "string" && contextBody.trim()) {
+    const trimmedBody = contextBody.trim();
+    if (trimmedBody === "{" || trimmedBody === "}" || trimmedBody === "{}") {
+      return statusFallback;
+    }
+    try {
+      const parsed = JSON.parse(contextBody) as { message?: unknown };
+      if (typeof parsed?.message === "string" && parsed.message.trim()) {
+        return parsed.message;
+      }
+      return contextBody;
+    } catch {
+      return contextBody;
+    }
+  }
+
+  if (contextBody && typeof contextBody === "object") {
+    const bodyObj = contextBody as { message?: unknown };
+    if (typeof bodyObj.message === "string" && bodyObj.message.trim()) {
+      return bodyObj.message;
+    }
+    try {
+      return JSON.stringify(contextBody);
+    } catch {
+      return statusFallback;
+    }
+  }
+
+  if (typeof anyError?.message === "string" && anyError.message.trim()) {
+    if (anyError.message === "Edge Function returned a non-2xx status code") {
+      return statusFallback ?? anyError.message;
+    }
+    return anyError.message;
+  }
+
+  return statusFallback;
+}
+
+function isStrongEnoughPassword(password: string) {
+  return password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password);
+}
+
+async function invokeFirstAccessDirect(body: Record<string, unknown>) {
+  const supabaseUrl = import.meta.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined;
+  const apikey = import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+
+  if (!supabaseUrl || !apikey) {
+    return { ok: false, status: 0, data: null as FirstAccessErrorResponse | null };
+  }
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/first-access`, {
+    method: "POST",
+    headers: {
+      apikey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  let data: FirstAccessErrorResponse | null = null;
+  try {
+    data = (await res.json()) as FirstAccessErrorResponse;
+  } catch {
+    data = null;
+  }
+
+  return { ok: res.ok, status: res.status, data };
+}
+
 export function App() {
   const [loginStatus, setLoginStatus] = useState<LandingLoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -191,7 +294,7 @@ export function App() {
 
     if (error || !data) {
       setLoginStatus("error");
-      setLoginMessage("Não foi possível iniciar o primeiro acesso agora.");
+      setLoginMessage(extractFunctionErrorMessage(error) ?? "Não foi possível iniciar o primeiro acesso agora.");
       return;
     }
 
@@ -240,18 +343,47 @@ export function App() {
       return;
     }
 
+    if (!firstAccessEmail.trim() || !firstAccessToken.trim()) {
+      setLoginStatus("error");
+      setLoginMessage("Código de primeiro acesso ausente. Reinicie o primeiro acesso informando seu e-mail novamente.");
+      setFirstAccessStep("identify");
+      return;
+    }
+
+    if (!isStrongEnoughPassword(password)) {
+      setLoginStatus("error");
+      setLoginMessage("A senha precisa ter pelo menos 8 caracteres, com letras maiúsculas, minúsculas e números.");
+      return;
+    }
+
+    const email = firstAccessEmail.trim().toLowerCase();
+    const token = firstAccessToken.trim();
+
     const { data, error } = await supabase.functions.invoke<FirstAccessCompleteResponse>("first-access", {
       body: {
         action: "complete",
-        email: firstAccessEmail,
-        token: firstAccessToken,
+        email,
+        token,
         password,
       },
     });
 
     if (error || !data || !data.ok) {
+      const direct = await invokeFirstAccessDirect({
+        action: "complete",
+        email,
+        token,
+        password,
+      });
+
       setLoginStatus("error");
-      setLoginMessage(data?.message ?? "Não foi possível concluir o primeiro acesso.");
+      setLoginMessage(
+        data?.message ??
+          direct.data?.message ??
+          extractFunctionErrorMessage(error) ??
+          (direct.status ? `Não foi possível concluir o primeiro acesso (status ${direct.status}).` : null) ??
+          "Não foi possível concluir o primeiro acesso.",
+      );
       return;
     }
 
@@ -269,8 +401,8 @@ export function App() {
     });
 
     if (authError || !authData.user) {
-      setLoginStatus("success");
-      setLoginMessage("Senha criada. Entre com seu e-mail e senha.");
+      setLoginStatus("error");
+      setLoginMessage(`Senha criada, mas não foi possível entrar. ${authError?.message ?? ""}`.trim());
       setLoginMode("login");
       setFirstAccessStep("identify");
       return;
@@ -355,10 +487,10 @@ export function App() {
               <div className="preview-content">
                 <div className="preview-header">
                   <div>
-                    <span>Admin Global</span>
-                    <strong>Gestão do SaaS</strong>
+                    <span>Admin da Igreja</span>
+                    <strong>Painel administrativo</strong>
                   </div>
-                  <span className="preview-cta">Novo tenant</span>
+                  <span className="preview-cta">Configurar módulos</span>
                 </div>
 
                 <div className="module-strip">
@@ -418,7 +550,7 @@ export function App() {
                   onChange={(event) => setFirstAccessEmail(event.target.value)}
                   placeholder="admin@suaigreja.org"
                   type="email"
-                  value={loginMode === "first-access" ? firstAccessEmail : undefined}
+                  value={firstAccessEmail}
                 />
               ) : null}
 
@@ -580,7 +712,7 @@ export function App() {
                 </div>
                 <div>
                   <strong>White-label por igreja</strong>
-                  <p>Logo, cores e identidade visual do cliente sem afetar o Admin Global da plataforma.</p>
+                  <p>Logo, cores e identidade visual aplicados por igreja, sem afetar outros tenants.</p>
                 </div>
               </article>
             </div>

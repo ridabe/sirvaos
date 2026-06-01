@@ -10,6 +10,8 @@ export const modules = [
   { name: "Membresia", metric: "12.450", label: "membros organizados" },
   { name: "Louvor", metric: "186", label: "escalas publicadas" },
   { name: "Kids", metric: "72", label: "famílias acompanhadas" },
+  { name: "Financeiro", metric: "R$ 98k", label: "movimentação no mês" },
+  { name: "Escola Bíblica", metric: "24", label: "aulas registradas" },
 ];
 
 export const tenantCards = [
@@ -33,13 +35,13 @@ export const tenantCards = [
 export const features = [
   {
     icon: LayoutDashboard,
-    title: "Operação do SaaS",
-    text: "Admin Global para gerir tenants, planos, catálogo de módulos e auditoria da plataforma.",
+    title: "Administração por igreja",
+    text: "Cada igreja gerencia usuários, permissões, módulos, cadastros e rotina operacional no seu painel administrativo.",
   },
   {
     icon: Network,
     title: "White-label por igreja",
-    text: "Marca do cliente aplicada no painel: logo, cores e módulos ativos sem conflitar com a plataforma.",
+    text: "Marca do cliente aplicada no painel: logo, cores e módulos ativos sem conflitar com outras igrejas.",
   },
   {
     icon: Bell,

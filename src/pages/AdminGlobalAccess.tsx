@@ -891,12 +891,10 @@ export function AdminGlobalAccess() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("audit_logs").insert({
+    await supabase.rpc("audit_log", {
       tenant_id: tenantResult.data.id,
-      actor_user_id: userData.user?.id ?? null,
-      action: tenantForm.id ? "tenant.updated" : "tenant.created",
-      entity_type: "tenant",
+      action: tenantForm.id ? "Tenant · Atualizado" : "Tenant · Criado",
+      entity_type: "Tenant",
       entity_id: tenantResult.data.id,
       metadata: {
         name: payload.name,
@@ -1151,12 +1149,10 @@ export function AdminGlobalAccess() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("audit_logs").insert({
+    await supabase.rpc("audit_log", {
       tenant_id: selectedTenantId,
-      actor_user_id: userData.user?.id ?? null,
-      action: "tenant.status.updated",
-      entity_type: "tenant",
+      action: "Tenant · Status alterado",
+      entity_type: "Tenant",
       entity_id: selectedTenantId,
       metadata: {
         from: selectedTenant.status,
@@ -1272,12 +1268,10 @@ export function AdminGlobalAccess() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("audit_logs").insert({
+    await supabase.rpc("audit_log", {
       tenant_id: selectedModulesTenant.id,
-      actor_user_id: userData.user?.id ?? null,
-      action: "tenant.modules.updated",
-      entity_type: "tenant_modules",
+      action: "Tenant · Módulos atualizados",
+      entity_type: "Tenant módulos",
       entity_id: selectedModulesTenant.id,
       metadata: {
         tenant: selectedModulesTenant.name,

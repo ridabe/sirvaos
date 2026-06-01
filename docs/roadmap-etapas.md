@@ -163,7 +163,7 @@ Objetivo: maturidade administrativa.
 - Dashboard executivo.
 - Relatórios por módulo.
 - Exportação CSV/PDF.
-- Logs de atividade com dados e nomes humizados e nao nome de funcoes, tambelas e permissoes.
+- Logs de atividade com dados e nomes humizados e nao nome de funcoes, tabelas e permissoes.
 - Auditoria de dados sensíveis.
 - Métricas de engajamento.
 - Adicionar o dash para o admin global e para o admin tenant
