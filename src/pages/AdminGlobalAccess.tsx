@@ -6,6 +6,7 @@ import {
   CircleDashed,
   Clock3,
   Edit3,
+  ExternalLink,
   Eye,
   LayoutDashboard,
   LockKeyhole,
@@ -697,7 +698,7 @@ export function AdminGlobalAccess() {
   }
 
   function openEditTenantForm(tenant: TenantRecord) {
-    setSelectedTenantId(tenant.id);
+    setSelectedTenantId(null);
     setTenantForm({
       id: tenant.id,
       name: tenant.name,
@@ -993,8 +994,8 @@ export function AdminGlobalAccess() {
 
     await supabase.rpc("audit_log", {
       tenant_id: tenantResult.data.id,
-      action: tenantForm.id ? "Tenant · Atualizado" : "Tenant · Criado",
-      entity_type: "Tenant",
+      action: tenantForm.id ? "Cliente · Atualizado" : "Cliente · Criado",
+      entity_type: "Cliente",
       entity_id: tenantResult.data.id,
       metadata: {
         name: payload.name,
@@ -1003,7 +1004,7 @@ export function AdminGlobalAccess() {
     });
 
     setTenantSaveStatus("success");
-    setTenantSaveMessage(tenantForm.id ? "Tenant atualizado." : "Tenant criado.");
+    setTenantSaveMessage(tenantForm.id ? "Cliente atualizado." : "Cliente criado.");
     setIsTenantFormOpen(false);
     setTenantForm(emptyTenantForm);
     await loadDashboardData();
@@ -1206,7 +1207,7 @@ export function AdminGlobalAccess() {
       setTenantLogoUploadStatus("error");
       const details = tenantUpdateError.message ? ` Detalhes: ${tenantUpdateError.message}` : "";
       setTenantLogoUploadMessage(
-        `Logo enviada, mas não foi possível atualizar o cadastro do tenant.${details}`,
+        `Logo enviada, mas não foi possível atualizar o cadastro do cliente.${details}`,
       );
       return;
     }
@@ -1251,8 +1252,8 @@ export function AdminGlobalAccess() {
 
     await supabase.rpc("audit_log", {
       tenant_id: selectedTenantId,
-      action: "Tenant · Status alterado",
-      entity_type: "Tenant",
+      action: "Cliente · Status alterado",
+      entity_type: "Cliente",
       entity_id: selectedTenantId,
       metadata: {
         from: selectedTenant.status,
@@ -1275,7 +1276,7 @@ export function AdminGlobalAccess() {
     const email = tenantAdminEmail.trim().toLowerCase();
     if (!email) {
       setTenantAdminProvisionStatus("error");
-      setTenantAdminProvisionMessage("Informe o e-mail do admin do tenant.");
+      setTenantAdminProvisionMessage("Informe o e-mail do admin do cliente.");
       return;
     }
 
@@ -1321,14 +1322,6 @@ export function AdminGlobalAccess() {
 
   function openTenantDetailPanel(tenant: TenantRecord) {
     setSelectedTenantId(tenant.id);
-    const currentConfig = tenant.tenant_modules.reduce<ModuleConfigState>((config, mod) => {
-      config[mod.module_id] = mod.status;
-      return config;
-    }, {});
-    setModuleConfig(currentConfig);
-    setModuleSaveStatus("idle");
-    setModuleSaveMessage("");
-    setSelectedModulesTenantId(tenant.id);
   }
 
   function clearTenantSelection() {
@@ -1377,8 +1370,8 @@ export function AdminGlobalAccess() {
 
     await supabase.rpc("audit_log", {
       tenant_id: selectedModulesTenant.id,
-      action: "Tenant · Módulos atualizados",
-      entity_type: "Tenant módulos",
+      action: "Cliente · Módulos atualizados",
+      entity_type: "Cliente módulos",
       entity_id: selectedModulesTenant.id,
       metadata: {
         tenant: selectedModulesTenant.name,
@@ -1503,7 +1496,7 @@ export function AdminGlobalAccess() {
         <section className="global-admin-content">
           <header className="global-admin-header">
             <div>
-              <span>Etapa 2 · Admin Global SirvaOS</span>
+              <span>Admin SirvaOS</span>
               <h1>
                 {activeSection === "dashboard" && "Visão geral"}
                 {activeSection === "clients" && "Clientes / Igrejas"}
@@ -1566,22 +1559,18 @@ export function AdminGlobalAccess() {
           {dashboardData ? (
             <>
               {activeSection === "clients" && isTenantFormOpen ? (
-                <section className="global-panel tenant-form-panel" aria-label="Cadastro de tenant">
-                  <div className="global-panel-heading">
-                    <div>
-                      <span>{tenantForm.id ? "Editar tenant" : "Novo tenant"}</span>
-                      <h2>{tenantForm.id ? tenantForm.name : "Cadastrar igreja cliente"}</h2>
+                <div className="modal-overlay" onClick={() => setIsTenantFormOpen(false)}>
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <div>
+                        <span>{tenantForm.id ? "Editar cliente" : "Novo cliente"}</span>
+                        <h2>{tenantForm.id ? tenantForm.name : "Cadastrar nova igreja"}</h2>
+                      </div>
+                      <button className="modal-close" type="button" aria-label="Fechar formulário" onClick={() => setIsTenantFormOpen(false)}>
+                        <X size={18} />
+                      </button>
                     </div>
-                    <button
-                      className="panel-icon-button"
-                      type="button"
-                      aria-label="Fechar formulário"
-                      onClick={() => setIsTenantFormOpen(false)}
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
+                    <div className="modal-body">
                   <form className="tenant-form" onSubmit={handleTenantSubmit}>
                     {tenantFormLogoUrl ? (
                       <div className="tenant-logo-preview">
@@ -1748,7 +1737,7 @@ export function AdminGlobalAccess() {
                         disabled={tenantSaveStatus === "loading"}
                         icon={<ArrowRight size={18} />}
                       >
-                        {tenantSaveStatus === "loading" ? "Salvando..." : "Salvar tenant"}
+                        {tenantSaveStatus === "loading" ? "Salvando..." : "Salvar cliente"}
                       </Button>
                       <button
                         className="secondary-action"
@@ -1759,7 +1748,9 @@ export function AdminGlobalAccess() {
                       </button>
                     </div>
                   </form>
-                </section>
+                    </div>
+                  </div>
+                </div>
               ) : null}
 
               {activeSection === "plans" && isPlanFormOpen ? (
@@ -2053,68 +2044,63 @@ export function AdminGlobalAccess() {
               ) : null}
 
               {activeSection === "clients" && selectedModulesTenant ? (
-                <section
-                  className="global-panel tenant-modules-panel"
-                  aria-label="Ativação de módulos por tenant"
-                >
-                  <div className="global-panel-heading">
-                    <div>
-                      <span>Módulos por tenant</span>
-                      <h2>{selectedModulesTenant.name}</h2>
+                <div className="modal-overlay" onClick={() => setSelectedModulesTenantId(null)}>
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Módulos por Cliente</span>
+                        <h2>{selectedModulesTenant.name}</h2>
+                      </div>
+                      <button className="modal-close" type="button" aria-label="Fechar módulos" onClick={() => setSelectedModulesTenantId(null)}>
+                        <X size={18} />
+                      </button>
                     </div>
-                    <button
-                      className="panel-icon-button"
-                      type="button"
-                      aria-label="Fechar módulos"
-                      onClick={() => setSelectedModulesTenantId(null)}
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
+                    <div className="modal-body">
+                      <form className="tenant-modules-form" onSubmit={handleModulesSubmit}>
+                        {dashboardData.modules
+                          .filter((module) => module.status !== "deprecated")
+                          .map((module) => (
+                          <article key={module.id} className="tenant-module-card">
+                            <div>
+                              {module.status === "beta" ? (
+                                <span className="module-badge beta">Beta</span>
+                              ) : (
+                                <span className="module-badge active">Ativo</span>
+                              )}
+                              <strong>{module.name}</strong>
+                              <small>{module.description ?? module.code}</small>
+                            </div>
+                            <select
+                              value={moduleConfig[module.id] ?? "inactive"}
+                              onChange={(event) =>
+                                updateModuleStatus(module.id, event.target.value as TenantModuleStatus)
+                              }
+                            >
+                              <option value="inactive">Inativo</option>
+                              <option value="configuring">Em configuração</option>
+                              <option value="active">Ativo</option>
+                              <option value="suspended">Suspenso</option>
+                            </select>
+                          </article>
+                        ))}
 
-                  <form className="tenant-modules-form" onSubmit={handleModulesSubmit}>
-                    {dashboardData.modules
-                      .filter((module) => module.status !== "deprecated")
-                      .map((module) => (
-                      <article key={module.id} className="tenant-module-card">
-                        <div>
-                          {module.status === "beta" ? (
-                            <span className="module-badge beta">Beta</span>
-                          ) : (
-                            <span className="module-badge active">Ativo</span>
-                          )}
-                          <strong>{module.name}</strong>
-                          <small>{module.description ?? module.code}</small>
+                        {moduleSaveMessage ? (
+                          <p className={`login-feedback ${moduleSaveStatus}`}>{moduleSaveMessage}</p>
+                        ) : null}
+
+                        <div className="tenant-form-actions">
+                          <Button
+                            type="submit"
+                            disabled={moduleSaveStatus === "loading"}
+                            icon={<ArrowRight size={18} />}
+                          >
+                            {moduleSaveStatus === "loading" ? "Salvando..." : "Salvar módulos"}
+                          </Button>
                         </div>
-                        <select
-                          value={moduleConfig[module.id] ?? "inactive"}
-                          onChange={(event) =>
-                            updateModuleStatus(module.id, event.target.value as TenantModuleStatus)
-                          }
-                        >
-                          <option value="inactive">Inativo</option>
-                          <option value="configuring">Em configuração</option>
-                          <option value="active">Ativo</option>
-                          <option value="suspended">Suspenso</option>
-                        </select>
-                      </article>
-                    ))}
-
-                    {moduleSaveMessage ? (
-                      <p className={`login-feedback ${moduleSaveStatus}`}>{moduleSaveMessage}</p>
-                    ) : null}
-
-                    <div className="tenant-form-actions">
-                      <Button
-                        type="submit"
-                        disabled={moduleSaveStatus === "loading"}
-                        icon={<ArrowRight size={18} />}
-                      >
-                        {moduleSaveStatus === "loading" ? "Salvando..." : "Salvar módulos"}
-                      </Button>
+                      </form>
                     </div>
-                  </form>
-                </section>
+                  </div>
+                </div>
               ) : null}
 
               <div className="global-stats">
@@ -2186,7 +2172,7 @@ export function AdminGlobalAccess() {
                         {activeSection === "dashboard"
                           ? "Resumo do Admin Global"
                           : activeSection === "clients"
-                          ? "Tenants cadastrados"
+                          ? "Clientes cadastrados"
                           : activeSection === "plans"
                           ? "Catálogo de planos"
                           : "Módulos disponíveis"}
@@ -2249,7 +2235,7 @@ export function AdminGlobalAccess() {
                   {activeSection === "dashboard" ? (
                     <div className="tenant-table">
                       <div className="tenant-table-head">
-                        <span>Tenant</span>
+                        <span>Cliente</span>
                         <span>Plano</span>
                         <span>Status</span>
                         <span>Membros</span>
@@ -2304,6 +2290,7 @@ export function AdminGlobalAccess() {
                               <em className={tenant.status}>{statusLabels[tenant.status]}</em>
                               <button
                                 type="button"
+                                title="Ver detalhes do cliente"
                                 aria-label={`Ver detalhes de ${tenant.name}`}
                                 onClick={() => openTenantDetailPanel(tenant)}
                               >
@@ -2311,6 +2298,7 @@ export function AdminGlobalAccess() {
                               </button>
                               <button
                                 type="button"
+                                title="Configurar módulos ativos"
                                 aria-label={`Configurar módulos de ${tenant.name}`}
                                 onClick={() => openModulesPanel(tenant)}
                               >
@@ -2318,10 +2306,19 @@ export function AdminGlobalAccess() {
                               </button>
                               <button
                                 type="button"
+                                title="Editar dados do cliente"
                                 aria-label={`Editar ${tenant.name}`}
                                 onClick={() => openEditTenantForm(tenant)}
                               >
                                 <Edit3 size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Abrir painel Admin do cliente"
+                                aria-label={`Abrir Admin Cliente de ${tenant.name}`}
+                                onClick={() => window.open("/admin-cliente", "_blank")}
+                              >
+                                <ExternalLink size={16} />
                               </button>
                             </div>
                           </article>
@@ -2329,118 +2326,109 @@ export function AdminGlobalAccess() {
                       ) : (
                         <div className="empty-admin-state">
                           <Building2 size={22} />
-                          <strong>Nenhum tenant encontrado.</strong>
-                          <span>Cadastre a primeira igreja no próximo fluxo da Etapa 2.</span>
+                          <strong>Nenhum cliente encontrado.</strong>
+                          <span>Cadastre a primeira igreja no próximo fluxo.</span>
                         </div>
                       )}
                     </div>
 
                     {selectedTenant ? (
-                      <section className="global-panel tenant-detail-panel" aria-label={`Detalhes do tenant ${selectedTenant.name}`}>
-                        <div className="global-panel-heading">
-                          <div>
-                            <span>Detalhes do tenant</span>
-                            <h2>{selectedTenant.name}</h2>
+                      <div className="modal-overlay" onClick={clearTenantSelection}>
+                        <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "min(960px, 95vw)", width: "100%" }}>
+                          <div className="modal-header">
+                            <div>
+                              <span>Detalhes do cliente</span>
+                              <h2>{selectedTenant.name}</h2>
+                            </div>
+                            <button className="modal-close" type="button" aria-label="Fechar detalhes" onClick={clearTenantSelection}>
+                              <X size={18} />
+                            </button>
                           </div>
-                          <button
-                            className="panel-icon-button"
-                            type="button"
-                            aria-label="Fechar detalhes"
-                            onClick={clearTenantSelection}
-                          >
-                            <X size={18} />
-                          </button>
+                          <div className="modal-body">
+
+                        <div className="tenant-detail-actions">
+                          <Button onClick={() => { clearTenantSelection(); openEditTenantForm(selectedTenant); }}>
+                            Editar cliente
+                          </Button>
+                          <Button variant="secondary" onClick={() => { clearTenantSelection(); openModulesPanel(selectedTenant); }}>
+                            Configurar módulos
+                          </Button>
+                          <Button variant="secondary" onClick={handleToggleTenantStatus}>
+                            {selectedTenant.status === "active" ? "Desativar" : "Ativar"}
+                          </Button>
                         </div>
 
-                        <div className="tenant-detail-grid">
-                          <div className="tenant-detail-summary">
-                            <article>
-                              <strong>Slug</strong>
-                              <span>{selectedTenant.slug}</span>
-                            </article>
-                            <article>
-                              <strong>Plano</strong>
-                              <span>{selectedTenant.plans?.name ?? "Sem plano"}</span>
-                            </article>
-                            <article>
-                              <strong>Status</strong>
-                              <span>{statusLabels[selectedTenant.status]}</span>
-                            </article>
-                            <article>
-                              <strong>Contato</strong>
-                              <span>{selectedTenant.contact_email ?? "-"}</span>
-                            </article>
-                            <article>
-                              <strong>Telefone</strong>
-                              <span>{selectedTenant.contact_phone ?? "-"}</span>
-                            </article>
-                            <article>
-                              <strong>Logo</strong>
-                              <span className="tenant-logo-preview">
-                                {resolvedTenantLogoUrl ? (
-                                  <img src={resolvedTenantLogoUrl} alt="Logo do tenant" />
-                                ) : (
-                                  <em className="placeholder">Sem logo</em>
-                                )}
-                              </span>
-                            </article>
-                            <article>
-                              <strong>Cores</strong>
-                              <span className="tenant-color-samples">
-                                <em style={{ background: selectedTenant.primary_color }} />
-                                <em style={{ background: selectedTenant.accent_color }} />
-                                <em style={{ background: selectedTenant.header_color }} />
-                                <em style={{ background: selectedTenant.sidebar_color }} />
-                                <em style={{ background: selectedTenant.footer_color }} />
-                                <small>
-                                  Primária {selectedTenant.primary_color} · Destaque {selectedTenant.accent_color} · Header{" "}
-                                  {selectedTenant.header_color} · Menu {selectedTenant.sidebar_color} · Footer{" "}
-                                  {selectedTenant.footer_color}
-                                </small>
-                              </span>
-                            </article>
-                            <article>
-                              <strong>Módulos ativos</strong>
-                              <span>
-                                {selectedTenant.tenant_modules.filter((module) => module.status === "active").length || 0}
-                              </span>
-                            </article>
-                            <article>
-                              <strong>Em configuração</strong>
-                              <span>
-                                {selectedTenant.tenant_modules.filter((module) => module.status === "configuring").length || 0}
-                              </span>
-                            </article>
-                            <article>
-                              <strong>Principais módulos</strong>
-                              <span>
-                                {selectedTenant.tenant_modules
-                                  .filter((module) => module.status === "active")
-                                  .map((module) => module.platform_modules?.name ?? module.module_id)
-                                  .filter(Boolean)
-                                  .slice(0, 3)
-                                  .join(", ") || "Nenhum módulo ativo"}
-                              </span>
-                            </article>
-                          </div>
-
-                          <div className="tenant-detail-actions">
-                            <Button onClick={() => openEditTenantForm(selectedTenant)}>
-                              Editar tenant
-                            </Button>
-                            <Button variant="ghost" onClick={() => openModulesPanel(selectedTenant)}>
-                              Configurar módulos
-                            </Button>
-                            <Button variant="secondary" onClick={handleToggleTenantStatus}>
-                              {selectedTenant.status === "active" ? "Desativar (suspender)" : "Ativar tenant"}
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => window.open("/admin-cliente", "_blank")}
-                            >
-                              Abrir Admin Cliente
-                            </Button>
-                          </div>
+                        <div className="tenant-detail-summary">
+                          <article>
+                            <strong>Slug</strong>
+                            <span>{selectedTenant.slug}</span>
+                          </article>
+                          <article>
+                            <strong>Plano</strong>
+                            <span>{selectedTenant.plans?.name ?? "Sem plano"}</span>
+                          </article>
+                          <article>
+                            <strong>Status</strong>
+                            <span>{statusLabels[selectedTenant.status]}</span>
+                          </article>
+                          <article>
+                            <strong>Contato</strong>
+                            <span>{selectedTenant.contact_email ?? "-"}</span>
+                          </article>
+                          <article>
+                            <strong>Telefone</strong>
+                            <span>{selectedTenant.contact_phone ?? "-"}</span>
+                          </article>
+                          <article>
+                            <strong>Módulos ativos</strong>
+                            <span>{selectedTenant.tenant_modules.filter((m) => m.status === "active").length || 0}</span>
+                          </article>
+                          <article>
+                            <strong>Principais módulos</strong>
+                            <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>
+                              {selectedTenant.tenant_modules
+                                .filter((m) => m.status === "active")
+                                .map((m) => m.platform_modules?.name ?? m.module_id)
+                                .filter(Boolean)
+                                .map((name) => (
+                                  <li key={name} style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--color-neutral-800)", display: "flex", alignItems: "center", gap: 6 }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-brand-primary)", flexShrink: 0, display: "inline-block" }} />
+                                    {name}
+                                  </li>
+                                ))}
+                              {selectedTenant.tenant_modules.filter((m) => m.status === "active").length === 0 ? (
+                                <li style={{ fontSize: "0.82rem", color: "var(--color-neutral-400)" }}>Nenhum módulo ativo</li>
+                              ) : null}
+                            </ul>
+                          </article>
+                          <article>
+                            <strong>Cores</strong>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+                              {[
+                                { label: "Primária", color: selectedTenant.primary_color },
+                                { label: "Destaque", color: selectedTenant.accent_color },
+                                { label: "Header", color: selectedTenant.header_color },
+                                { label: "Menu", color: selectedTenant.sidebar_color },
+                                { label: "Footer", color: selectedTenant.footer_color },
+                              ].map(({ label, color }) => (
+                                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ width: 20, height: 20, borderRadius: 6, background: color, border: "1px solid var(--color-neutral-200)", flexShrink: 0 }} />
+                                  <span style={{ fontSize: "0.75rem", color: "var(--color-neutral-500)", fontWeight: 500 }}>{label}</span>
+                                  <code style={{ fontSize: "0.72rem", color: "var(--color-neutral-700)", background: "var(--color-neutral-100)", padding: "1px 5px", borderRadius: 4, fontFamily: "monospace" }}>{color}</code>
+                                </div>
+                              ))}
+                            </div>
+                          </article>
+                          <article>
+                            <strong>Logo</strong>
+                            <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>
+                              {resolvedTenantLogoUrl ? (
+                                <img src={resolvedTenantLogoUrl} alt="Logo" style={{ maxWidth: "100%", maxHeight: 120, objectFit: "contain" }} />
+                              ) : (
+                                <em style={{ fontStyle: "normal", fontSize: "0.82rem", color: "var(--color-neutral-400)" }}>Sem logo</em>
+                              )}
+                            </div>
+                          </article>
                         </div>
 
                         <div className="tenant-detail-sections">
@@ -2640,7 +2628,9 @@ export function AdminGlobalAccess() {
                             </div>
                           </section>
                         </div>
-                      </section>
+                      </div>
+                    </div>
+                  </div>
                     ) : null}
                     </>
                   ) : activeSection === "admins" ? (

@@ -43,7 +43,7 @@ select
   id,
   'active'
 from public.platform_modules
-where code in ('members', 'calendar', 'announcements')
+where code in ('members', 'announcements')
 on conflict (tenant_id, module_id) do update set
   status = excluded.status,
   updated_at = now();

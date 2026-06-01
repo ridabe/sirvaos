@@ -977,48 +977,60 @@ h1 {
 
 .tenant-detail-summary {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .tenant-detail-summary article {
-  padding: 16px;
+  padding: 12px 14px;
   background: var(--color-neutral-50);
   border: 1px solid var(--color-neutral-200);
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .tenant-detail-summary strong {
   display: block;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
-  color: var(--color-neutral-600);
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .tenant-detail-summary span {
   display: block;
   color: var(--color-neutral-950);
   font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .tenant-color-samples {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .tenant-color-samples em {
   display: block;
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
   border: 1px solid var(--color-neutral-200);
 }
 
+.tenant-color-samples small {
+  display: none;
+}
+
 .tenant-detail-actions {
-  display: grid;
-  gap: 12px;
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 
 .tenant-logo-preview {
@@ -1315,7 +1327,7 @@ h1 {
 .tenant-table-head,
 .tenant-table-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.35fr) minmax(120px, 0.72fr) 86px 96px 160px;
+  grid-template-columns: minmax(190px, 1.35fr) minmax(120px, 0.72fr) 86px 96px minmax(210px, auto);
   gap: 12px;
   align-items: center;
 }

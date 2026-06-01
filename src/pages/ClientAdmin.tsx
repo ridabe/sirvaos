@@ -21,6 +21,7 @@ import {
   MessageCircle,
   Music,
   Palette,
+  Play,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -120,6 +121,19 @@ type AnnouncementRecord = {
   message_html: string | null;
   published_at: string;
   expires_at: string | null;
+  created_at: string;
+};
+
+type SocialMediaChannelRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  platform: string;
+  channel_type: "channel" | "playlist";
+  channel_id: string;
+  channel_url: string | null;
+  description: string | null;
+  is_active: boolean;
   created_at: string;
 };
 
@@ -530,6 +544,7 @@ type ClientDashboardData = {
   kidsActivities: KidsActivityRecord[];
   kidsCommunications: KidsCommunicationRecord[];
   allPlatformModules: TenantModuleRecord[];
+  socialMediaChannels: SocialMediaChannelRecord[];
 };
 
 type MemberFormState = {
@@ -983,6 +998,8 @@ const sampleClientDashboardData: ClientDashboardData = {
       id: "announce-1",
       title: "Culto Especial",
       message: "Não perca o culto especial de domingo com convidados.",
+      message_html: null,
+      expires_at: null,
       published_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
     },
@@ -1049,9 +1066,9 @@ const sampleClientDashboardData: ClientDashboardData = {
     },
     {
       id: "module-2",
-      code: "calendar",
+      code: "events",
       name: "Eventos",
-      description: "Calendário e programação de cultos.",
+      description: "Agenda institucional da igreja.",
       status: "active",
     },
     {
@@ -1101,7 +1118,7 @@ const sampleClientDashboardData: ClientDashboardData = {
   ],
   allPlatformModules: [
     { id: "module-1", code: "members",       name: "Membresia",          description: "Cadastro de membros, famílias e ministérios.", status: "active" },
-    { id: "module-2", code: "calendar",      name: "Calendário Central", description: "Agenda de cultos e eventos.",                  status: "active" },
+    { id: "module-2", code: "events",         name: "Eventos",            description: "Agenda institucional da igreja.",               status: "active" },
     { id: "module-3", code: "announcements", name: "Comunicados",        description: "Comunicados gerais para membros.",              status: "active" },
     { id: "module-4", code: "worship",       name: "Louvor",             description: "Escalas e confirmação de presença.",            status: "active" },
     { id: "module-5", code: "financial",     name: "Financeiro",         description: "Dízimos, ofertas e relatórios.",                status: "active" },
@@ -1222,6 +1239,7 @@ const sampleClientDashboardData: ClientDashboardData = {
   kidsCommunications: [
     { id: "kids-comm-1", tenant_id: "demo-tenant", child_id: null, title: "Evento especial crianças", message: "Neste domingo teremos uma programação especial para as crianças! Traga seu filho(a).", sent_via: "system", sent_at: new Date().toISOString(), created_at: new Date().toISOString(), kids_children: null },
   ],
+  socialMediaChannels: [],
 };
 
 const clientTabs = [
@@ -1235,6 +1253,7 @@ const clientTabs = [
   { key: "kids", label: "Kids", icon: Baby },
   { key: "bible-school", label: "Escola Bíblica", icon: BookOpen },
   { key: "notices", label: "Comunicados", icon: Bell },
+  { key: "social-media", label: "Mídias Sociais", icon: Play },
   { key: "lists", label: "Listagens", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
   { key: "users", label: "Usuários", icon: ShieldCheck },
@@ -1254,6 +1273,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   kids: "kids",
   "bible-school": "bible-school",
   notices: "announcements",
+  "social-media": "social_media",
 };
 
 const tenantAdminOnlyTabs = new Set<ClientTab>(["lists", "theme", "users", "policies"]);
@@ -1613,6 +1633,14 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [announcementNotifyMessage, setAnnouncementNotifyMessage] = useState("");
   const [announcementPreviewOpen, setAnnouncementPreviewOpen] = useState(false);
   const [announcementPreviewTarget, setAnnouncementPreviewTarget] = useState<AnnouncementRecord | null>(null);
+  const [isSocialMediaFormOpen, setIsSocialMediaFormOpen] = useState(false);
+  const [socialMediaFormMode, setSocialMediaFormMode] = useState<"create" | "edit">("create");
+  const [socialMediaEditTarget, setSocialMediaEditTarget] = useState<SocialMediaChannelRecord | null>(null);
+  const [socialMediaFormName, setSocialMediaFormName] = useState("");
+  const [socialMediaFormUrl, setSocialMediaFormUrl] = useState("");
+  const [socialMediaFormDescription, setSocialMediaFormDescription] = useState("");
+  const [socialMediaSaveStatus, setSocialMediaSaveStatus] = useState<LoginStatus>("idle");
+  const [socialMediaSaveMessage, setSocialMediaSaveMessage] = useState("");
   const [themeForm, setThemeForm] = useState<ThemeFormState>(emptyThemeForm);
   const [themeSaveStatus, setThemeSaveStatus] = useState<LoginStatus>("idle");
   const [themeSaveMessage, setThemeSaveMessage] = useState("");
@@ -1768,6 +1796,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageKids = canManageModuleCode("kids");
   const canManageBibleSchool = canManageModuleCode("bible-school");
   const canManageAnnouncements = canManageModuleCode("announcements");
+  const canManageSocialMedia = canManageModuleCode("social_media");
 
   const visibleClientTabs = useMemo(() => {
     return clientTabs.filter((tab) => {
@@ -2261,6 +2290,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       kidsActivitiesResult,
       kidsCommunicationsResult,
       allPlatformModulesResult,
+      socialMediaChannelsResult,
     ] = await Promise.all([
         supabase
           .from("tenants")
@@ -2420,6 +2450,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .eq("status", "active")
           .order("sort_order", { ascending: true })
           .returns<TenantModuleRecord[]>(),
+        supabase
+          .from("social_media_channels")
+          .select("id, tenant_id, name, platform, channel_type, channel_id, channel_url, description, is_active, created_at")
+          .eq("tenant_id", tenantId)
+          .order("created_at", { ascending: true })
+          .returns<SocialMediaChannelRecord[]>(),
       ]);
 
     if (
@@ -2447,7 +2483,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       kidsAttendanceResult.error ||
       kidsActivitiesResult.error ||
       kidsCommunicationsResult.error ||
-      allPlatformModulesResult.error
+      allPlatformModulesResult.error ||
+      socialMediaChannelsResult.error
     ) {
       setDataStatus("error");
       setLoginMessage("Erro ao carregar dados do tenant.");
@@ -2571,6 +2608,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       kidsActivities: kidsActivitiesResult.data ?? [],
       kidsCommunications: kidsCommunicationsResult.data ?? [],
       allPlatformModules: allPlatformModulesResult.data ?? [],
+      socialMediaChannels: socialMediaChannelsResult.data ?? [],
     });
 
     setThemeForm({
@@ -3693,7 +3731,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     if (!clientData) {
       setMemberSaveStatus("error");
-      setMemberSaveMessage("Tenant não carregado.");
+      setMemberSaveMessage("Dados do cliente não carregados.");
       return;
     }
 
@@ -4843,6 +4881,99 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setAnnouncementNotifyStatus("error");
       setAnnouncementNotifyMessage(err instanceof Error ? err.message : "Erro ao enviar e-mails.");
     }
+  }
+
+  function extractYouTubeInfo(url: string): { channelType: "channel" | "playlist"; channelId: string } | null {
+    const channelMatch = url.match(/youtube\.com\/channel\/(UC[a-zA-Z0-9_-]+)/);
+    if (channelMatch) return { channelType: "channel", channelId: channelMatch[1] };
+    const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    if (listMatch) return { channelType: "playlist", channelId: listMatch[1] };
+    return null;
+  }
+
+  function openCreateSocialMediaForm() {
+    if (!canManageSocialMedia) return;
+    setSocialMediaFormMode("create");
+    setSocialMediaEditTarget(null);
+    setSocialMediaFormName("");
+    setSocialMediaFormUrl("");
+    setSocialMediaFormDescription("");
+    setSocialMediaSaveStatus("idle");
+    setSocialMediaSaveMessage("");
+    setIsSocialMediaFormOpen(true);
+  }
+
+  function openEditSocialMediaForm(channel: SocialMediaChannelRecord) {
+    if (!canManageSocialMedia) return;
+    setSocialMediaFormMode("edit");
+    setSocialMediaEditTarget(channel);
+    setSocialMediaFormName(channel.name);
+    setSocialMediaFormUrl(channel.channel_url ?? "");
+    setSocialMediaFormDescription(channel.description ?? "");
+    setSocialMediaSaveStatus("idle");
+    setSocialMediaSaveMessage("");
+    setIsSocialMediaFormOpen(true);
+  }
+
+  async function handleSaveSocialMediaChannel(e: FormEvent) {
+    e.preventDefault();
+    if (!canManageSocialMedia || !clientData) return;
+    setSocialMediaSaveStatus("loading");
+    setSocialMediaSaveMessage("");
+
+    const name = socialMediaFormName.trim();
+    const url = socialMediaFormUrl.trim();
+    if (!name || !url) {
+      setSocialMediaSaveStatus("error");
+      setSocialMediaSaveMessage("Informe nome e URL do canal/playlist.");
+      return;
+    }
+
+    const info = extractYouTubeInfo(url);
+    if (!info) {
+      setSocialMediaSaveStatus("error");
+      setSocialMediaSaveMessage("URL inválida. Use o formato https://www.youtube.com/channel/UC... ou https://www.youtube.com/playlist?list=...");
+      return;
+    }
+
+    const payload = {
+      tenant_id: clientData.tenant.id,
+      name,
+      platform: "youtube" as const,
+      channel_type: info.channelType,
+      channel_id: info.channelId,
+      channel_url: url,
+      description: socialMediaFormDescription.trim() || null,
+      is_active: true,
+    };
+
+    const result = socialMediaEditTarget
+      ? await supabase.from("social_media_channels").update(payload).eq("id", socialMediaEditTarget.id)
+      : await supabase.from("social_media_channels").insert({ ...payload, created_by: profile?.id ?? null });
+
+    if (result.error) {
+      setSocialMediaSaveStatus("error");
+      setSocialMediaSaveMessage("Não foi possível salvar o canal.");
+      return;
+    }
+
+    setSocialMediaSaveStatus("success");
+    setSocialMediaSaveMessage(socialMediaEditTarget ? "Canal atualizado." : "Canal adicionado.");
+    setIsSocialMediaFormOpen(false);
+    if (profile) await loadClientData(profile.id);
+  }
+
+  async function handleDeleteSocialMediaChannel(id: string) {
+    if (!canManageSocialMedia) return;
+    if (!window.confirm("Excluir este canal?")) return;
+    await supabase.from("social_media_channels").delete().eq("id", id);
+    if (profile) await loadClientData(profile.id);
+  }
+
+  async function handleToggleSocialMediaChannel(channel: SocialMediaChannelRecord) {
+    if (!canManageSocialMedia) return;
+    await supabase.from("social_media_channels").update({ is_active: !channel.is_active }).eq("id", channel.id);
+    if (profile) await loadClientData(profile.id);
   }
 
   function updateThemeForm(field: keyof ThemeFormState, value: string) {
@@ -6101,6 +6232,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Módulo Kids"
                   : activeTab === "notices"
                   ? "Comunicados gerais"
+                  : activeTab === "social-media"
+                  ? "Mídias Sociais"
                   : activeTab === "lists"
                   ? "Listagens do tenant"
                   : activeTab === "theme"
@@ -6131,6 +6264,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Gerencie crianças, turmas, presença, professores e comunicados aos responsáveis."
                   : activeTab === "notices"
                   ? "Publique comunicados gerais para a comunidade."
+                  : activeTab === "social-media"
+                  ? "Vincule canais e playlists do YouTube para os membros assistirem dentro do sistema."
                   : activeTab === "lists"
                   ? "Gerencie cargos e ministérios visíveis neste ambiente."
                   : activeTab === "theme"
@@ -6180,6 +6315,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 : activeTab === "events"
                 ? "Novo evento"
                 : "Novo comunicado"}
+            </Button>
+          ) : null}
+          {activeTab === "social-media" && canManageSocialMedia ? (
+            <Button icon={<Plus size={18} />} onClick={openCreateSocialMediaForm}>
+              Novo canal
             </Button>
           ) : null}
         </header>
@@ -9602,6 +9742,156 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
             </article>
           ) : null}
 
+          {activeTab === "social-media" ? (
+            <article className="panel full-width">
+              <div className="panel-heading">
+                <div>
+                  <span>Mídias Sociais</span>
+                  <h4>Canais e playlists do YouTube</h4>
+                </div>
+                {canManageSocialMedia ? (
+                  <button type="button" onClick={openCreateSocialMediaForm}>Adicionar canal</button>
+                ) : null}
+              </div>
+
+              {(clientData?.socialMediaChannels ?? []).length === 0 ? (
+                <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                  <Play size={32} />
+                  <strong>Nenhum canal cadastrado</strong>
+                  <span>Adicione um canal ou playlist do YouTube para os membros assistirem.</span>
+                </div>
+              ) : (
+                <div className="notification-list">
+                  {(clientData?.socialMediaChannels ?? []).map((ch) => (
+                    <div key={ch.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <Play size={15} style={{ color: "var(--color-accent)" }} />
+                          <strong>{ch.name}</strong>
+                          <em style={{
+                            fontSize: "0.7rem", fontStyle: "normal", fontWeight: 600,
+                            background: ch.channel_type === "playlist" ? "var(--color-bg-subtle)" : "rgba(var(--color-accent-rgb),0.12)",
+                            color: "var(--color-text-secondary)",
+                            padding: "1px 7px", borderRadius: 4,
+                          }}>
+                            {ch.channel_type === "playlist" ? "Playlist" : "Canal"}
+                          </em>
+                          {!ch.is_active ? (
+                            <em style={{
+                              fontSize: "0.7rem", fontStyle: "normal", fontWeight: 600,
+                              background: "var(--color-bg-subtle)", color: "var(--color-text-secondary)",
+                              padding: "1px 7px", borderRadius: 4,
+                            }}>Inativo</em>
+                          ) : null}
+                        </div>
+                        {canManageSocialMedia ? (
+                          <div className="member-actions" style={{ gap: 4 }}>
+                            <button
+                              type="button"
+                              title={ch.is_active ? "Desativar" : "Ativar"}
+                              style={{ color: ch.is_active ? "var(--color-success)" : "var(--color-text-secondary)" }}
+                              onClick={() => handleToggleSocialMediaChannel(ch)}
+                            >
+                              <CheckCircle2 size={15} />
+                            </button>
+                            <button type="button" title="Editar" onClick={() => openEditSocialMediaForm(ch)}>
+                              <Edit3 size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Excluir"
+                              style={{ color: "var(--color-error)" }}
+                              onClick={() => handleDeleteSocialMediaChannel(ch.id)}
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                      {ch.channel_url ? (
+                        <a
+                          href={ch.channel_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", wordBreak: "break-all" }}
+                        >
+                          {ch.channel_url}
+                        </a>
+                      ) : null}
+                      {ch.description ? (
+                        <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                          {ch.description}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          ) : null}
+
+          {isSocialMediaFormOpen ? (
+            <div className="modal-overlay" onClick={() => setIsSocialMediaFormOpen(false)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div className="modal-header">
+                  <strong>{socialMediaFormMode === "create" ? "Novo canal" : "Editar canal"}</strong>
+                  <button type="button" onClick={() => setIsSocialMediaFormOpen(false)}><X size={18} /></button>
+                </div>
+                <form onSubmit={handleSaveSocialMediaChannel} style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 0 4px" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>Nome do canal *</span>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={socialMediaFormName}
+                      onChange={(e) => setSocialMediaFormName(e.target.value)}
+                      placeholder="Ex.: Canal da Igreja"
+                      required
+                    />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>URL do YouTube *</span>
+                    <input
+                      type="url"
+                      className="form-input"
+                      value={socialMediaFormUrl}
+                      onChange={(e) => setSocialMediaFormUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/channel/UC... ou playlist?list=..."
+                      required
+                    />
+                    <small style={{ color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                      Suportado: <code>youtube.com/channel/UC...</code> ou <code>youtube.com/playlist?list=...</code>
+                    </small>
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>Descrição (opcional)</span>
+                    <textarea
+                      className="form-input"
+                      rows={2}
+                      value={socialMediaFormDescription}
+                      onChange={(e) => setSocialMediaFormDescription(e.target.value)}
+                      placeholder="Breve descrição para os membros"
+                    />
+                  </label>
+                  {socialMediaSaveStatus === "error" ? (
+                    <p style={{ color: "var(--color-error)", margin: 0, fontSize: "0.82rem" }}>{socialMediaSaveMessage}</p>
+                  ) : null}
+                  {socialMediaSaveStatus === "success" ? (
+                    <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.82rem" }}>{socialMediaSaveMessage}</p>
+                  ) : null}
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsSocialMediaFormOpen(false)}>
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={socialMediaSaveStatus === "loading"}>
+                      {socialMediaSaveStatus === "loading" ? "Salvando..." : "Salvar"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
+
           {activeTab === "lists" ? (
             <article className="panel full-width">
               <div className="panel-heading">
@@ -10818,7 +11108,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>Em breve</em>
                   </div>
                   <small style={{ color: "var(--color-text-secondary)" }}>
-                    Disponível quando o aplicativo móvel (Etapa 14) for lançado.
+                    Disponível no App(Em breve).
                   </small>
                 </div>
               </div>
@@ -11015,7 +11305,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>Em breve</em>
                   </div>
                   <small style={{ color: "var(--color-text-secondary)" }}>
-                    Disponível quando o aplicativo móvel (Etapa 14) for lançado.
+                    Disponível no App(Em breve).
                   </small>
                 </div>
               </div>

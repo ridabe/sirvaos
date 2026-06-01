@@ -13,6 +13,7 @@ import {
   Mail,
   MapPin,
   Music,
+  Play,
   Plus,
   QrCode,
   ScrollText,
@@ -98,6 +99,24 @@ type PortalAnnouncementRecord = {
   message_html: string | null;
   published_at: string;
   expires_at: string | null;
+};
+
+type SocialMediaChannelPortalRecord = {
+  id: string;
+  name: string;
+  platform: string;
+  channel_type: "channel" | "playlist";
+  channel_id: string;
+  channel_url: string | null;
+  description: string | null;
+};
+
+type YouTubeVideoRecord = {
+  videoId: string;
+  title: string;
+  published: string;
+  thumbnail: string;
+  description: string;
 };
 
 function normalizeAccessLabel(value: string | null | undefined) {
@@ -378,6 +397,10 @@ export function MemberPortal() {
   const [lgpdDeletionRequested, setLgpdDeletionRequested] = useState(false);
   const [lgpdActionStatus, setLgpdActionStatus] = useState<LoginStatus>("idle");
   const [lgpdActionMessage, setLgpdActionMessage] = useState("");
+  const [socialMediaChannels, setSocialMediaChannels] = useState<SocialMediaChannelPortalRecord[]>([]);
+  const [socialMediaVideos, setSocialMediaVideos] = useState<Record<string, YouTubeVideoRecord[]>>({});
+  const [socialMediaLoadingIds, setSocialMediaLoadingIds] = useState<Set<string>>(new Set());
+  const [socialMediaVideoModal, setSocialMediaVideoModal] = useState<{ channelName: string; video: YouTubeVideoRecord } | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -558,7 +581,7 @@ export function MemberPortal() {
     // Tenant info e eventos são públicos para todo membro do tenant — carregamos
     // antes de qualquer guarda de member_id ou módulo específico.
     if (profileData.tenant_id) {
-      const [tenantInfoRes, eventsRes, announcementsRes] = await Promise.all([
+      const [tenantInfoRes, eventsRes, announcementsRes, socialMediaRes] = await Promise.all([
         supabase
           .from("tenants")
           .select("name, contact_phone")
@@ -581,10 +604,47 @@ export function MemberPortal() {
           .order("published_at", { ascending: false })
           .limit(20)
           .returns<PortalAnnouncementRecord[]>(),
+        supabase
+          .from("social_media_channels")
+          .select("id, name, platform, channel_type, channel_id, channel_url, description")
+          .eq("tenant_id", profileData.tenant_id)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true })
+          .returns<SocialMediaChannelPortalRecord[]>(),
       ]);
       setPortalTenantInfo(tenantInfoRes.data ?? null);
       setPortalEvents(eventsRes.data ?? []);
       setPortalAnnouncements(announcementsRes.data ?? []);
+      const channels = socialMediaRes.data ?? [];
+      setSocialMediaChannels(channels);
+      // Busca vídeos de cada canal em background
+      if (channels.length > 0) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token ?? "";
+        setSocialMediaLoadingIds(new Set(channels.map((c) => c.id)));
+        await Promise.all(
+          channels.map(async (ch) => {
+            try {
+              const res = await fetch(`${supabaseUrl}/functions/v1/fetch-youtube-feed`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ channel_id: ch.channel_id, channel_type: ch.channel_type }),
+              });
+              const json = (await res.json()) as { videos?: YouTubeVideoRecord[] };
+              setSocialMediaVideos((prev) => ({ ...prev, [ch.id]: json.videos ?? [] }));
+            } catch {
+              setSocialMediaVideos((prev) => ({ ...prev, [ch.id]: [] }));
+            } finally {
+              setSocialMediaLoadingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(ch.id);
+                return next;
+              });
+            }
+          }),
+        );
+      }
     }
 
     if (!profileData.member_id || !profileData.tenant_id) {
@@ -1815,6 +1875,101 @@ export function MemberPortal() {
               })}
             </div>
           </section>
+        ) : null}
+
+        {/* ── Seção: Mídias Sociais ─────────────────────────────────────── */}
+        {socialMediaChannels.length > 0 ? (
+          <section className="member-portal-section">
+            <div className="member-portal-section-head">
+              <div>
+                <h2><Play size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Mídias Sociais</h2>
+                <p>Vídeos e transmissões do canal da sua igreja.</p>
+              </div>
+            </div>
+            {socialMediaChannels.map((ch) => {
+              const videos = socialMediaVideos[ch.id] ?? [];
+              const isLoading = socialMediaLoadingIds.has(ch.id);
+              return (
+                <div key={ch.id} style={{ marginBottom: 24 }}>
+                  <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Play size={14} style={{ color: "var(--color-accent)" }} />
+                    {ch.name}
+                    <em style={{ fontSize: "0.72rem", fontStyle: "normal", background: "var(--color-bg-subtle)", color: "var(--color-text-secondary)", padding: "1px 7px", borderRadius: 4 }}>
+                      {ch.channel_type === "playlist" ? "Playlist" : "Canal"}
+                    </em>
+                  </h3>
+                  {ch.description ? (
+                    <p style={{ margin: "0 0 10px", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>{ch.description}</p>
+                  ) : null}
+                  {isLoading ? (
+                    <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>Carregando vídeos…</p>
+                  ) : videos.length === 0 ? (
+                    <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>Nenhum vídeo disponível no momento.</p>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                      {videos.map((v) => (
+                        <button
+                          key={v.videoId}
+                          type="button"
+                          onClick={() => setSocialMediaVideoModal({ channelName: ch.name, video: v })}
+                          style={{
+                            background: "none", border: "1px solid var(--color-border)",
+                            borderRadius: 8, padding: 0, cursor: "pointer",
+                            display: "flex", flexDirection: "column", overflow: "hidden",
+                            textAlign: "left",
+                          }}
+                        >
+                          <div style={{ position: "relative", width: "100%", paddingTop: "56.25%" }}>
+                            <img
+                              src={v.thumbnail}
+                              alt={v.title}
+                              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                            <div style={{
+                              position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                              background: "rgba(0,0,0,0.25)",
+                            }}>
+                              <Play size={28} style={{ color: "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }} />
+                            </div>
+                          </div>
+                          <div style={{ padding: "8px 10px 10px" }}>
+                            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, lineHeight: 1.35, color: "var(--color-text-primary)", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", display: "-webkit-box", overflow: "hidden" }}>
+                              {v.title}
+                            </p>
+                            {v.published ? (
+                              <small style={{ color: "var(--color-text-secondary)", fontSize: "0.7rem" }}>
+                                {new Date(v.published).toLocaleDateString("pt-BR")}
+                              </small>
+                            ) : null}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        ) : null}
+
+        {socialMediaVideoModal ? (
+          <div className="modal-overlay" onClick={() => setSocialMediaVideoModal(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: "95vw" }}>
+              <div className="modal-header">
+                <strong style={{ fontSize: "0.88rem" }}>{socialMediaVideoModal.video.title}</strong>
+                <button type="button" onClick={() => setSocialMediaVideoModal(null)}><X size={18} /></button>
+              </div>
+              <div style={{ position: "relative", width: "100%", paddingTop: "56.25%", background: "#000", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+                <iframe
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                  src={`https://www.youtube.com/embed/${socialMediaVideoModal.video.videoId}?autoplay=1`}
+                  title={socialMediaVideoModal.video.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
