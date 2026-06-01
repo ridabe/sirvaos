@@ -29,7 +29,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseUrl } from "../lib/supabase";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -843,7 +843,7 @@ export function AdminGlobalAccess() {
     const token = sessionData?.session?.access_token;
 
     const res = await fetch(
-      `${import.meta.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-global-admin`,
+      `${supabaseUrl}/functions/v1/create-global-admin`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

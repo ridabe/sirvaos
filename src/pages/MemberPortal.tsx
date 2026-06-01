@@ -25,7 +25,7 @@ import { useEffect, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { renderEventCardHtml } from "../lib/eventCardTemplate";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseUrl } from "../lib/supabase";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -342,6 +342,8 @@ export function MemberPortal() {
   const [eventPreviewTarget, setEventPreviewTarget] = useState<PortalEventRecord | null>(null);
   const [announcementPreviewOpen, setAnnouncementPreviewOpen] = useState(false);
   const [announcementPreviewTarget, setAnnouncementPreviewTarget] = useState<PortalAnnouncementRecord | null>(null);
+  const [announcementMenuOpen, setAnnouncementMenuOpen] = useState(false);
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<Set<string>>(new Set());
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
   const [portalEvents, setPortalEvents] = useState<PortalEventRecord[]>([]);
   const [portalAnnouncements, setPortalAnnouncements] = useState<PortalAnnouncementRecord[]>([]);
@@ -415,6 +417,49 @@ export function MemberPortal() {
       void checkPolicyAcceptance(profile.tenant_id);
     }
   }, [loadStatus, profile?.tenant_id]);
+
+  useEffect(() => {
+    if (!profile?.id) {
+      setReadAnnouncementIds(new Set());
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(`sirvaos-member-announcements-read:${profile.id}`);
+      const ids = stored ? (JSON.parse(stored) as string[]) : [];
+      setReadAnnouncementIds(new Set(ids));
+    } catch {
+      setReadAnnouncementIds(new Set());
+    }
+  }, [profile?.id]);
+
+  function markAnnouncementsAsRead(ids: string[]) {
+    if (!profile?.id || ids.length === 0) return;
+
+    setReadAnnouncementIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.add(id));
+      try {
+        window.localStorage.setItem(
+          `sirvaos-member-announcements-read:${profile.id}`,
+          JSON.stringify(Array.from(next)),
+        );
+      } catch {
+        // Local read state is only a convenience; ignore storage failures.
+      }
+      return next;
+    });
+  }
+
+  function toggleAnnouncementMenu() {
+    setAnnouncementMenuOpen((current) => {
+      const next = !current;
+      if (next) {
+        markAnnouncementsAsRead(portalAnnouncements.map((announcement) => announcement.id));
+      }
+      return next;
+    });
+  }
 
   async function checkPolicyAcceptance(tenantId: string) {
     const { data: policyData } = await supabase
@@ -619,7 +664,6 @@ export function MemberPortal() {
       setSocialMediaChannels(channels);
       // Busca vídeos de cada canal em background
       if (channels.length > 0) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token ?? "";
         setSocialMediaLoadingIds(new Set(channels.map((c) => c.id)));
@@ -1527,9 +1571,34 @@ export function MemberPortal() {
   });
 
   const adminModuleAccesses = moduleAdminAccesses.filter((row) => row.platform_modules);
+  const isKidsModuleAdmin = adminModuleAccesses.some((row) => row.platform_modules?.code === "kids");
   const isTenantAdmin = profile?.tenant_role === "owner" || profile?.tenant_role === "admin";
   const canOpenAdminPortal =
     Boolean(isTenantAdmin) || canManageMembers || bibleSchoolCanManage || adminModuleAccesses.length > 0;
+  const highlightedAdminModules = [
+    ...(canManageMembers && !adminModuleAccesses.some((row) => row.platform_modules?.code === "members")
+      ? [{
+          id: "members",
+          code: "members",
+          name: "Membresia",
+          description: "Cadastro de membros, famílias, cargos e ministérios.",
+        }]
+      : []),
+    ...adminModuleAccesses.map((row) => ({
+      id: row.id,
+      code: row.platform_modules?.code ?? "",
+      name: row.platform_modules?.name ?? "Módulo",
+      description: row.platform_modules?.description ?? "Acesso administrativo liberado pela igreja.",
+    })),
+    ...(bibleSchoolCanManage && !adminModuleAccesses.some((row) => row.platform_modules?.code === "bible-school")
+      ? [{
+          id: "bible-school",
+          code: "bible-school",
+          name: "Escola Bíblica",
+          description: "Turmas, aulas, materiais e presença.",
+        }]
+      : []),
+  ];
   const ministryAdminLabels = memberMinistries
     .filter((item) => item.is_admin)
     .map((item) => item.catalog_ministries?.name ?? "Ministério")
@@ -1541,6 +1610,15 @@ export function MemberPortal() {
     isSchedulableMinistryName(item.catalog_ministries?.name),
   );
   const showLegacyAssignmentSections = new URLSearchParams(window.location.search).has("legacyPortalAssignments");
+  const showLegacyPortalAnnouncements = new URLSearchParams(window.location.search).has("legacyPortalAnnouncements");
+  const nextPortalEvent = portalEvents[0] ?? null;
+  const latestAnnouncement = portalAnnouncements[0] ?? null;
+  const firstKidsChild = kidsChildren[0] ?? null;
+  const activeKidsPass = firstKidsChild
+    ? (kidsPassesByChildId[firstKidsChild.id] ?? []).find((pass) => !pass.used_at && new Date(pass.valid_until) >= new Date()) ?? null
+    : null;
+  const unreadAnnouncementCount = portalAnnouncements.filter((announcement) => !readAnnouncementIds.has(announcement.id)).length;
+  const hasAnnouncements = portalAnnouncements.length > 0;
 
   if (loadStatus === "idle" || loginStatus === "idle" || loginStatus === "loading") {
     if (!profile) {
@@ -1678,6 +1756,52 @@ export function MemberPortal() {
             <span>{profile.full_name ?? profile.email}</span>
           </div>
         </div>
+        <div className="member-portal-header-actions">
+          <div className="member-portal-announcement-menu">
+            <button
+              type="button"
+              className={`member-portal-announcement-button ${unreadAnnouncementCount > 0 ? "has-unread" : hasAnnouncements ? "has-read" : ""}`}
+              onClick={toggleAnnouncementMenu}
+              aria-label={
+                unreadAnnouncementCount > 0
+                  ? `${unreadAnnouncementCount} comunicado${unreadAnnouncementCount === 1 ? "" : "s"} novo${unreadAnnouncementCount === 1 ? "" : "s"}`
+                  : "Comunicados"
+              }
+            >
+              <Bell size={18} />
+              {hasAnnouncements ? <span className="member-portal-announcement-dot" /> : null}
+            </button>
+            {announcementMenuOpen ? (
+              <div className="member-portal-announcement-popover">
+                <div className="member-portal-announcement-popover-head">
+                  <strong>Comunicados</strong>
+                  <small>{portalAnnouncements.length} {portalAnnouncements.length === 1 ? "recado" : "recados"}</small>
+                </div>
+                {portalAnnouncements.length === 0 ? (
+                  <div className="member-portal-announcement-empty">Nenhum comunicado no momento.</div>
+                ) : (
+                  <div className="member-portal-announcement-list">
+                    {portalAnnouncements.map((announcement) => (
+                      <button
+                        key={announcement.id}
+                        type="button"
+                        onClick={() => {
+                          markAnnouncementsAsRead([announcement.id]);
+                          setAnnouncementPreviewTarget(announcement);
+                          setAnnouncementPreviewOpen(true);
+                          setAnnouncementMenuOpen(false);
+                        }}
+                      >
+                        <strong>{announcement.title}</strong>
+                        <small>{new Date(announcement.published_at).toLocaleDateString("pt-BR")}</small>
+                        <span>{announcement.message.length > 90 ? `${announcement.message.slice(0, 90)}...` : announcement.message}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
         <div className="member-portal-userbox">
           <span>{profile.full_name ?? profile.email}</span>
           <small>{profile.email}</small>
@@ -1686,9 +1810,10 @@ export function MemberPortal() {
             Sair
           </button>
         </div>
+        </div>
       </header>
 
-      <main className="member-portal-main">
+      <main className="member-portal-main member-portal-feed-layout">
         <section className="member-portal-hero">
           <div>
             <span className="member-portal-kicker">Minha área</span>
@@ -1704,7 +1829,61 @@ export function MemberPortal() {
           ) : null}
         </section>
 
-        <section className="member-portal-access-grid" aria-label="Resumo de acessos">
+        <section className="member-portal-now" aria-label="Para você agora">
+          <div className="member-portal-section-head">
+            <div>
+              <h2>Para você agora</h2>
+              <p>Os itens mais importantes do seu portal em primeiro lugar.</p>
+            </div>
+          </div>
+          <div className="member-portal-now-grid">
+            {hasSchedulePortalAccess && upcomingAssignments[0]?.worship_events ? (
+              <article className="member-portal-now-card urgent">
+                <span><CalendarCheck size={16} /> Próxima escala</span>
+                <strong>{upcomingAssignments[0].worship_events.title}</strong>
+                <small>{statusLabel(upcomingAssignments[0].status)}</small>
+              </article>
+            ) : null}
+            {nextPortalEvent ? (
+              <article className="member-portal-now-card">
+                <span><CalendarDays size={16} /> Próximo evento</span>
+                <strong>{nextPortalEvent.title}</strong>
+                <small>
+                  {new Date(nextPortalEvent.event_date).toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </small>
+              </article>
+            ) : null}
+            {latestAnnouncement ? (
+              <article className="member-portal-now-card">
+                <span><Bell size={16} /> Comunicado</span>
+                <strong>{latestAnnouncement.title}</strong>
+                <small>{new Date(latestAnnouncement.published_at).toLocaleDateString("pt-BR")}</small>
+              </article>
+            ) : null}
+            {firstKidsChild ? (
+              <article className="member-portal-now-card">
+                <span><Baby size={16} /> Kids</span>
+                <strong>{firstKidsChild.name}</strong>
+                <small>{activeKidsPass ? "QR ativo para check-in" : "Sem QR ativo"}</small>
+              </article>
+            ) : null}
+            {!nextPortalEvent && !latestAnnouncement && !firstKidsChild && upcomingAssignments.length === 0 ? (
+              <div className="member-portal-empty-inline">
+                <Check size={18} />
+                <span>Nenhuma pendência importante no momento.</span>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <div className="member-portal-feed-shell">
+          <aside className="member-portal-side-panel" aria-label="Resumo e acessos do portal">
+        <section className="member-portal-access-grid member-portal-module-strip" aria-label="Resumo de acessos">
           {hasSchedulePortalAccess ? (
             <article className="member-portal-access-card">
               <span><Music size={17} /> Escalas</span>
@@ -1734,7 +1913,7 @@ export function MemberPortal() {
           </article>
         </section>
 
-        <section className="member-portal-section">
+        <section className="member-portal-section member-portal-access-section">
           <div className="member-portal-section-head">
             <div>
               <h2>Acessos e ministérios</h2>
@@ -1786,9 +1965,12 @@ export function MemberPortal() {
           </div>
         </section>
 
+          </aside>
+          <div className="member-portal-feed-column">
+
         {/* ── Seção: Próximos Eventos ─────────────────────────────────── */}
         {portalEvents.length > 0 ? (
-          <section className="member-portal-section">
+          <section className="member-portal-section member-portal-feed-section member-portal-events-section">
             <div className="member-portal-section-head">
               <div>
                 <h2><CalendarDays size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Próximos eventos</h2>
@@ -1838,8 +2020,8 @@ export function MemberPortal() {
         ) : null}
 
         {/* ── Seção: Comunicados ───────────────────────────────────────── */}
-        {portalAnnouncements.length > 0 ? (
-          <section className="member-portal-section">
+        {showLegacyPortalAnnouncements && portalAnnouncements.length > 0 ? (
+          <section className="member-portal-section member-portal-feed-section member-portal-announcements-section">
             <div className="member-portal-section-head">
               <div>
                 <h2><Bell size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Comunicados</h2>
@@ -1877,9 +2059,52 @@ export function MemberPortal() {
           </section>
         ) : null}
 
+        {highlightedAdminModules.length > 0 ? (
+          <section className="member-portal-section member-portal-feed-section member-portal-admin-modules-section">
+            <div className="member-portal-section-head">
+              <div>
+                <h2><Check size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Módulos administrativos</h2>
+                <p>Acessos liberados para você administrar pela igreja.</p>
+              </div>
+            </div>
+            <div className="member-portal-admin-module-grid">
+              {highlightedAdminModules.map((module) => (
+                <article key={module.id} className="member-portal-admin-module-card">
+                  <span className="member-portal-admin-module-icon">
+                    {module.code === "kids" ? <Baby size={18} /> : null}
+                    {module.code === "bible-school" ? <BookOpen size={18} /> : null}
+                    {module.code === "worship" ? <Music size={18} /> : null}
+                    {!["kids", "bible-school", "worship"].includes(module.code) ? <Check size={18} /> : null}
+                  </span>
+                  <span>
+                    <em>Admin do módulo</em>
+                    <strong>{module.name}</strong>
+                    <small>{module.description}</small>
+                    <span className="member-portal-admin-module-actions">
+                      <a href="/admin-cliente">Abrir admin</a>
+                      {module.code === "kids" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setKidsForm(emptyKidsChildForm);
+                            setIsKidsFormOpen(true);
+                          }}
+                        >
+                          <Plus size={14} />
+                          Cadastrar crianÃ§a
+                        </button>
+                      ) : null}
+                    </span>
+                  </span>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {/* ── Seção: Mídias Sociais ─────────────────────────────────────── */}
         {socialMediaChannels.length > 0 ? (
-          <section className="member-portal-section">
+          <section className="member-portal-section member-portal-feed-section member-portal-social-section">
             <div className="member-portal-section-head">
               <div>
                 <h2><Play size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Mídias Sociais</h2>
@@ -1890,23 +2115,26 @@ export function MemberPortal() {
               const videos = socialMediaVideos[ch.id] ?? [];
               const isLoading = socialMediaLoadingIds.has(ch.id);
               return (
-                <div key={ch.id} style={{ marginBottom: 24 }}>
-                  <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
-                    <Play size={14} style={{ color: "var(--color-accent)" }} />
-                    {ch.name}
-                    <em style={{ fontSize: "0.72rem", fontStyle: "normal", background: "var(--color-bg-subtle)", color: "var(--color-text-secondary)", padding: "1px 7px", borderRadius: 4 }}>
-                      {ch.channel_type === "playlist" ? "Playlist" : "Canal"}
-                    </em>
-                  </h3>
+                <div key={ch.id} className="member-portal-social-channel">
+                  <div className="member-portal-social-channel-head">
+                    <h3>
+                      <Play size={14} />
+                      {ch.name}
+                    </h3>
+                    <div className="member-portal-social-channel-meta">
+                      <span>{ch.channel_type === "playlist" ? "Playlist" : "Canal"}</span>
+                      {videos.length > 0 ? <span>{videos.length} videos</span> : null}
+                    </div>
+                  </div>
                   {ch.description ? (
-                    <p style={{ margin: "0 0 10px", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>{ch.description}</p>
+                    <p className="member-portal-social-description">{ch.description}</p>
                   ) : null}
                   {isLoading ? (
                     <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>Carregando vídeos…</p>
                   ) : videos.length === 0 ? (
                     <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>Nenhum vídeo disponível no momento.</p>
                   ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                    <div className="member-portal-social-grid">
                       {videos.map((v) => (
                         <button
                           key={v.videoId}
@@ -1973,7 +2201,7 @@ export function MemberPortal() {
         ) : null}
 
         {hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
-          <section className="member-portal-section">
+          <section className="member-portal-section member-portal-feed-section member-portal-schedule-section">
             <div className="member-portal-empty state-card">
               <CalendarCheck size={34} />
               <strong>Nenhuma escala ministerial encontrada</strong>
@@ -1983,7 +2211,7 @@ export function MemberPortal() {
         ) : null}
 
         {hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
-          <section className="member-portal-section">
+          <section className="member-portal-section member-portal-feed-section member-portal-schedule-section">
             <h2>Próximas escalas</h2>
             <div className="member-portal-cards">
               {upcomingAssignments.map((assignment) => {
@@ -2108,7 +2336,8 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        <section className="member-portal-section">
+        {!isKidsModuleAdmin ? (
+        <section className="member-portal-section member-portal-feed-section member-portal-kids-section">
           <div className="member-portal-section-head">
             <div>
               <h2>Kids</h2>
@@ -2217,6 +2446,7 @@ export function MemberPortal() {
             </div>
           )}
         </section>
+        ) : null}
 
         {bibleSchoolEnabled && (bibleSchoolCanManage || bibleSchoolClasses.length > 0) ? (
           <section className="member-portal-section">
@@ -2617,7 +2847,7 @@ export function MemberPortal() {
 
         {/* ── Seção LGPD ──────────────────────────────────────────────── */}
         {lgpdConsentGranted !== null && (
-          <section className="member-portal-section">
+          <section className="member-portal-section member-portal-lgpd-section">
             <div className="member-portal-section-head">
               <ShieldCheck size={18} />
               <strong>Privacidade &amp; LGPD</strong>
@@ -2673,6 +2903,8 @@ export function MemberPortal() {
             </div>
           </section>
         )}
+          </div>
+        </div>
       </main>
 
       {isBibleSchoolClassFormOpen ? (

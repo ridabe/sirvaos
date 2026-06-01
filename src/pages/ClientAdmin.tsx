@@ -43,7 +43,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { htmlToPlainText, renderEventCardHtml, sanitizeRichHtml } from "../lib/eventCardTemplate";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseUrl } from "../lib/supabase";
 import {
   createWorshipEmailCampaign,
   emailErrorMessage,
@@ -4391,7 +4391,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const token = sessionData?.session?.access_token;
 
       const res = await fetch(
-        `${import.meta.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-event-emails`,
+        `${supabaseUrl}/functions/v1/send-event-emails`,
         {
           method: "POST",
           headers: {
@@ -4853,7 +4853,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error("Sessão inválida.");
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
       const res = await fetch(`${supabaseUrl}/functions/v1/send-announcement-emails`, {
         method: "POST",
         headers: {
@@ -11041,14 +11040,14 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
       {/* ── Modal: Notificações de Evento ────────────────────────────────── */}
       {eventNotifyOpen && eventNotifyTarget ? (
-        <div className="modal-overlay" onClick={() => setEventNotifyOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal-backdrop" onClick={() => setEventNotifyOpen(false)}>
+          <div className="modal-sheet event-notify-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <Send size={20} />
                 <strong>Notificar membros</strong>
               </div>
-              <button type="button" onClick={() => setEventNotifyOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setEventNotifyOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body">
               <div style={{ background: "var(--color-bg-subtle)", borderRadius: 8, padding: "12px 16px", marginBottom: 16 }}>

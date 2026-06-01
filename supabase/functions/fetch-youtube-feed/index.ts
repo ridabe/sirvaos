@@ -140,7 +140,7 @@ async function resolveHandle(handle: string, debug: string[]): Promise<string> {
         /"externalId":"(UC[a-zA-Z0-9_-]{22})"/,
         /"channelId":"(UC[a-zA-Z0-9_-]{22})"/,
         /"browseId":"(UC[a-zA-Z0-9_-]{22})"/,
-        /\/channel\/(UC[a-zA-Z0-9_-]{22})["\/]/,
+        /\/channel\/(UC[a-zA-Z0-9_-]{22})["/]/,
       ]) {
         const m = html.match(pattern);
         if (m?.[1]) {
