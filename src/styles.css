@@ -618,6 +618,17 @@ h1 {
   background: var(--color-danger-soft);
 }
 
+.first-access-context {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 8px;
+  background: rgba(20, 184, 166, 0.08);
+  color: var(--color-neutral-700);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
 .submit-button {
   width: 100%;
   margin-top: 2px;

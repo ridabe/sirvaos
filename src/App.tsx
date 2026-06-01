@@ -34,12 +34,15 @@ import {
   notificationItems,
 } from "./data/clientDashboard";
 import { features, modules, tenantCards } from "./data/landing";
+import { resolvePostLoginPath } from "./lib/accessRouting";
 import { supabase } from "./lib/supabase";
 import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 import { ClientAdmin } from "./pages/ClientAdmin";
 import { MemberPortal } from "./pages/MemberPortal";
 
-type LandingLoginStatus = "idle" | "loading" | "error";
+type LandingLoginStatus = "idle" | "loading" | "success" | "error";
+type LoginMode = "login" | "first-access";
+type FirstAccessStep = "identify" | "password";
 
 type LandingProfile = {
   global_role: "super_admin" | "operations" | "support" | null;
@@ -47,9 +50,34 @@ type LandingProfile = {
   status: "active" | "invited" | "suspended";
 };
 
+type FirstAccessStartResponse = {
+  ok: boolean;
+  code: string;
+  message: string;
+  activationToken?: string;
+  memberName?: string;
+  tenantName?: string;
+  requiresBirthDate?: boolean;
+  alreadyActive?: boolean;
+};
+
+type FirstAccessCompleteResponse = {
+  ok: boolean;
+  code: string;
+  message: string;
+  alreadyActive?: boolean;
+};
+
 export function App() {
   const [loginStatus, setLoginStatus] = useState<LandingLoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
+  const [loginMode, setLoginMode] = useState<LoginMode>("login");
+  const [firstAccessStep, setFirstAccessStep] = useState<FirstAccessStep>("identify");
+  const [firstAccessEmail, setFirstAccessEmail] = useState("");
+  const [firstAccessBirthDate, setFirstAccessBirthDate] = useState("");
+  const [firstAccessRequiresBirthDate, setFirstAccessRequiresBirthDate] = useState(false);
+  const [firstAccessToken, setFirstAccessToken] = useState("");
+  const [firstAccessContext, setFirstAccessContext] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -101,10 +129,19 @@ export function App() {
       return;
     }
 
+    try {
+      window.location.assign(await resolvePostLoginPath(authData.user!.id));
+      return;
+    } catch (error) {
+      setLoginStatus("error");
+      setLoginMessage(error instanceof Error ? error.message : "Não foi possível direcionar o acesso.");
+      return;
+    }
+
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("global_role, tenant_id, status")
-      .eq("id", authData.user.id)
+      .eq("id", authData.user!.id)
       .single<LandingProfile>();
 
     if (profileError || !profileData) {
@@ -113,19 +150,19 @@ export function App() {
       return;
     }
 
-    if (profileData.status !== "active") {
+    if (profileData!.status !== "active") {
       await supabase.auth.signOut();
       setLoginStatus("error");
       setLoginMessage("Usuário inativo ou sem liberação.");
       return;
     }
 
-    if (profileData.global_role === "super_admin" || profileData.global_role === "operations") {
+    if (profileData!.global_role === "super_admin" || profileData!.global_role === "operations") {
       window.location.assign("/admin-global");
       return;
     }
 
-    if (!profileData.tenant_id) {
+    if (!profileData!.tenant_id) {
       await supabase.auth.signOut();
       setLoginStatus("error");
       setLoginMessage("Usuário autenticado, mas sem tenant associado.");
@@ -133,6 +170,113 @@ export function App() {
     }
 
     window.location.assign("/admin-cliente");
+  }
+
+  async function handleFirstAccessStart(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoginStatus("loading");
+    setLoginMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("firstAccessEmail") ?? "").trim().toLowerCase();
+    const dateOfBirth = String(formData.get("dateOfBirth") ?? "");
+
+    const { data, error } = await supabase.functions.invoke<FirstAccessStartResponse>("first-access", {
+      body: {
+        action: "start",
+        email,
+        dateOfBirth: dateOfBirth || undefined,
+      },
+    });
+
+    if (error || !data) {
+      setLoginStatus("error");
+      setLoginMessage("Não foi possível iniciar o primeiro acesso agora.");
+      return;
+    }
+
+    if (data.alreadyActive) {
+      setLoginStatus("error");
+      setLoginMessage(data.message);
+      setLoginMode("login");
+      setFirstAccessStep("identify");
+      return;
+    }
+
+    if (data.requiresBirthDate) {
+      setLoginStatus("idle");
+      setFirstAccessEmail(email);
+      setFirstAccessRequiresBirthDate(true);
+      setLoginMessage(data.message);
+      return;
+    }
+
+    if (!data.ok || !data.activationToken) {
+      setLoginStatus("error");
+      setLoginMessage(data.message || "Não foi possível localizar seu cadastro.");
+      return;
+    }
+
+    setLoginStatus("success");
+    setFirstAccessEmail(email);
+    setFirstAccessToken(data.activationToken);
+    setFirstAccessContext(`${data.memberName ?? "Membro"} - ${data.tenantName ?? "Igreja"}`);
+    setFirstAccessStep("password");
+    setLoginMessage(data.message);
+  }
+
+  async function handleFirstAccessComplete(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoginStatus("loading");
+    setLoginMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const password = String(formData.get("newPassword") ?? "");
+    const passwordConfirm = String(formData.get("newPasswordConfirm") ?? "");
+
+    if (password !== passwordConfirm) {
+      setLoginStatus("error");
+      setLoginMessage("As senhas não conferem.");
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke<FirstAccessCompleteResponse>("first-access", {
+      body: {
+        action: "complete",
+        email: firstAccessEmail,
+        token: firstAccessToken,
+        password,
+      },
+    });
+
+    if (error || !data || !data.ok) {
+      setLoginStatus("error");
+      setLoginMessage(data?.message ?? "Não foi possível concluir o primeiro acesso.");
+      return;
+    }
+
+    if (data.alreadyActive) {
+      setLoginStatus("error");
+      setLoginMessage(data.message);
+      setLoginMode("login");
+      setFirstAccessStep("identify");
+      return;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: firstAccessEmail,
+      password,
+    });
+
+    if (authError || !authData.user) {
+      setLoginStatus("success");
+      setLoginMessage("Senha criada. Entre com seu e-mail e senha.");
+      setLoginMode("login");
+      setFirstAccessStep("identify");
+      return;
+    }
+
+    window.location.assign(await resolvePostLoginPath(authData.user.id));
   }
 
   return (
@@ -254,34 +398,97 @@ export function App() {
               </div>
             </div>
 
-            <form className="login-form" method="post" onSubmit={handleLandingLogin}>
-              <TextField
-                autoComplete="email"
-                icon={<Mail size={18} />}
-                label="E-mail"
-                name="email"
-                placeholder="admin@suaigreja.org"
-                type="email"
-              />
+            <form
+              className="login-form"
+              method="post"
+              onSubmit={
+                loginMode === "login"
+                  ? handleLandingLogin
+                  : firstAccessStep === "identify"
+                    ? handleFirstAccessStart
+                    : handleFirstAccessComplete
+              }
+            >
+              {loginMode === "login" || firstAccessStep === "identify" ? (
+                <TextField
+                  autoComplete="email"
+                  icon={<Mail size={18} />}
+                  label="E-mail"
+                  name={loginMode === "login" ? "email" : "firstAccessEmail"}
+                  onChange={(event) => setFirstAccessEmail(event.target.value)}
+                  placeholder="admin@suaigreja.org"
+                  type="email"
+                  value={loginMode === "first-access" ? firstAccessEmail : undefined}
+                />
+              ) : null}
 
-              <TextField
-                autoComplete="current-password"
-                endIcon={
-                  <button type="button" aria-label="Mostrar senha">
-                    <Eye size={18} />
-                  </button>
-                }
-                icon={<LockKeyhole size={18} />}
-                label="Senha"
-                name="password"
-                placeholder="Sua senha"
-                type="password"
-              />
+              {loginMode === "first-access" && firstAccessRequiresBirthDate && firstAccessStep === "identify" ? (
+                <label>
+                  <span>Data de nascimento</span>
+                  <div className="field">
+                    <Fingerprint size={18} />
+                    <input
+                      autoComplete="bday"
+                      name="dateOfBirth"
+                      onChange={(event) => setFirstAccessBirthDate(event.target.value)}
+                      type="date"
+                      value={firstAccessBirthDate}
+                    />
+                  </div>
+                </label>
+              ) : null}
+
+              {loginMode === "login" ? (
+                <TextField
+                  autoComplete="current-password"
+                  endIcon={
+                    <button type="button" aria-label="Mostrar senha">
+                      <Eye size={18} />
+                    </button>
+                  }
+                  icon={<LockKeyhole size={18} />}
+                  label="Senha"
+                  name="password"
+                  placeholder="Sua senha"
+                  type="password"
+                />
+              ) : null}
+
+              {loginMode === "first-access" && firstAccessStep === "password" ? (
+                <>
+                  <p className="first-access-context">{firstAccessContext}</p>
+                  <TextField
+                    autoComplete="new-password"
+                    icon={<LockKeyhole size={18} />}
+                    label="Criar senha"
+                    name="newPassword"
+                    placeholder="Mínimo 8 caracteres"
+                    type="password"
+                  />
+                  <TextField
+                    autoComplete="new-password"
+                    icon={<LockKeyhole size={18} />}
+                    label="Confirmar senha"
+                    name="newPasswordConfirm"
+                    placeholder="Repita a senha"
+                    type="password"
+                  />
+                </>
+              ) : null}
 
               <div className="form-options">
                 <label className="remember">
-                  <input type="checkbox" />
-                  <span>Manter conectado</span>
+                  <input
+                    type="checkbox"
+                    checked={loginMode === "first-access"}
+                    onChange={(event) => {
+                      setLoginMode(event.target.checked ? "first-access" : "login");
+                      setFirstAccessStep("identify");
+                      setLoginStatus("idle");
+                      setLoginMessage("");
+                    }}
+                  />
+                  <span>Primeiro acesso</span>
                 </label>
                 <a href="/">Esqueci a senha</a>
               </div>
@@ -292,7 +499,13 @@ export function App() {
                 icon={<ArrowRight size={18} />}
                 disabled={loginStatus === "loading"}
               >
-                Acessar painel da igreja
+                {loginStatus === "loading"
+                  ? "Aguarde..."
+                  : loginMode === "first-access" && firstAccessStep === "password"
+                    ? "Criar senha e entrar"
+                    : loginMode === "first-access"
+                      ? "Continuar primeiro acesso"
+                      : "Acessar SirvaOS"}
               </Button>
 
               {loginMessage ? <p className={`login-feedback ${loginStatus}`}>{loginMessage}</p> : null}

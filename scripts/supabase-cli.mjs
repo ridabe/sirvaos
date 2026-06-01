@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { URL } from "node:url";
 
 function readLocalEnv() {
   const envPath = resolve(process.cwd(), ".env.local");
@@ -34,8 +35,11 @@ const globalOnly =
   forwardedArgs.includes("-v") ||
   forwardedArgs.includes("--help") ||
   forwardedArgs.includes("-h");
+const shouldAttachDbUrl =
+  forwardedArgs[0] === "db" ||
+  (forwardedArgs[0] === "migration" && forwardedArgs[1] === "list");
 const hasDbUrl = forwardedArgs.includes("--db-url");
-const args = globalOnly || hasDbUrl ? forwardedArgs : [...forwardedArgs, "--db-url", dbUrl];
+const args = globalOnly || hasDbUrl || !shouldAttachDbUrl ? forwardedArgs : [...forwardedArgs, "--db-url", dbUrl];
 
 const result =
   process.platform === "win32"

@@ -106,6 +106,22 @@ Essa operação deve ser feita no SQL Editor do Supabase ou por uma conexão adm
 
 Evite inserir diretamente na tabela `auth.users`, porque o Supabase Auth gerencia hash de senha, confirmação, identidades e metadados próprios. Para criação programática, use a Admin API em ambiente confiável.
 
+## Primeiro acesso de membros
+
+O fluxo de primeiro acesso usa uma Edge Function pÃºblica (`first-access`) para validar membros cadastrados antes de criar senha. A funÃ§Ã£o roda server-side com `SUPABASE_SERVICE_ROLE_KEY` e nunca expÃµe essa chave no frontend.
+
+Deploy esperado:
+
+```bash
+npm run sb -- functions deploy first-access --project-ref <project-ref> --no-verify-jwt --use-api
+```
+
+Regras do endpoint:
+
+- `action = start`: valida e-mail do membro, tenant ativo, status ativo, data de nascimento quando existir, rate limit e cria token curto.
+- `action = complete`: valida token, cria/atualiza o usuÃ¡rio Auth com senha, vincula `profiles.member_id`, ativa o perfil e registra auditoria.
+- Se o perfil jÃ¡ estiver ativo, o endpoint nÃ£o recria senha e orienta login normal.
+
 ## Rota do Admin Global
 
 A rota web exclusiva do Admin Global é:

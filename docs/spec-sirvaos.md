@@ -234,6 +234,42 @@ O Admin de Módulo não pode:
 
 O membro acessa informações relacionadas a ele.
 
+### Primeiro acesso de membros
+
+O cadastro de membro e o acesso autenticado sÃ£o conceitos separados:
+
+- `members` representa a pessoa cadastrada na igreja.
+- `profiles` representa um usuÃ¡rio autenticÃ¡vel no SirvaOS.
+- `tenant_module_admins` pode conceder permissÃµes administrativas ao `member_id` antes mesmo de existir um `profile`.
+
+Fluxo definido:
+
+1. Admin da igreja cadastra ou atualiza o membro com e-mail.
+2. Admin pode deixar o membro como comum ou atribuir mÃ³dulos administrativos ao `member_id`.
+3. O membro abre a tela do sistema/app, informa o e-mail e marca `Primeiro acesso`.
+4. O backend valida se o e-mail existe em um membro ativo, vinculado a um tenant ativo.
+5. Se o membro possuir data de nascimento cadastrada, o primeiro acesso exige a confirmaÃ§Ã£o dessa data.
+6. O backend gera um token curto de ativaÃ§Ã£o, com expiraÃ§Ã£o e uso Ãºnico.
+7. O membro cria a senha.
+8. O sistema cria ou ativa o `profile`, vinculado ao `member_id`, com `tenant_role = member` por padrÃ£o.
+9. O acesso passa a seguir as regras normais:
+   - membro comum vai para o portal/app do membro;
+   - membro com permissÃ£o em `tenant_module_admins` acessa o admin do(s) mÃ³dulo(s);
+   - `owner`/`admin` do tenant acessa o admin do cliente;
+   - admin global acessa o admin global.
+
+Regras de seguranÃ§a:
+
+- NÃ£o criar senha no cadastro administrativo do membro.
+- NÃ£o expor service role no frontend.
+- Criar usuÃ¡rio Auth apenas em ambiente server-side controlado.
+- Normalizar e-mail em lowercase.
+- Bloquear primeiro acesso quando houver mais de um membro ativo com o mesmo e-mail.
+- Registrar tentativas e aplicar rate limit por e-mail/IP.
+- NÃ£o permitir recriaÃ§Ã£o de senha pelo fluxo de primeiro acesso quando o perfil jÃ¡ estiver ativo.
+- Usar fluxo separado de recuperaÃ§Ã£o de senha para usuÃ¡rios que esquecerem a senha.
+- Registrar auditoria quando o primeiro acesso for concluÃ­do.
+
 ### Recursos comuns
 
 - Login seguro.
@@ -816,4 +852,3 @@ O SirvaOS deve ser percebido como:
 Slogan base:
 
 > **SirvaOS: organize para servir melhor.**
-
