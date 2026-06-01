@@ -2007,8 +2007,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setPolicyForm({ terms_text: "", privacy_text: "" });
     }
 
-    setLgpdConsents((consentsResult.data ?? []) as LgpdConsentRecord[]);
-    setPolicyAcceptances((acceptancesResult.data ?? []) as PolicyAcceptanceRecord[]);
+    setLgpdConsents((consentsResult.data ?? []) as unknown as LgpdConsentRecord[]);
+    setPolicyAcceptances((acceptancesResult.data ?? []) as unknown as PolicyAcceptanceRecord[]);
   }
 
   async function handleSavePolicy() {
