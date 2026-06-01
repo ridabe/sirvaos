@@ -309,6 +309,8 @@ export function MemberPortal() {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [portalTenantInfo, setPortalTenantInfo] = useState<PortalTenantInfo | null>(null);
+  const [eventPreviewOpen, setEventPreviewOpen] = useState(false);
+  const [eventPreviewTarget, setEventPreviewTarget] = useState<PortalEventRecord | null>(null);
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
   const [portalEvents, setPortalEvents] = useState<PortalEventRecord[]>([]);
   const [memberMinistries, setMemberMinistries] = useState<PortalMinistryRecord[]>([]);
@@ -540,9 +542,31 @@ export function MemberPortal() {
 
     setProfile(profileData);
 
+    // Tenant info e eventos são públicos para todo membro do tenant — carregamos
+    // antes de qualquer guarda de member_id ou módulo específico.
+    if (profileData.tenant_id) {
+      const [tenantInfoRes, eventsRes] = await Promise.all([
+        supabase
+          .from("tenants")
+          .select("name, contact_phone")
+          .eq("id", profileData.tenant_id)
+          .single<PortalTenantInfo>(),
+        supabase
+          .from("tenant_events")
+          .select("id, title, description, description_html, location, event_date, ends_at, event_type, color, cover_image_url")
+          .eq("tenant_id", profileData.tenant_id)
+          .eq("status", "publicado")
+          .gte("event_date", new Date().toISOString())
+          .order("event_date", { ascending: true })
+          .limit(20)
+          .returns<PortalEventRecord[]>(),
+      ]);
+      setPortalTenantInfo(tenantInfoRes.data ?? null);
+      setPortalEvents(eventsRes.data ?? []);
+    }
+
     if (!profileData.member_id || !profileData.tenant_id) {
       setAssignments([]);
-      setPortalEvents([]);
       setMemberMinistries([]);
       setModuleAdminAccesses([]);
       setCanManageMembers(false);
@@ -777,25 +801,6 @@ export function MemberPortal() {
     }
 
     setSelectedBibleSchoolClassId((current) => current ?? bibleClasses[0]!.id);
-
-    const tenantInfoResult = await supabase
-      .from("tenants")
-      .select("name, contact_phone")
-      .eq("id", profileData.tenant_id)
-      .single<PortalTenantInfo>();
-    setPortalTenantInfo(tenantInfoResult.data ?? null);
-
-    // Eventos públicos (todos os membros veem independente de permissão)
-    const eventsResult = await supabase
-      .from("tenant_events")
-      .select("id, title, description, description_html, location, event_date, ends_at, event_type, color, cover_image_url")
-      .eq("tenant_id", profileData.tenant_id)
-      .eq("status", "publicado")
-      .gte("event_date", new Date().toISOString())
-      .order("event_date", { ascending: true })
-      .limit(20)
-      .returns<PortalEventRecord[]>();
-    setPortalEvents(eventsResult.data ?? []);
 
     setLoadStatus("ready");
   }
@@ -1607,7 +1612,7 @@ export function MemberPortal() {
             <span className="member-portal-kicker">Minha área</span>
             <h1>Olá, {profile.full_name?.split(" ")[0] ?? "membro"}</h1>
             <p>
-              Seus acessos, ministérios, crianças vinculadas e atividades aparecem aqui conforme as permissões do seu cadastro.
+              Nesta tela você tera acesso aos modulos e atividades liberados ao seu usuario.
             </p>
           </div>
           {canOpenAdminPortal ? (
@@ -1708,35 +1713,42 @@ export function MemberPortal() {
                 <p>Agenda da sua igreja para os próximos dias.</p>
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {portalEvents.map((evt) => {
-                const tenantName = portalTenantInfo?.name ?? "Igreja";
-                const tenantPhone = portalTenantInfo?.contact_phone ?? null;
-                const cover = evt.cover_image_url ?? null;
-                const bannerUrl = cover
-                  ? /^https?:\/\//i.test(cover)
-                    ? cover
-                    : supabase.storage.from("event-banners").getPublicUrl(cover).data.publicUrl
-                  : null;
-                const cardHtml = renderEventCardHtml(
-                  {
-                    title: evt.title,
-                    event_date: evt.event_date,
-                    ends_at: evt.ends_at,
-                    location: evt.location,
-                    description: evt.description,
-                    description_html: evt.description_html ?? null,
-                    cover_image_url: evt.cover_image_url ?? null,
-                  },
-                  { name: tenantName, contact_phone: tenantPhone },
-                  { bannerUrl },
-                );
+                const typeLabels: Record<string, string> = {
+                  culto: "Culto", conferencia: "Conferência", retiro: "Retiro",
+                  jovens: "Jovens", infantil: "Infantil", social: "Social", outro: "Outro",
+                };
+                const eventDate = new Date(evt.event_date);
                 return (
-                  <div
+                  <button
                     key={evt.id}
-                    style={{ display: "flex", justifyContent: "center" }}
-                    dangerouslySetInnerHTML={{ __html: cardHtml }}
-                  ></div>
+                    type="button"
+                    onClick={() => { setEventPreviewTarget(evt); setEventPreviewOpen(true); }}
+                    style={{
+                      width: "100%", textAlign: "left", cursor: "pointer",
+                      background: "var(--color-white)", border: "1px solid var(--color-border)",
+                      borderRadius: 10, padding: "14px 16px",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0, background: evt.color ?? "#6d28d9" }} />
+                      <div style={{ minWidth: 0 }}>
+                        <strong style={{ fontSize: "0.9rem", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {evt.title}
+                        </strong>
+                        <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+                          {eventDate.toLocaleString("pt-BR", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          {evt.location ? ` · ${evt.location}` : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "0.72rem", background: "var(--color-bg-subtle)", padding: "2px 8px", borderRadius: 4, color: "var(--color-text-secondary)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                      {typeLabels[evt.event_type] ?? evt.event_type}
+                    </span>
+                  </button>
                 );
               })}
             </div>
@@ -2943,6 +2955,49 @@ export function MemberPortal() {
 
       {profile?.tenant_id ? (
         <PolicyFooter tenantId={profile.tenant_id} />
+      ) : null}
+
+      {/* ── Modal: Detalhe do Evento ─────────────────────────────────────── */}
+      {eventPreviewOpen && eventPreviewTarget ? (
+        <div className="modal-overlay" onClick={() => setEventPreviewOpen(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+            <div className="modal-header">
+              <div>
+                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--color-brand-primary)", display: "block", marginBottom: 2 }}>
+                  {eventPreviewTarget.event_type === "culto" ? "Culto"
+                    : eventPreviewTarget.event_type === "conferencia" ? "Conferência"
+                    : eventPreviewTarget.event_type === "retiro" ? "Retiro"
+                    : eventPreviewTarget.event_type === "jovens" ? "Jovens"
+                    : eventPreviewTarget.event_type === "infantil" ? "Infantil"
+                    : eventPreviewTarget.event_type === "social" ? "Social"
+                    : "Evento"}
+                </span>
+                <strong style={{ fontSize: "1.05rem" }}>{eventPreviewTarget.title}</strong>
+              </div>
+              <button type="button" onClick={() => setEventPreviewOpen(false)}><X size={18} /></button>
+            </div>
+            <div style={{ padding: "20px 22px", overflowY: "auto", maxHeight: "75vh" }}>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: renderEventCardHtml(
+                    eventPreviewTarget,
+                    {
+                      name: portalTenantInfo?.name ?? "",
+                      contact_phone: portalTenantInfo?.contact_phone ?? null,
+                    },
+                    {
+                      bannerUrl: eventPreviewTarget.cover_image_url
+                        ? /^https?:\/\//i.test(eventPreviewTarget.cover_image_url)
+                          ? eventPreviewTarget.cover_image_url
+                          : supabase.storage.from("event-banners").getPublicUrl(eventPreviewTarget.cover_image_url).data.publicUrl
+                        : null,
+                    },
+                  ),
+                }}
+              />
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

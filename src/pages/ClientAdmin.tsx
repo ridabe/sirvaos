@@ -41,7 +41,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
-import { htmlToPlainText, sanitizeRichHtml } from "../lib/eventCardTemplate";
+import { htmlToPlainText, renderEventCardHtml, sanitizeRichHtml } from "../lib/eventCardTemplate";
 import { supabase } from "../lib/supabase";
 import {
   createWorshipEmailCampaign,
@@ -1578,6 +1578,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [eventNotifyTarget, setEventNotifyTarget] = useState<EventRecord | null>(null);
   const [eventNotifyStatus, setEventNotifyStatus] = useState<LoginStatus>("idle");
   const [eventNotifyMessage, setEventNotifyMessage] = useState("");
+  const [eventPreviewOpen, setEventPreviewOpen] = useState(false);
+  const [eventPreviewTarget, setEventPreviewTarget] = useState<EventRecord | null>(null);
   const [worshipEventForm, setWorshipEventForm] = useState<WorshipEventFormState>(emptyWorshipEventForm);
   const [worshipAssignmentForm, setWorshipAssignmentForm] = useState<WorshipAssignmentFormState>(
     emptyWorshipAssignmentForm,
@@ -6714,6 +6716,14 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                             <em style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "2px 6px", borderRadius: 4 }}>
                               {typeLabels[item.event_type] ?? item.event_type}
                             </em>
+                            <button
+                              type="button"
+                              className="worship-action-btn"
+                              onClick={() => { setEventPreviewTarget(item); setEventPreviewOpen(true); }}
+                              title="Visualizar como membro"
+                            >
+                              <Eye size={14} />
+                            </button>
                             {canManageEvents && item.status === "publicado" ? (
                               <button
                                 type="button"
@@ -10657,6 +10667,38 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   {eventNotifyMessage}
                 </p>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Modal: Preview do Evento ─────────────────────────────────────── */}
+      {eventPreviewOpen && eventPreviewTarget ? (
+        <div className="modal-overlay" onClick={() => setEventPreviewOpen(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Eye size={20} />
+                <strong>Pré-visualização do evento</strong>
+              </div>
+              <button type="button" onClick={() => setEventPreviewOpen(false)}><X size={18} /></button>
+            </div>
+            <div style={{ padding: "20px 22px", overflowY: "auto", maxHeight: "75vh" }}>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: renderEventCardHtml(
+                    eventPreviewTarget,
+                    { name: clientData!.tenant.name, contact_phone: null },
+                    {
+                      bannerUrl: eventPreviewTarget.cover_image_url
+                        ? /^https?:\/\//i.test(eventPreviewTarget.cover_image_url)
+                          ? eventPreviewTarget.cover_image_url
+                          : supabase.storage.from("event-banners").getPublicUrl(eventPreviewTarget.cover_image_url).data.publicUrl
+                        : null,
+                    },
+                  ),
+                }}
+              />
             </div>
           </div>
         </div>
