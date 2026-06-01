@@ -179,7 +179,7 @@ Objetivo: preparar para clientes reais.
 
 ## Etapa 12 - modulo de eventos
 
-Objetivo: criar agenda de eventos da igreja e poder disponibilizar para todos os membros que acessarem o sistema indepenendente de permissoes, todos terao a visao do evento.
+Objetivo: criar agenda de eventos da igreja (nao confundir com eventos da area de louvor) e poder disponibilizar para todos os membros que acessarem o sistema indepenendente de permissoes, todos terao a visao do evento.
 
 - Cadastro de evento.
 - Opçãoes de envios por email, whatsapp(para todos os membros da igreja) e push para quem estiver usando ao app(App ainda sera desenvolvido).
