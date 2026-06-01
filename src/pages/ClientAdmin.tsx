@@ -4884,8 +4884,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   function extractYouTubeInfo(url: string): { channelType: "channel" | "playlist"; channelId: string } | null {
+    // /channel/UCxxxxx
     const channelMatch = url.match(/youtube\.com\/channel\/(UC[a-zA-Z0-9_-]+)/);
     if (channelMatch) return { channelType: "channel", channelId: channelMatch[1] };
+    // /@handle ou /@handle/videos ou /@handle/playlists
+    const handleMatch = url.match(/youtube\.com\/@([a-zA-Z0-9_.%-]+)/);
+    if (handleMatch) return { channelType: "channel", channelId: `@${decodeURIComponent(handleMatch[1])}` };
+    // /user/username (formato antigo)
+    const userMatch = url.match(/youtube\.com\/user\/([a-zA-Z0-9_-]+)/);
+    if (userMatch) return { channelType: "channel", channelId: userMatch[1] };
+    // ?list=PLxxxxx (playlist)
     const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
     if (listMatch) return { channelType: "playlist", channelId: listMatch[1] };
     return null;
@@ -4932,7 +4940,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     const info = extractYouTubeInfo(url);
     if (!info) {
       setSocialMediaSaveStatus("error");
-      setSocialMediaSaveMessage("URL inválida. Use o formato https://www.youtube.com/channel/UC... ou https://www.youtube.com/playlist?list=...");
+      setSocialMediaSaveMessage("URL inválida. Cole a URL do canal ou playlist do YouTube (ex.: youtube.com/@IgrejaXYZ ou youtube.com/playlist?list=...).");
       return;
     }
 
@@ -9832,62 +9840,68 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
           {isSocialMediaFormOpen ? (
             <div className="modal-overlay" onClick={() => setIsSocialMediaFormOpen(false)}>
-              <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+              <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
                 <div className="modal-header">
-                  <strong>{socialMediaFormMode === "create" ? "Novo canal" : "Editar canal"}</strong>
-                  <button type="button" onClick={() => setIsSocialMediaFormOpen(false)}><X size={18} /></button>
-                </div>
-                <form onSubmit={handleSaveSocialMediaChannel} style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 0 4px" }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>Nome do canal *</span>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={socialMediaFormName}
-                      onChange={(e) => setSocialMediaFormName(e.target.value)}
-                      placeholder="Ex.: Canal da Igreja"
-                      required
-                    />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>URL do YouTube *</span>
-                    <input
-                      type="url"
-                      className="form-input"
-                      value={socialMediaFormUrl}
-                      onChange={(e) => setSocialMediaFormUrl(e.target.value)}
-                      placeholder="https://www.youtube.com/channel/UC... ou playlist?list=..."
-                      required
-                    />
-                    <small style={{ color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
-                      Suportado: <code>youtube.com/channel/UC...</code> ou <code>youtube.com/playlist?list=...</code>
-                    </small>
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>Descrição (opcional)</span>
-                    <textarea
-                      className="form-input"
-                      rows={2}
-                      value={socialMediaFormDescription}
-                      onChange={(e) => setSocialMediaFormDescription(e.target.value)}
-                      placeholder="Breve descrição para os membros"
-                    />
-                  </label>
-                  {socialMediaSaveStatus === "error" ? (
-                    <p style={{ color: "var(--color-error)", margin: 0, fontSize: "0.82rem" }}>{socialMediaSaveMessage}</p>
-                  ) : null}
-                  {socialMediaSaveStatus === "success" ? (
-                    <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.82rem" }}>{socialMediaSaveMessage}</p>
-                  ) : null}
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button type="button" className="btn btn-secondary" onClick={() => setIsSocialMediaFormOpen(false)}>
-                      Cancelar
-                    </button>
-                    <button type="submit" className="btn btn-primary" disabled={socialMediaSaveStatus === "loading"}>
-                      {socialMediaSaveStatus === "loading" ? "Salvando..." : "Salvar"}
-                    </button>
+                  <div>
+                    <span>{socialMediaFormMode === "create" ? "Novo canal" : "Editar canal"}</span>
+                    <h2 style={{ fontSize: "1.15rem", margin: 0 }}>
+                      {socialMediaFormMode === "create" ? "Adicionar canal do YouTube" : socialMediaEditTarget?.name}
+                    </h2>
                   </div>
-                </form>
+                  <button className="modal-close" type="button" onClick={() => setIsSocialMediaFormOpen(false)}>
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <form onSubmit={handleSaveSocialMediaChannel}>
+                    <label>
+                      <span>Nome do canal *</span>
+                      <input
+                        type="text"
+                        value={socialMediaFormName}
+                        onChange={(e) => setSocialMediaFormName(e.target.value)}
+                        placeholder="Ex.: Canal da Igreja"
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span>URL do YouTube *</span>
+                      <input
+                        type="url"
+                        value={socialMediaFormUrl}
+                        onChange={(e) => setSocialMediaFormUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/channel/UC... ou playlist?list=..."
+                        required
+                      />
+                      <small style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, marginTop: 2, display: "block" }}>
+                        Suportado: <code>youtube.com/channel/UC...</code> ou <code>youtube.com/playlist?list=...</code>
+                      </small>
+                    </label>
+                    <label>
+                      <span>Descrição (opcional)</span>
+                      <textarea
+                        rows={2}
+                        value={socialMediaFormDescription}
+                        onChange={(e) => setSocialMediaFormDescription(e.target.value)}
+                        placeholder="Breve descrição para os membros"
+                      />
+                    </label>
+                    {socialMediaSaveStatus === "error" ? (
+                      <p className="login-feedback error">{socialMediaSaveMessage}</p>
+                    ) : null}
+                    {socialMediaSaveStatus === "success" ? (
+                      <p className="login-feedback success">{socialMediaSaveMessage}</p>
+                    ) : null}
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={() => setIsSocialMediaFormOpen(false)}>
+                        Cancelar
+                      </button>
+                      <Button type="submit" disabled={socialMediaSaveStatus === "loading"} icon={<Play size={16} />}>
+                        {socialMediaSaveStatus === "loading" ? "Salvando..." : "Salvar canal"}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           ) : null}
