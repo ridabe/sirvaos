@@ -6,6 +6,11 @@
   "scripts": {
     "admin:create-global": "node scripts/create-global-admin.mjs",
     "seed:tenant-demo": "node scripts/seed-tenant-demo.mjs",
+    "sb": "node scripts/supabase-cli.mjs",
+    "sb:migrations": "node scripts/supabase-cli.mjs migration list",
+    "sb:push": "node scripts/supabase-cli.mjs db push",
+    "sb:query": "node scripts/supabase-cli.mjs db query",
+    "sb:advisors": "node scripts/supabase-cli.mjs db advisors --type security --level warn --fail-on none",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
@@ -23,6 +28,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "eslint": "^9.0.0",
+    "supabase": "^2.102.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.0.0",
     "vite": "^7.0.0"

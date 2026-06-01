@@ -3304,6 +3304,25 @@ h1 {
   margin: 0 0 16px;
 }
 
+.member-portal-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.member-portal-empty-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--tenant-card-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--color-neutral-600);
+  background: var(--color-white);
+}
+
 .member-portal-cards {
   display: grid;
   gap: 14px;
@@ -3423,6 +3442,55 @@ h1 {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.member-portal-guardians {
+  display: grid;
+  gap: 4px;
+}
+
+.member-portal-guardians small {
+  color: var(--color-neutral-600);
+}
+
+.member-portal-kids-qr {
+  border: 1px solid var(--tenant-card-border);
+  border-radius: 12px;
+  background: var(--color-white);
+  padding: 10px;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+}
+
+.member-portal-kids-qr img {
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--tenant-card-border);
+}
+
+.member-portal-kids-qr small {
+  color: var(--color-neutral-600);
+  text-align: center;
+  font-size: 0.74rem;
+}
+
+.kids-qr-scanner {
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.75rem;
+  max-width: 420px;
+}
+
+.kids-qr-scanner video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--tenant-card-border);
+  background: var(--color-neutral-950);
 }
 
 .member-portal-decline-form {

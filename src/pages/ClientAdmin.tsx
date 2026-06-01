@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   CalendarCheck,
+  Camera,
   CheckCircle2,
   Clock3,
   DollarSign,
@@ -21,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  QrCode,
   Receipt,
   Search,
   Send,
@@ -33,7 +35,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, TextField } from "../design-system/components";
 import { supabase } from "../lib/supabase";
 import {
@@ -331,6 +333,14 @@ type KidsCommunicationRecord = {
   sent_at: string;
   created_at: string;
   kids_children: { name: string } | null;
+};
+
+type KidsQrConsumeResult = {
+  attendance_id: string;
+  child_id: string;
+  child_name: string;
+  attendance_date: string;
+  checked_in_at: string;
 };
 
 type ClientDashboardData = {
@@ -1305,6 +1315,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [kidsFilterGroupId, setKidsFilterGroupId] = useState("");
   const [kidsAttendanceDate, setKidsAttendanceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [kidsSelectedChildId, setKidsSelectedChildId] = useState<string | null>(null);
+  const [kidsQrToken, setKidsQrToken] = useState("");
+  const [isKidsQrScannerOpen, setIsKidsQrScannerOpen] = useState(false);
+  const [kidsQrScannerMessage, setKidsQrScannerMessage] = useState("");
+  const kidsQrVideoRef = useRef<HTMLVideoElement | null>(null);
+  const kidsQrStreamRef = useRef<MediaStream | null>(null);
+  const kidsQrScanTimerRef = useRef<number | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -1593,6 +1609,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setActiveTab(visibleClientTabs[0]?.key ?? "overview");
     }
   }, [activeTab, visibleClientTabs]);
+
+  useEffect(() => {
+    return () => {
+      stopKidsQrScanner();
+    };
+  }, []);
 
   async function handleForcePasswordChangeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3960,6 +3982,197 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     await loadClientData(profile.id);
   }
 
+  async function handleKidsAttendanceCheckout(attendanceId: string) {
+    if (!attendanceId || !clientData || !profile || !canManageKids) return;
+
+    const checkedOutAt = new Date().toISOString();
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      setClientData((current) =>
+        current
+          ? {
+              ...current,
+              kidsAttendance: current.kidsAttendance.map((item) =>
+                item.id === attendanceId ? { ...item, checked_out_at: checkedOutAt } : item,
+              ),
+            }
+          : current,
+      );
+      setKidsSaveStatus("success");
+      setKidsSaveMessage("Check-out registrado.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("kids_attendance")
+      .update({ checked_out_at: checkedOutAt })
+      .eq("id", attendanceId)
+      .eq("tenant_id", clientData.tenant.id);
+
+    if (error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível registrar o check-out.");
+      return;
+    }
+
+    setKidsSaveStatus("success");
+    setKidsSaveMessage("Check-out registrado.");
+    await loadClientData(profile.id);
+  }
+
+  function stopKidsQrScanner() {
+    if (kidsQrScanTimerRef.current) {
+      window.clearTimeout(kidsQrScanTimerRef.current);
+      kidsQrScanTimerRef.current = null;
+    }
+
+    kidsQrStreamRef.current?.getTracks().forEach((track) => track.stop());
+    kidsQrStreamRef.current = null;
+
+    if (kidsQrVideoRef.current) {
+      kidsQrVideoRef.current.srcObject = null;
+    }
+
+    setIsKidsQrScannerOpen(false);
+  }
+
+  async function startKidsQrScanner() {
+    const BarcodeDetectorCtor = (window as typeof window & {
+      BarcodeDetector?: new (options: { formats: string[] }) => {
+        detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
+      };
+    }).BarcodeDetector;
+
+    if (!BarcodeDetectorCtor) {
+      setKidsQrScannerMessage("Leitura por câmera não está disponível neste navegador. Use o campo de token.");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setKidsQrScannerMessage("Este navegador não liberou acesso à câmera. Use o campo de token.");
+      return;
+    }
+
+    setKidsQrScannerMessage("");
+    setIsKidsQrScannerOpen(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+
+      kidsQrStreamRef.current = stream;
+      if (kidsQrVideoRef.current) {
+        kidsQrVideoRef.current.srcObject = stream;
+        await kidsQrVideoRef.current.play();
+      }
+
+      const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
+      const scan = async () => {
+        const video = kidsQrVideoRef.current;
+        if (!video || !kidsQrStreamRef.current) return;
+
+        try {
+          const codes = await detector.detect(video);
+          const rawValue = codes[0]?.rawValue?.trim();
+          if (rawValue) {
+            setKidsQrToken(rawValue);
+            stopKidsQrScanner();
+            setKidsQrScannerMessage("QR lido. Confirme o check-in.");
+            return;
+          }
+        } catch {
+          setKidsQrScannerMessage("Não foi possível ler o QR. Ajuste o enquadramento ou use o token manual.");
+        }
+
+        kidsQrScanTimerRef.current = window.setTimeout(scan, 650);
+      };
+
+      kidsQrScanTimerRef.current = window.setTimeout(scan, 650);
+    } catch {
+      setKidsQrScannerMessage("Permissão de câmera negada ou indisponível.");
+      stopKidsQrScanner();
+    }
+  }
+
+  async function handleKidsQrCheckin() {
+    if (!clientData || !profile || !canManageKids) return;
+    const raw = kidsQrToken.trim();
+    if (!raw) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Informe ou escaneie o QR token.");
+      return;
+    }
+
+    const normalizedToken = raw.startsWith("kids-pass:") ? raw.slice("kids-pass:".length) : raw;
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    const { data, error } = await supabase.rpc("consume_kids_checkin_pass", {
+      in_pass_token: normalizedToken,
+      in_guardian_name: null,
+      in_notes: "Check-in via QR",
+    });
+
+    if (error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage(error.message || "QR inválido, expirado ou já utilizado.");
+      return;
+    }
+
+    const result = ((data as KidsQrConsumeResult[] | null) ?? [])[0];
+    if (!result) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível processar o QR.");
+      return;
+    }
+
+    setKidsSaveStatus("success");
+    setKidsSaveMessage(`Check-in confirmado para ${result.child_name}.`);
+    setKidsQrToken("");
+    await loadClientData(profile.id);
+  }
+
+  async function handleDeleteKidsTeacherSchedule(scheduleId: string) {
+    if (!scheduleId || !clientData || !profile || !canManageKids) return;
+
+    setKidsSaveStatus("loading");
+    setKidsSaveMessage("");
+
+    if (demoMode) {
+      setClientData((current) =>
+        current
+          ? {
+              ...current,
+              kidsTeacherSchedule: current.kidsTeacherSchedule.filter((item) => item.id !== scheduleId),
+            }
+          : current,
+      );
+      setKidsSaveStatus("success");
+      setKidsSaveMessage("Escala removida.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("kids_teacher_schedule")
+      .delete()
+      .eq("id", scheduleId)
+      .eq("tenant_id", clientData.tenant.id);
+
+    if (error) {
+      setKidsSaveStatus("error");
+      setKidsSaveMessage("Não foi possível remover a escala.");
+      return;
+    }
+
+    setKidsSaveStatus("success");
+    setKidsSaveMessage("Escala removida.");
+    await loadClientData(profile.id);
+  }
+
   async function handleKidsActivitySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!clientData || !profile || !canManageKids) return;
@@ -4277,6 +4490,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Módulo de Louvor"
                   : activeTab === "financial"
                   ? "Módulo Financeiro"
+                  : activeTab === "kids"
+                  ? "Módulo Kids"
                   : activeTab === "notices"
                   ? "Comunicados gerais"
                   : activeTab === "lists"
@@ -4299,6 +4514,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Gerencie escalas, integrantes e confirmações de presença."
                   : activeTab === "financial"
                   ? "Registre dízimos, ofertas, receitas e despesas da igreja."
+                  : activeTab === "kids"
+                  ? "Gerencie crianças, turmas, presença, professores e comunicados aos responsáveis."
                   : activeTab === "notices"
                   ? "Publique comunicados gerais para a comunidade."
                   : activeTab === "lists"
@@ -5726,6 +5943,28 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               return map[v] ?? v;
             };
 
+            const normalizeWhatsappPhone = (phone: string | null) => {
+              const digits = phone?.replace(/\D/g, "") ?? "";
+              if (!digits) return "";
+              return digits.startsWith("55") ? digits : `55${digits}`;
+            };
+
+            const communicationWhatsappLinks = (comm: KidsCommunicationRecord) => {
+              if (comm.sent_via === "system") return [];
+              const guardians = comm.child_id
+                ? clientData.kidsGuardiansByChildId[comm.child_id] ?? []
+                : Object.values(clientData.kidsGuardiansByChildId).flat();
+              const message = encodeURIComponent(comm.message);
+              return guardians
+                .map((guardian) => ({ guardian, phone: normalizeWhatsappPhone(guardian.phone) }))
+                .filter((item) => item.phone)
+                .map((item) => ({
+                  id: item.guardian.id,
+                  name: item.guardian.name,
+                  href: `https://wa.me/${item.phone}?text=${message}`,
+                }));
+            };
+
             const calcAge = (dob: string | null) => {
               if (!dob) return null;
               const birth = new Date(dob + "T12:00:00");
@@ -6325,18 +6564,26 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                               <strong>{s.members?.name ?? "—"}</strong>
                               {s.role_label ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{s.role_label}</small> : null}
                             </span>
-                            <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
-                              {s.kids_groups?.name ?? "Todas as turmas"}
+                            <span style={{ display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
+                              <span>{s.kids_groups?.name ?? "Todas as turmas"}</span>
                               {s.members?.phone ? (
                                 <a
-                                  href={`https://wa.me/55${s.members.phone.replace(/\D/g, "")}?text=${encodeURIComponent("Olá! Você está escalado(a) hoje na Escolinha.")}`}
+                                  href={`https://wa.me/${normalizeWhatsappPhone(s.members.phone)}?text=${encodeURIComponent("Olá! Você está escalado(a) hoje na Escolinha.")}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  style={{ marginLeft: "0.5rem", color: "#25D366", fontSize: "0.8rem" }}
+                                  style={{ color: "#25D366", fontSize: "0.8rem" }}
                                 >
                                   WhatsApp
                                 </a>
                               ) : null}
+                              <button
+                                type="button"
+                                className="btn-icon-ghost"
+                                aria-label="Remover escala"
+                                onClick={() => handleDeleteKidsTeacherSchedule(s.id)}
+                              >
+                                <X size={14} />
+                              </button>
                             </span>
                           </div>
                         ))}
@@ -6370,12 +6617,38 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 {kidsView === "attendance" ? (
                   <div>
                     <div className="panel-heading" style={{ marginBottom: "0.75rem" }}>
-                      <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.9rem" }}>
-                        <span>Data:</span>
-                        <input className="catalog-input" type="date" value={kidsAttendanceDate} onChange={(e) => setKidsAttendanceDate(e.target.value)} style={{ width: "auto" }} />
-                      </label>
+                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.9rem" }}>
+                          <span>Data:</span>
+                          <input className="catalog-input" type="date" value={kidsAttendanceDate} onChange={(e) => setKidsAttendanceDate(e.target.value)} style={{ width: "auto" }} />
+                        </label>
+                        <input
+                          className="catalog-input"
+                          placeholder="Escanear/colar token QR"
+                          value={kidsQrToken}
+                          onChange={(e) => setKidsQrToken(e.target.value)}
+                          style={{ minWidth: 240 }}
+                        />
+                        <button type="button" onClick={() => void startKidsQrScanner()}>
+                          <Camera size={15} /> Ler câmera
+                        </button>
+                        <button type="button" onClick={() => void handleKidsQrCheckin()}>
+                          <QrCode size={15} /> Check-in por QR
+                        </button>
+                      </div>
                       <button type="button" onClick={() => { setKidsAttendanceForm({ ...emptyKidsAttendanceForm, attendance_date: kidsAttendanceDate }); setIsKidsAttendanceFormOpen(true); }}>+ Registrar check-in</button>
                     </div>
+                    {kidsQrScannerMessage ? (
+                      <p className={`login-feedback ${kidsQrScannerMessage.includes("lido") ? "success" : "error"}`}>{kidsQrScannerMessage}</p>
+                    ) : null}
+                    {isKidsQrScannerOpen ? (
+                      <div className="kids-qr-scanner">
+                        <video ref={kidsQrVideoRef} muted playsInline />
+                        <button type="button" className="btn btn-secondary" onClick={stopKidsQrScanner}>
+                          Fechar câmera
+                        </button>
+                      </div>
+                    ) : null}
                     {allAttendance.filter((a) => a.attendance_date === kidsAttendanceDate).length === 0 ? (
                       <div className="catalog-empty">Nenhuma presença registrada para esta data.</div>
                     ) : (
@@ -6386,9 +6659,22 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                               <strong>{a.kids_children?.name ?? "—"}</strong>
                               {a.kids_groups ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{a.kids_groups.name}</small> : null}
                             </span>
-                            <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
-                              {a.checked_in_at ? `Entrada: ${new Date(a.checked_in_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "—"}
-                              {a.guardian_name ? ` · Responsável: ${a.guardian_name}` : ""}
+                            <span style={{ display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>
+                              <span>
+                                {a.checked_in_at ? `Entrada: ${new Date(a.checked_in_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "—"}
+                                {a.checked_out_at ? ` · Saída: ${new Date(a.checked_out_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                                {a.guardian_name ? ` · Responsável: ${a.guardian_name}` : ""}
+                              </span>
+                              {!a.checked_out_at ? (
+                                <button
+                                  type="button"
+                                  className="btn-icon-ghost"
+                                  aria-label="Registrar check-out"
+                                  onClick={() => handleKidsAttendanceCheckout(a.id)}
+                                >
+                                  <CheckCircle2 size={14} />
+                                </button>
+                              ) : null}
                             </span>
                           </div>
                         ))}
@@ -6442,7 +6728,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <div className="catalog-empty">Nenhum comunicado enviado ainda.</div>
                     ) : (
                       <div className="catalog-list">
-                        {allComms.map((comm) => (
+                        {allComms.map((comm) => {
+                          const whatsappLinks = communicationWhatsappLinks(comm);
+                          return (
                           <div key={comm.id} className="catalog-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.25rem" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
                               <strong>{comm.title}</strong>
@@ -6455,8 +6743,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                               {comm.kids_children ? `Para: ${comm.kids_children.name}` : "Para: todos os responsáveis"}
                             </small>
                             <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--color-text)" }}>{comm.message}</p>
+                            {whatsappLinks.length > 0 ? (
+                              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                {whatsappLinks.map((link) => (
+                                  <a
+                                    key={link.id}
+                                    href={link.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: "#25D366", fontSize: "0.8rem" }}
+                                  >
+                                    WhatsApp: {link.name}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

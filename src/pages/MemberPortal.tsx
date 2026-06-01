@@ -1,4 +1,5 @@
 import {
+  Baby,
   CalendarCheck,
   Check,
   ChevronDown,
@@ -8,6 +9,8 @@ import {
   Mail,
   MapPin,
   Music,
+  Plus,
+  QrCode,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -48,12 +51,78 @@ type MemberProfile = {
   status: string;
 };
 
+type KidsGroupRecord = {
+  id: string;
+  name: string;
+};
+
+type KidsChildRecord = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  date_of_birth: string | null;
+  group_id: string | null;
+  allergies: string | null;
+  special_needs: string | null;
+  notes: string | null;
+  is_active: boolean;
+  kids_groups: { name: string } | null;
+};
+
+type KidsGuardianRecord = {
+  id: string;
+  child_id: string;
+  name: string;
+  phone: string | null;
+  relationship: "parent" | "grandparent" | "sibling" | "guardian" | "other";
+  is_primary: boolean;
+};
+
+type KidsCheckinPassRecord = {
+  id: string;
+  child_id: string;
+  pass_token: string;
+  valid_from: string;
+  valid_until: string;
+  used_at: string | null;
+  created_at: string;
+};
+
+type KidsChildFormState = {
+  id: string | null;
+  name: string;
+  date_of_birth: string;
+  group_id: string;
+  allergies: string;
+  special_needs: string;
+  notes: string;
+};
+
+const emptyKidsChildForm: KidsChildFormState = {
+  id: null,
+  name: "",
+  date_of_birth: "",
+  group_id: "",
+  allergies: "",
+  special_needs: "",
+  notes: "",
+};
+
 export function MemberPortal() {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
+  const [kidsGroups, setKidsGroups] = useState<KidsGroupRecord[]>([]);
+  const [kidsChildren, setKidsChildren] = useState<KidsChildRecord[]>([]);
+  const [kidsGuardiansByChildId, setKidsGuardiansByChildId] = useState<Record<string, KidsGuardianRecord[]>>({});
+  const [kidsPassesByChildId, setKidsPassesByChildId] = useState<Record<string, KidsCheckinPassRecord[]>>({});
+  const [kidsForm, setKidsForm] = useState<KidsChildFormState>(emptyKidsChildForm);
+  const [isKidsFormOpen, setIsKidsFormOpen] = useState(false);
+  const [kidsMessage, setKidsMessage] = useState("");
+  const [kidsStatus, setKidsStatus] = useState<LoginStatus>("idle");
+  const [selectedPassChildId, setSelectedPassChildId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [actionStatus, setActionStatus] = useState<Record<string, "loading" | "done">>({});
@@ -111,6 +180,10 @@ export function MemberPortal() {
 
     if (!profileData.member_id || !profileData.tenant_id) {
       setAssignments([]);
+      setKidsGroups([]);
+      setKidsChildren([]);
+      setKidsGuardiansByChildId({});
+      setKidsPassesByChildId({});
       setLoadStatus("ready");
       return;
     }
@@ -132,7 +205,169 @@ export function MemberPortal() {
     });
 
     setAssignments(sorted);
+
+    const [groupsResult, guardiansResult] = await Promise.all([
+      supabase
+        .from("kids_groups")
+        .select("id, name")
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .returns<KidsGroupRecord[]>(),
+      supabase
+        .from("kids_guardians")
+        .select(
+          "id, child_id, name, phone, relationship, is_primary, kids_children (id, tenant_id, name, date_of_birth, group_id, allergies, special_needs, notes, is_active, kids_groups (name))",
+        )
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("member_id", profileData.member_id)
+        .returns<
+          Array<
+            KidsGuardianRecord & {
+              kids_children: KidsChildRecord | null;
+            }
+          >
+        >(),
+    ]);
+
+    if (!groupsResult.error) {
+      setKidsGroups(groupsResult.data ?? []);
+    } else {
+      setKidsGroups([]);
+    }
+
+    const guardianRows = guardiansResult.data ?? [];
+    const childById = new Map<string, KidsChildRecord>();
+    const guardiansByChild: Record<string, KidsGuardianRecord[]> = {};
+
+    for (const row of guardianRows) {
+      if (!row.kids_children) continue;
+      childById.set(row.kids_children.id, row.kids_children);
+      if (!guardiansByChild[row.child_id]) guardiansByChild[row.child_id] = [];
+      guardiansByChild[row.child_id].push({
+        id: row.id,
+        child_id: row.child_id,
+        name: row.name,
+        phone: row.phone,
+        relationship: row.relationship,
+        is_primary: row.is_primary,
+      });
+    }
+
+    const children = Array.from(childById.values()).sort((a, b) => a.name.localeCompare(b.name));
+    setKidsChildren(children);
+    setKidsGuardiansByChildId(guardiansByChild);
+
+    if (children.length > 0) {
+      const childIds = children.map((c) => c.id);
+      const passesResult = await supabase
+        .from("kids_checkin_passes")
+        .select("id, child_id, pass_token, valid_from, valid_until, used_at, created_at")
+        .in("child_id", childIds)
+        .order("created_at", { ascending: false })
+        .returns<KidsCheckinPassRecord[]>();
+
+      if (!passesResult.error) {
+        const grouped = (passesResult.data ?? []).reduce<Record<string, KidsCheckinPassRecord[]>>((acc, pass) => {
+          if (!acc[pass.child_id]) acc[pass.child_id] = [];
+          acc[pass.child_id].push(pass);
+          return acc;
+        }, {});
+        setKidsPassesByChildId(grouped);
+      } else {
+        setKidsPassesByChildId({});
+      }
+    } else {
+      setKidsPassesByChildId({});
+    }
+
     setLoadStatus("ready");
+  }
+
+  async function handleKidsChildSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile?.tenant_id || !profile.member_id) return;
+
+    if (!kidsForm.name.trim()) {
+      setKidsStatus("error");
+      setKidsMessage("Informe o nome da criança.");
+      return;
+    }
+
+    setKidsStatus("loading");
+    setKidsMessage("");
+
+    const payload = {
+      tenant_id: profile.tenant_id,
+      name: kidsForm.name.trim(),
+      date_of_birth: kidsForm.date_of_birth || null,
+      group_id: kidsForm.group_id || null,
+      allergies: kidsForm.allergies.trim() || null,
+      special_needs: kidsForm.special_needs.trim() || null,
+      notes: kidsForm.notes.trim() || null,
+    };
+
+    if (kidsForm.id) {
+      const { error } = await supabase.from("kids_children").update(payload).eq("id", kidsForm.id);
+      if (error) {
+        setKidsStatus("error");
+        setKidsMessage("Não foi possível atualizar a criança.");
+        return;
+      }
+    } else {
+      const inserted = await supabase
+        .from("kids_children")
+        .insert(payload)
+        .select("id, name")
+        .single<{ id: string; name: string }>();
+      if (inserted.error || !inserted.data) {
+        setKidsStatus("error");
+        setKidsMessage("Não foi possível cadastrar a criança.");
+        return;
+      }
+
+      const { error: guardianError } = await supabase.from("kids_guardians").insert({
+        tenant_id: profile.tenant_id,
+        child_id: inserted.data.id,
+        member_id: profile.member_id,
+        name: profile.full_name?.trim() || profile.email,
+        relationship: "parent",
+        is_primary: true,
+      });
+      if (guardianError) {
+        setKidsStatus("error");
+        setKidsMessage("Criança criada, mas não foi possível vincular o responsável.");
+        return;
+      }
+    }
+
+    setKidsStatus("success");
+    setKidsMessage(kidsForm.id ? "Criança atualizada." : "Criança cadastrada.");
+    setKidsForm(emptyKidsChildForm);
+    setIsKidsFormOpen(false);
+    await loadPortalData(profile.id);
+  }
+
+  async function generateKidsPass(child: KidsChildRecord) {
+    if (!profile?.tenant_id || !profile.member_id) return;
+    setKidsStatus("loading");
+    setKidsMessage("");
+
+    const { error } = await supabase.rpc("create_kids_checkin_pass", {
+      in_child_id: child.id,
+      in_valid_hours: 8,
+    });
+
+    if (error) {
+      setKidsStatus("error");
+      setKidsMessage("Não foi possível gerar o QR da criança.");
+      return;
+    }
+
+    setKidsStatus("success");
+    setKidsMessage("QR de check-in gerado.");
+    setSelectedPassChildId(child.id);
+    await loadPortalData(profile.id);
   }
 
   async function confirmAssignment(assignmentId: string) {
@@ -190,6 +425,19 @@ export function MemberPortal() {
     if (status === "declined") return "Recusado";
     if (status === "standby") return "Apoio";
     return "Aguardando";
+  }
+
+  function formatRelationship(value: KidsGuardianRecord["relationship"]) {
+    if (value === "parent") return "Pai/Mãe";
+    if (value === "grandparent") return "Avô/Avó";
+    if (value === "sibling") return "Irmão/Irmã";
+    if (value === "guardian") return "Responsável";
+    return "Outro";
+  }
+
+  function qrImageUrl(passToken: string) {
+    const payload = `kids-pass:${passToken}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
   }
 
   const upcomingAssignments = assignments.filter((a) => {
@@ -347,6 +595,113 @@ export function MemberPortal() {
       </header>
 
       <main className="member-portal-main">
+        <section className="member-portal-section">
+          <div className="member-portal-section-head">
+            <h2>Kids</h2>
+            <Button
+              type="button"
+              icon={<Plus size={14} />}
+              onClick={() => {
+                setKidsForm(emptyKidsChildForm);
+                setIsKidsFormOpen(true);
+              }}
+            >
+              Cadastrar criança
+            </Button>
+          </div>
+
+          {kidsMessage ? <p className={`login-feedback ${kidsStatus}`}>{kidsMessage}</p> : null}
+
+          {kidsChildren.length === 0 ? (
+            <div className="member-portal-empty-inline">
+              <Baby size={18} />
+              <span>Nenhuma criança cadastrada ainda.</span>
+            </div>
+          ) : (
+            <div className="member-portal-cards">
+              {kidsChildren.map((child) => {
+                const guardians = kidsGuardiansByChildId[child.id] ?? [];
+                const activePass = (kidsPassesByChildId[child.id] ?? []).find((pass) => !pass.used_at && new Date(pass.valid_until) >= new Date()) ?? null;
+                const showQr = selectedPassChildId === child.id && activePass;
+                return (
+                  <article key={child.id} className="member-portal-card">
+                    <div className="member-portal-card-head">
+                      <div>
+                        <span className="member-portal-event-type">Criança</span>
+                        <strong>{child.name}</strong>
+                      </div>
+                      <em className="member-portal-status pending">{child.kids_groups?.name ?? "Sem turma"}</em>
+                    </div>
+
+                    <div className="member-portal-card-meta">
+                      {child.date_of_birth ? (
+                        <div>
+                          <CalendarCheck size={14} />
+                          <span>Nascimento: {new Date(`${child.date_of_birth}T12:00:00`).toLocaleDateString("pt-BR")}</span>
+                        </div>
+                      ) : null}
+                      {child.allergies ? (
+                        <div>
+                          <X size={14} />
+                          <span>Alergias: {child.allergies}</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {guardians.length > 0 ? (
+                      <div className="member-portal-guardians">
+                        {guardians.map((guardian) => (
+                          <small key={guardian.id}>
+                            {formatRelationship(guardian.relationship)}: {guardian.name}
+                          </small>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="member-portal-card-actions">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        icon={<QrCode size={14} />}
+                        onClick={() => void generateKidsPass(child)}
+                        disabled={kidsStatus === "loading"}
+                      >
+                        Gerar QR
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setKidsForm({
+                            id: child.id,
+                            name: child.name,
+                            date_of_birth: child.date_of_birth ?? "",
+                            group_id: child.group_id ?? "",
+                            allergies: child.allergies ?? "",
+                            special_needs: child.special_needs ?? "",
+                            notes: child.notes ?? "",
+                          });
+                          setIsKidsFormOpen(true);
+                        }}
+                      >
+                        Editar
+                      </Button>
+                    </div>
+
+                    {showQr ? (
+                      <div className="member-portal-kids-qr">
+                        <img src={qrImageUrl(activePass.pass_token)} alt={`QR de check-in de ${child.name}`} />
+                        <small>Válido até {new Date(activePass.valid_until).toLocaleString("pt-BR")}</small>
+                        <small>Código fallback: {activePass.pass_token.slice(0, 12)}</small>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         {upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
           <div className="member-portal-empty">
             <CalendarCheck size={40} />
@@ -507,6 +862,97 @@ export function MemberPortal() {
           </section>
         ) : null}
       </main>
+
+      {isKidsFormOpen ? (
+        <div className="modal-backdrop">
+          <section className="modal-sheet">
+            <div className="modal-section-header">
+              <Baby size={18} />
+              <div>
+                <strong>{kidsForm.id ? "Editar criança" : "Cadastrar criança"}</strong>
+                <small>Dados visíveis para check-in no módulo Kids.</small>
+              </div>
+            </div>
+            <form className="modal-body" onSubmit={(event) => void handleKidsChildSubmit(event)}>
+              <label>
+                <span>Nome</span>
+                <input
+                  className="catalog-input"
+                  value={kidsForm.name}
+                  onChange={(event) => setKidsForm((current) => ({ ...current, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <div className="modal-grid">
+                <label>
+                  <span>Data de nascimento</span>
+                  <input
+                    type="date"
+                    className="catalog-input"
+                    value={kidsForm.date_of_birth}
+                    onChange={(event) => setKidsForm((current) => ({ ...current, date_of_birth: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span>Turma</span>
+                  <select
+                    className="catalog-input"
+                    value={kidsForm.group_id}
+                    onChange={(event) => setKidsForm((current) => ({ ...current, group_id: event.target.value }))}
+                  >
+                    <option value="">Sem turma</option>
+                    {kidsGroups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                <span>Alergias</span>
+                <input
+                  className="catalog-input"
+                  value={kidsForm.allergies}
+                  onChange={(event) => setKidsForm((current) => ({ ...current, allergies: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Necessidades especiais</span>
+                <input
+                  className="catalog-input"
+                  value={kidsForm.special_needs}
+                  onChange={(event) => setKidsForm((current) => ({ ...current, special_needs: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Observações</span>
+                <textarea
+                  className="catalog-input catalog-textarea"
+                  rows={2}
+                  value={kidsForm.notes}
+                  onChange={(event) => setKidsForm((current) => ({ ...current, notes: event.target.value }))}
+                />
+              </label>
+              <div className="modal-actions">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsKidsFormOpen(false);
+                    setKidsForm(emptyKidsChildForm);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={kidsStatus === "loading"}>
+                  {kidsStatus === "loading" ? "Salvando..." : kidsForm.id ? "Salvar" : "Cadastrar"}
+                </Button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
