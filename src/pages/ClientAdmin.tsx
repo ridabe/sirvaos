@@ -1297,6 +1297,25 @@ function normalizePermissionLabel(value: string) {
     .trim();
 }
 
+function isArtsScheduleAccessLabel(value: string | null | undefined) {
+  const tokens = normalizePermissionLabel(value ?? "").split(/[^a-z0-9]+/).filter(Boolean);
+  const scheduleTokens = new Set([
+    "arte",
+    "artes",
+    "louvor",
+    "worship",
+    "danca",
+    "midia",
+    "multimidia",
+    "teatro",
+    "som",
+    "audio",
+    "audiovisual",
+    "sound",
+  ]);
+  return tokens.some((token) => scheduleTokens.has(token));
+}
+
 function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
   if (!storedLogoUrl) {
     return null;
@@ -1686,11 +1705,11 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const visibleClientTabs = useMemo(() => {
     return clientTabs.filter((tab) => {
       if (defaultClientTabs.has(tab.key)) {
-        return true;
+        return isTenantAdmin;
       }
 
       if (tab.key === "reports") {
-        return isTenantAdmin || currentUserModuleAdminIds.length > 0;
+        return isTenantAdmin;
       }
 
       if (tenantAdminOnlyTabs.has(tab.key)) {
@@ -1749,6 +1768,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       acc[member.id] = parts.length ? parts.join(" · ") : member.email ?? "Sem vínculos";
       return acc;
     }, {});
+  }, [catalogRoleNameById, clientData, clientData?.members, clientData?.memberMinistriesByMemberId, clientData?.memberRoleIdsByMemberId]);
+
+  const worshipAssignableMembers = useMemo(() => {
+    if (!clientData) {
+      return [];
+    }
+
+    return clientData.members.filter((member) => {
+      const ministryNames = [
+        member.ministry,
+        ...(clientData.memberMinistriesByMemberId[member.id] ?? []).map((item) => item.name),
+      ];
+      const roleNames = (clientData.memberRoleIdsByMemberId[member.id] ?? [])
+        .map((roleId) => catalogRoleNameById[roleId])
+        .filter(Boolean);
+
+      return [...ministryNames, ...roleNames].some((name) => isArtsScheduleAccessLabel(name));
+    });
   }, [catalogRoleNameById, clientData, clientData?.members, clientData?.memberMinistriesByMemberId, clientData?.memberRoleIdsByMemberId]);
 
   const filteredMembers = useMemo(() => {
@@ -2955,7 +2992,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       }
 
       const materialId = crypto.randomUUID();
-      const safeName = (file.name || "arquivo").replace(/[^\w.\-]+/g, "-");
+      const safeName = (file.name || "arquivo").replace(/[^\w.-]+/g, "-");
       const objectKey = `${tenantId}/${selectedBibleSchoolClassId}/${materialId}/${Date.now()}-${safeName}`;
 
       const uploadResult = await supabase.storage.from("bible-school-materials").upload(objectKey, file, {
@@ -4155,6 +4192,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     if (!worshipAssignmentForm.event_id || !worshipAssignmentForm.member_id || (!worshipAssignmentForm.role_id && !customRole)) {
       setWorshipSaveStatus("error");
       setWorshipSaveMessage("Selecione evento, membro e funcao na escala.");
+      return;
+    }
+
+    if (!worshipAssignableMembers.some((member) => member.id === worshipAssignmentForm.member_id)) {
+      setWorshipSaveStatus("error");
+      setWorshipSaveMessage("Selecione um membro vinculado aos ministérios de arte, louvor, dança, mídia, teatro ou som.");
       return;
     }
 
@@ -5538,6 +5581,19 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           ))}
         </nav>
 
+        <div className="client-admin-userbox">
+          <span className="sidebar-label">Logado como</span>
+          <strong className="sidebar-label">{profile?.full_name ?? profile?.email}</strong>
+          <small className="sidebar-label">{profile?.email}</small>
+        </div>
+
+        {profile?.member_id ? (
+          <a className="client-admin-portal-link" href="/membro">
+            <Users2 size={18} />
+            <span className="sidebar-label">Portal do membro</span>
+          </a>
+        ) : null}
+
         <button className="global-admin-logout" type="button" onClick={handleSignOut}>
           <LogOut size={18} />
           <span className="sidebar-label">Sair</span>
@@ -5579,6 +5635,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   : "Gestão de usuários"}
               </span>
               <h1>{tenant.name}</h1>
+              <div className="client-header-user">
+                <span>Usuário logado</span>
+                <strong>{profile?.full_name ?? profile?.email}</strong>
+              </div>
               <p>
                 {activeTab === "overview"
                   ? "Acompanhe membros, eventos, módulos ativos e a identidade visual da igreja."
@@ -6317,7 +6377,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <form className="worship-form" onSubmit={handleWorshipAssignmentSubmit}>
                     <div className="modal-section-header">
                       <strong>Adicionar escalado</strong>
-                      <small>Vincule um membro a uma funcao do louvor.</small>
+                      <small>Liste somente membros de arte, louvor, dança, mídia, teatro e som.</small>
                     </div>
                     <select
                       className="catalog-input"
@@ -6337,11 +6397,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       onChange={(event) => setWorshipAssignmentForm((current) => ({ ...current, member_id: event.target.value }))}
                     >
                       <option value="">Selecionar membro</option>
-                      {clientData.members.map((member) => (
+                      {worshipAssignableMembers.map((member) => (
                         <option key={member.id} value={member.id}>
-                          {member.name}
+                          {member.name} - {memberSummaryById[member.id] ?? "Vínculo artístico"}
                         </option>
                       ))}
+                      {worshipAssignableMembers.length === 0 ? (
+                        <option value="" disabled>
+                          Nenhum membro elegível encontrado
+                        </option>
+                      ) : null}
                     </select>
                     <div className="modal-grid">
                       <select

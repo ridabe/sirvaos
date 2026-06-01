@@ -4,14 +4,13 @@ type AccessProfile = {
   global_role: "super_admin" | "operations" | "support" | null;
   tenant_id: string | null;
   tenant_role: "owner" | "admin" | "member" | null;
-  member_id: string | null;
   status: "active" | "invited" | "suspended";
 };
 
 export async function resolvePostLoginPath(userId: string) {
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
-    .select("global_role, tenant_id, tenant_role, member_id, status")
+    .select("global_role, tenant_id, tenant_role, status")
     .eq("id", userId)
     .single<AccessProfile>();
 
@@ -37,16 +36,5 @@ export async function resolvePostLoginPath(userId: string) {
     return "/admin-cliente";
   }
 
-  if (!profileData.member_id) {
-    return "/membro";
-  }
-
-  const { data: moduleAccess } = await supabase
-    .from("tenant_module_admins")
-    .select("id")
-    .eq("tenant_id", profileData.tenant_id)
-    .or(`profile_id.eq.${userId},member_id.eq.${profileData.member_id}`)
-    .limit(1);
-
-  return moduleAccess?.length ? "/admin-cliente" : "/membro";
+  return "/membro";
 }

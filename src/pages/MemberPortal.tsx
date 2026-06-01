@@ -49,8 +49,35 @@ type MemberProfile = {
   email: string;
   tenant_id: string | null;
   member_id: string | null;
+  tenant_role: "owner" | "admin" | "member" | null;
   status: string;
 };
+
+type PortalMinistryRecord = {
+  ministry_id: string;
+  is_admin: boolean;
+  catalog_ministries: { name: string } | null;
+};
+
+type PortalModuleAccessRecord = {
+  id: string;
+  module_id: string;
+  platform_modules: { code: string; name: string; description: string | null } | null;
+};
+
+function normalizeAccessLabel(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function isSchedulableMinistryName(value: string | null | undefined) {
+  const normalized = normalizeAccessLabel(value);
+  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
+  const schedulableTokens = new Set(["louvor", "worship", "danca", "midia", "multimidia", "som", "audio", "audiovisual", "sound"]);
+  return tokens.some((token) => schedulableTokens.has(token));
+}
 
 type KidsGroupRecord = {
   id: string;
@@ -257,6 +284,9 @@ export function MemberPortal() {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
+  const [memberMinistries, setMemberMinistries] = useState<PortalMinistryRecord[]>([]);
+  const [moduleAdminAccesses, setModuleAdminAccesses] = useState<PortalModuleAccessRecord[]>([]);
+  const [canManageMembers, setCanManageMembers] = useState(false);
   const [kidsGroups, setKidsGroups] = useState<KidsGroupRecord[]>([]);
   const [kidsChildren, setKidsChildren] = useState<KidsChildRecord[]>([]);
   const [kidsGuardiansByChildId, setKidsGuardiansByChildId] = useState<Record<string, KidsGuardianRecord[]>>({});
@@ -334,7 +364,7 @@ export function MemberPortal() {
 
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
-      .select("id, full_name, email, tenant_id, member_id, status")
+      .select("id, full_name, email, tenant_id, tenant_role, member_id, status")
       .eq("id", userId)
       .single<MemberProfile>();
 
@@ -347,6 +377,9 @@ export function MemberPortal() {
 
     if (!profileData.member_id || !profileData.tenant_id) {
       setAssignments([]);
+      setMemberMinistries([]);
+      setModuleAdminAccesses([]);
+      setCanManageMembers(false);
       setKidsGroups([]);
       setKidsChildren([]);
       setKidsGuardiansByChildId({});
@@ -379,23 +412,54 @@ export function MemberPortal() {
       return;
     }
 
-    const { data: assignmentsData } = await supabase
-      .from("worship_assignments")
-      .select(
-        "id, event_id, member_id, role_id, role_name, arrival_at, status, decline_reason, notes, worship_events (id, title, event_type, starts_at, ends_at, location, notes), worship_roles (name)",
-      )
-      .eq("member_id", profileData.member_id)
-      .eq("tenant_id", profileData.tenant_id)
-      .order("event_id", { ascending: true })
-      .returns<MemberAssignment[]>();
+    const [ministriesResult, moduleAccessResult, canManageMembersResult] = await Promise.all([
+      supabase
+        .from("member_ministries")
+        .select("ministry_id, is_admin, catalog_ministries (name)")
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("member_id", profileData.member_id)
+        .returns<PortalMinistryRecord[]>(),
+      supabase
+        .from("tenant_module_admins")
+        .select("id, module_id, platform_modules (code, name, description)")
+        .eq("tenant_id", profileData.tenant_id)
+        .or(`profile_id.eq.${profileData.id},member_id.eq.${profileData.member_id}`)
+        .returns<PortalModuleAccessRecord[]>(),
+      supabase.rpc("can_manage_module", {
+        module_code: "members",
+      }),
+    ]);
 
-    const sorted = (assignmentsData ?? []).sort((a, b) => {
-      const dateA = a.worship_events?.starts_at ?? "";
-      const dateB = b.worship_events?.starts_at ?? "";
-      return dateA.localeCompare(dateB);
-    });
+    const portalMinistries = ministriesResult.data ?? [];
+    const hasSchedulePortalAccess = portalMinistries.some((row) =>
+      isSchedulableMinistryName(row.catalog_ministries?.name),
+    );
 
-    setAssignments(sorted);
+    setMemberMinistries(portalMinistries);
+    setModuleAdminAccesses(moduleAccessResult.data ?? []);
+    setCanManageMembers(Boolean(canManageMembersResult.data));
+
+    if (hasSchedulePortalAccess) {
+      const { data: assignmentsData } = await supabase
+        .from("worship_assignments")
+        .select(
+          "id, event_id, member_id, role_id, role_name, arrival_at, status, decline_reason, notes, worship_events (id, title, event_type, starts_at, ends_at, location, notes), worship_roles (name)",
+        )
+        .eq("member_id", profileData.member_id)
+        .eq("tenant_id", profileData.tenant_id)
+        .order("event_id", { ascending: true })
+        .returns<MemberAssignment[]>();
+
+      const sorted = (assignmentsData ?? []).sort((a, b) => {
+        const dateA = a.worship_events?.starts_at ?? "";
+        const dateB = b.worship_events?.starts_at ?? "";
+        return dateA.localeCompare(dateB);
+      });
+
+      setAssignments(sorted);
+    } else {
+      setAssignments([]);
+    }
 
     const [groupsResult, guardiansResult] = await Promise.all([
       supabase
@@ -929,7 +993,7 @@ export function MemberPortal() {
       }
 
       const materialId = crypto.randomUUID();
-      const safeName = (file.name || "arquivo").replace(/[^\w.\-]+/g, "-");
+      const safeName = (file.name || "arquivo").replace(/[^\w.-]+/g, "-");
       const objectKey = `${profile.tenant_id}/${selectedBibleSchoolClassId}/${materialId}/${Date.now()}-${safeName}`;
 
       const uploadResult = await supabase.storage.from("bible-school-materials").upload(objectKey, file, {
@@ -1144,6 +1208,9 @@ export function MemberPortal() {
     await supabase.auth.signOut();
     setProfile(null);
     setAssignments([]);
+    setMemberMinistries([]);
+    setModuleAdminAccesses([]);
+    setCanManageMembers(false);
     setLoadStatus("idle");
     setLoginStatus("idle");
   }
@@ -1186,6 +1253,22 @@ export function MemberPortal() {
     if (!starts) return true;
     return new Date(starts) < new Date(new Date().setHours(0, 0, 0, 0));
   });
+
+  const adminModuleAccesses = moduleAdminAccesses.filter((row) => row.platform_modules);
+  const isTenantAdmin = profile?.tenant_role === "owner" || profile?.tenant_role === "admin";
+  const canOpenAdminPortal =
+    Boolean(isTenantAdmin) || canManageMembers || bibleSchoolCanManage || adminModuleAccesses.length > 0;
+  const ministryAdminLabels = memberMinistries
+    .filter((item) => item.is_admin)
+    .map((item) => item.catalog_ministries?.name ?? "Ministério")
+    .filter(Boolean);
+  const memberMinistryLabels = memberMinistries
+    .map((item) => item.catalog_ministries?.name ?? "Ministério")
+    .filter(Boolean);
+  const hasSchedulePortalAccess = memberMinistries.some((item) =>
+    isSchedulableMinistryName(item.catalog_ministries?.name),
+  );
+  const showLegacyAssignmentSections = new URLSearchParams(window.location.search).has("legacyPortalAssignments");
 
   if (loadStatus === "idle" || loginStatus === "idle" || loginStatus === "loading") {
     if (!profile) {
@@ -1317,22 +1400,257 @@ export function MemberPortal() {
     <div className="member-portal-shell">
       <header className="member-portal-header">
         <div className="member-portal-brand">
-          <Music size={22} />
+          <Check size={22} />
           <div>
             <strong>Portal do Membro</strong>
             <span>{profile.full_name ?? profile.email}</span>
           </div>
         </div>
-        <button type="button" className="member-portal-signout" onClick={() => void handleSignOut()}>
-          <LogOut size={16} />
-          Sair
-        </button>
+        <div className="member-portal-userbox">
+          <span>{profile.full_name ?? profile.email}</span>
+          <small>{profile.email}</small>
+          <button type="button" className="member-portal-signout" onClick={() => void handleSignOut()}>
+            <LogOut size={16} />
+            Sair
+          </button>
+        </div>
       </header>
 
       <main className="member-portal-main">
+        <section className="member-portal-hero">
+          <div>
+            <span className="member-portal-kicker">Minha área</span>
+            <h1>Olá, {profile.full_name?.split(" ")[0] ?? "membro"}</h1>
+            <p>
+              Seus acessos, ministérios, crianças vinculadas e atividades aparecem aqui conforme as permissões do seu cadastro.
+            </p>
+          </div>
+          {canOpenAdminPortal ? (
+            <a className="member-portal-admin-link" href="/admin-cliente">
+              Abrir painel administrativo
+            </a>
+          ) : null}
+        </section>
+
+        <section className="member-portal-access-grid" aria-label="Resumo de acessos">
+          {hasSchedulePortalAccess ? (
+            <article className="member-portal-access-card">
+              <span><Music size={17} /> Escalas</span>
+              <strong>{upcomingAssignments.length}</strong>
+              <small>{upcomingAssignments.length === 1 ? "próxima escala" : "próximas escalas"}</small>
+            </article>
+          ) : null}
+          <article className="member-portal-access-card">
+            <span><Baby size={17} /> Kids</span>
+            <strong>{kidsChildren.length}</strong>
+            <small>{kidsChildren.length === 1 ? "criança vinculada" : "crianças vinculadas"}</small>
+          </article>
+          <article className="member-portal-access-card">
+            <span><BookOpen size={17} /> Escola Bíblica</span>
+            <strong>{bibleSchoolClasses.length}</strong>
+            <small>{bibleSchoolCanManage ? "gestão liberada" : bibleSchoolEnabled ? "turmas disponíveis" : "sem acesso"}</small>
+          </article>
+          <article className="member-portal-access-card">
+            <span><Check size={17} /> Administração</span>
+            <strong>{canOpenAdminPortal ? "Sim" : "Não"}</strong>
+            <small>{canManageMembers ? "membresia liberada" : canOpenAdminPortal ? "módulo liberado" : "portal do membro"}</small>
+          </article>
+        </section>
+
         <section className="member-portal-section">
           <div className="member-portal-section-head">
-            <h2>Kids</h2>
+            <div>
+              <h2>Acessos e ministérios</h2>
+              <p>Permissões identificadas para este usuário.</p>
+            </div>
+          </div>
+          <div className="member-portal-permission-list">
+            {canManageMembers ? (
+              <a className="member-portal-permission-card featured" href="/admin-cliente">
+                <span>Membresia</span>
+                <strong>Acesso administrativo</strong>
+                <small>Cadastro de membros, famílias, cargos e ministérios.</small>
+              </a>
+            ) : null}
+            {adminModuleAccesses.map((row) => (
+              <a key={row.id} className="member-portal-permission-card" href="/admin-cliente">
+                <span>{row.platform_modules?.name ?? "Módulo"}</span>
+                <strong>Admin do módulo</strong>
+                <small>{row.platform_modules?.description ?? "Acesso liberado pela igreja."}</small>
+              </a>
+            ))}
+            {bibleSchoolCanManage && !adminModuleAccesses.some((row) => row.platform_modules?.code === "bible-school") ? (
+              <a className="member-portal-permission-card" href="/admin-cliente">
+                <span>Escola Bíblica</span>
+                <strong>{bibleSchoolIsTeacher ? "Professor" : "Gestão liberada"}</strong>
+                <small>Turmas, aulas, materiais e presença.</small>
+              </a>
+            ) : null}
+            {ministryAdminLabels.map((name) => (
+              <div key={name} className="member-portal-permission-card">
+                <span>{name}</span>
+                <strong>Liderança de ministério</strong>
+                <small>Permissão ministerial vinculada ao cadastro.</small>
+              </div>
+            ))}
+            {!canOpenAdminPortal && memberMinistryLabels.length === 0 ? (
+              <div className="member-portal-empty-inline">
+                <Check size={18} />
+                <span>Você está com acesso comum ao portal do membro.</span>
+              </div>
+            ) : null}
+            {memberMinistryLabels.length > 0 ? (
+              <div className="member-portal-ministry-pills">
+                {memberMinistryLabels.map((name) => (
+                  <span key={name}>{name}</span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        {hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
+          <section className="member-portal-section">
+            <div className="member-portal-empty state-card">
+              <CalendarCheck size={34} />
+              <strong>Nenhuma escala ministerial encontrada</strong>
+              <span>Quando você for escalado em algum evento, a confirmação aparecerá aqui.</span>
+            </div>
+          </section>
+        ) : null}
+
+        {hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
+          <section className="member-portal-section">
+            <h2>Próximas escalas</h2>
+            <div className="member-portal-cards">
+              {upcomingAssignments.map((assignment) => {
+                const evt = assignment.worship_events;
+                if (!evt) return null;
+                const role = assignment.worship_roles?.name ?? assignment.role_name ?? "Função não definida";
+                const isLoading = actionStatus[assignment.id] === "loading";
+                const isDeclining = decliningId === assignment.id;
+                return (
+                  <article key={assignment.id} className={`member-portal-card ${assignment.status}`}>
+                    <div className="member-portal-card-head">
+                      <div>
+                        <span className="member-portal-event-type">{eventTypeLabel(evt.event_type)}</span>
+                        <strong>{evt.title}</strong>
+                      </div>
+                      <em className={`member-portal-status ${assignment.status}`}>
+                        {statusLabel(assignment.status)}
+                      </em>
+                    </div>
+
+                    <div className="member-portal-card-meta">
+                      <div>
+                        <CalendarCheck size={14} />
+                        <span>
+                          {new Date(evt.starts_at).toLocaleString("pt-BR", {
+                            weekday: "long",
+                            day: "2-digit",
+                            month: "long",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      {evt.location ? (
+                        <div>
+                          <MapPin size={14} />
+                          <span>{evt.location}</span>
+                        </div>
+                      ) : null}
+                      {assignment.arrival_at ? (
+                        <div>
+                          <Clock3 size={14} />
+                          <span>
+                            Chegar às{" "}
+                            {new Date(assignment.arrival_at).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="member-portal-card-role">
+                      <Music size={14} />
+                      <strong>{role}</strong>
+                    </div>
+
+                    {assignment.notes ? (
+                      <p className="member-portal-card-notes">{assignment.notes}</p>
+                    ) : null}
+
+                    {assignment.decline_reason ? (
+                      <p className="member-portal-card-notes muted">Motivo: {assignment.decline_reason}</p>
+                    ) : null}
+
+                    {isDeclining ? (
+                      <div className="member-portal-decline-form">
+                        <textarea
+                          className="catalog-input catalog-textarea"
+                          placeholder="Motivo da recusa (opcional)"
+                          value={declineReason}
+                          onChange={(e) => setDeclineReason(e.target.value)}
+                          rows={2}
+                        />
+                        <div className="member-portal-decline-actions">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => { setDecliningId(null); setDeclineReason(""); }}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => void declineAssignment(assignment.id)}
+                            disabled={isLoading}
+                          >
+                            Confirmar recusa
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="member-portal-card-actions">
+                        {assignment.status !== "confirmed" ? (
+                          <Button
+                            type="button"
+                            icon={<Check size={15} />}
+                            onClick={() => void confirmAssignment(assignment.id)}
+                            disabled={isLoading}
+                          >
+                            Confirmar presença
+                          </Button>
+                        ) : null}
+                        {assignment.status !== "declined" ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            icon={<X size={15} />}
+                            onClick={() => setDecliningId(assignment.id)}
+                            disabled={isLoading}
+                          >
+                            Recusar
+                          </Button>
+                        ) : null}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="member-portal-section">
+          <div className="member-portal-section-head">
+            <div>
+              <h2>Kids</h2>
+              <p>Cadastre crianças e gere o QR Code para check-in na salinha.</p>
+            </div>
             <Button
               type="button"
               icon={<Plus size={14} />}
@@ -1674,15 +1992,15 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
+        {showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
           <div className="member-portal-empty">
             <CalendarCheck size={40} />
             <strong>Nenhuma escala encontrada</strong>
-            <span>Você ainda não foi escalado em nenhum evento de louvor.</span>
+            <span>Você ainda não foi escalado em nenhum evento ministerial.</span>
           </div>
         ) : null}
 
-        {upcomingAssignments.length > 0 ? (
+        {showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
           <section className="member-portal-section">
             <h2>Próximas escalas</h2>
             <div className="member-portal-cards">
@@ -1808,7 +2126,7 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {pastAssignments.length > 0 ? (
+        {hasSchedulePortalAccess && pastAssignments.length > 0 ? (
           <section className="member-portal-section">
             <h2>Histórico</h2>
             <div className="member-portal-history">
