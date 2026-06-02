@@ -232,6 +232,30 @@ const statusLabels: Record<TenantStatus, string> = {
   configuring: "Em configuração",
 };
 
+function humanizeGlobalAuditEntityType(entityType: string) {
+  const clean = (entityType ?? "").trim();
+  if (!clean) return "Sistema";
+  if (clean.toLowerCase() === "cliente módulos") return "Módulos do cliente";
+  return clean;
+}
+
+function humanizeGlobalAuditAction(action: string) {
+  const clean = (action ?? "").trim();
+  if (!clean) return "Atividade registrada";
+
+  const normalized = clean.startsWith("Tenant ·") ? clean.replace(/^Tenant ·/i, "Cliente ·") : clean;
+  const parts = normalized.split(" · ").map((p) => p.trim()).filter(Boolean);
+  const area = parts[0]?.toLowerCase() ?? "";
+  const verb = parts.slice(1).join(" · ");
+
+  if (area === "cliente" && /^criado$/i.test(verb)) return "Cliente criado";
+  if (area === "cliente" && /^atualizado$/i.test(verb)) return "Cliente atualizado";
+  if (area === "cliente" && /^status alterado$/i.test(verb)) return "Status do cliente alterado";
+  if (area === "cliente" && /módulos atualizados/i.test(verb)) return "Módulos do cliente atualizados";
+
+  return normalized;
+}
+
 const emptyTenantForm: TenantFormState = {
   id: null,
   name: "",
@@ -2870,8 +2894,8 @@ export function AdminGlobalAccess() {
                     {dashboardData.auditLogs.length > 0 ? (
                       dashboardData.auditLogs.map((log) => (
                         <article key={log.id}>
-                          <span>{log.entity_type}</span>
-                          <strong>{log.action}</strong>
+                          <span>{humanizeGlobalAuditEntityType(log.entity_type)}</span>
+                          <strong>{humanizeGlobalAuditAction(log.action)}</strong>
                           <small>{new Date(log.created_at).toLocaleString("pt-BR")}</small>
                         </article>
                       ))

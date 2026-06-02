@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Camera,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   DollarSign,
   Edit3,
@@ -575,7 +577,14 @@ type FamilyFormState = {
   tenant_id: string;
   name: string;
   notes: string;
-  members: Array<{ member_id: string; relationship: string; is_primary: boolean }>;
+  members: Array<{
+    id: string;
+    member_id: string | null;
+    name: string;
+    date_of_birth: string;
+    relationship: string;
+    is_primary: boolean;
+  }>;
 };
 type EventFormState = Omit<EventRecord, "created_at"> & { tenant_id: string };
 type AnnouncementFormState = Omit<AnnouncementRecord, "created_at"> & { tenant_id: string };
@@ -1941,6 +1950,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [tenantAuditLogs, setTenantAuditLogs] = useState<TenantAuditLogRecord[]>([]);
   const [tenantAuditStatus, setTenantAuditStatus] = useState<LoadStatus>("idle");
   const [tenantAuditMessage, setTenantAuditMessage] = useState("");
+  const [isTenantAuditOpen, setIsTenantAuditOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -2425,6 +2435,177 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     setTenantAuditLogs(result.data ?? []);
     setTenantAuditStatus("ready");
+  }
+
+  function isUuidLike(value: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  function shortId(value: string, head = 8, tail = 4) {
+    if (value.length <= head + tail + 1) return value;
+    return `${value.slice(0, head)}…${value.slice(-tail)}`;
+  }
+
+  function formatRelativeTimePtBR(iso: string) {
+    const ts = new Date(iso).getTime();
+    if (!Number.isFinite(ts)) return "";
+    const diffMs = Date.now() - ts;
+    const absMs = Math.abs(diffMs);
+    const future = diffMs < 0;
+
+    const mins = Math.round(absMs / 60000);
+    const hours = Math.round(absMs / 3600000);
+    const days = Math.round(absMs / 86400000);
+
+    if (mins < 1) return future ? "em instantes" : "agora";
+    if (mins < 60) return future ? `em ${mins} min` : `há ${mins} min`;
+    if (hours < 24) return future ? `em ${hours} h` : `há ${hours} h`;
+    return future ? `em ${days} d` : `há ${days} d`;
+  }
+
+  function splitAuditAction(action: string) {
+    const parts = action.split(" · ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return { area: parts[0], verb: parts.slice(1).join(" · ") };
+    }
+    return { area: null as string | null, verb: action.trim() };
+  }
+
+  function tenantStatusLabel(status: unknown) {
+    const v = typeof status === "string" ? status : "";
+    if (v === "active") return "Ativo";
+    if (v === "suspended") return "Suspenso";
+    if (v === "configuring") return "Em configuração";
+    return v || "—";
+  }
+
+  function normalizeAuditAction(action: string) {
+    const clean = action.trim();
+    if (!clean) return "";
+    if (clean.startsWith("Tenant ·")) return clean.replace(/^Tenant ·/i, "Cliente ·");
+    return clean;
+  }
+
+  function resolveAuditActorLabel(actorUserId: string | null) {
+    if (!actorUserId) return "Sistema";
+    const user = clientData?.users.find((u) => u.id === actorUserId) ?? null;
+    const display = user?.full_name?.trim() || user?.email?.trim() || "";
+    if (display) return display;
+    return "Admin do sistema";
+  }
+
+  function humanizeAuditEntityType(entityType: string) {
+    const clean = entityType.trim();
+    if (clean.toLowerCase() === "cliente módulos") return "Módulos do cliente";
+    return clean;
+  }
+
+  function resolveAuditEntityLabel(log: TenantAuditLogRecord) {
+    const entityType = humanizeAuditEntityType(log.entity_type);
+    const entityId = log.entity_id?.trim() || null;
+    const meta = log.metadata ?? {};
+    const metaName = typeof meta.name === "string" ? meta.name.trim() : "";
+    const metaTenant = typeof meta.tenant === "string" ? meta.tenant.trim() : "";
+
+    if (!clientData) {
+      if (!entityId || isUuidLike(entityId)) return entityType;
+      return `${entityType}: ${entityId}`;
+    }
+
+    if (entityType === "Cliente" || entityType === "Módulos do cliente") {
+      const tenantName = metaTenant || metaName || clientData.tenant.name;
+      return tenantName ? `Cliente: ${tenantName}` : entityType;
+    }
+
+    if (entityId) {
+      const member = clientData.members.find((m) => m.id === entityId) ?? null;
+      if (member) return `Membro: ${member.name}`;
+
+      const family = clientData.families.find((f) => f.id === entityId) ?? null;
+      if (family) return `Família: ${family.name}`;
+
+      const event = clientData.events.find((e) => e.id === entityId) ?? null;
+      if (event) return `Evento: ${event.title}`;
+
+      const announcement = clientData.announcements.find((a) => a.id === entityId) ?? null;
+      if (announcement) return `Comunicado: ${announcement.title}`;
+
+      const child = clientData.kidsChildren.find((c) => c.id === entityId) ?? null;
+      if (child) return `Kids: ${child.name}`;
+
+      const group = clientData.kidsGroups.find((g) => g.id === entityId) ?? null;
+      if (group) return `Grupo Kids: ${group.name}`;
+
+      const tx = clientData.financialTransactions.find((t) => t.id === entityId) ?? null;
+      if (tx) return `Financeiro: ${tx.description}`;
+
+      if (!isUuidLike(entityId)) return `${entityType}: ${entityId}`;
+    }
+
+    return entityType;
+  }
+
+  function formatTenantAuditLogUi(log: TenantAuditLogRecord) {
+    const action = normalizeAuditAction(log.action);
+    const { area, verb } = splitAuditAction(action);
+    const meta = log.metadata ?? {};
+
+    const metaName = typeof meta.name === "string" ? meta.name.trim() : "";
+    const metaTitle = typeof meta.title === "string" ? meta.title.trim() : "";
+    const metaTenant = typeof meta.tenant === "string" ? meta.tenant.trim() : "";
+    const metaFrom = (meta as { from?: unknown }).from;
+    const metaTo = (meta as { to?: unknown }).to;
+    const metaActiveModulesRaw = meta.active_modules;
+    const metaActiveModules =
+      typeof metaActiveModulesRaw === "number"
+        ? metaActiveModulesRaw
+        : typeof metaActiveModulesRaw === "string"
+        ? Number(metaActiveModulesRaw)
+        : null;
+
+    const areaLower = (area ?? "").trim().toLowerCase();
+
+    let title = verb;
+    if (areaLower === "cliente" && /^criado$/i.test(verb)) {
+      title = metaName ? `Cliente criado: ${metaName}` : "Cliente criado";
+    } else if (areaLower === "cliente" && /^atualizado$/i.test(verb)) {
+      title = metaName ? `Cliente atualizado: ${metaName}` : "Cliente atualizado";
+    } else if (areaLower === "cliente" && /^status alterado$/i.test(verb)) {
+      const fromLabel = tenantStatusLabel(metaFrom);
+      const toLabel = tenantStatusLabel(metaTo);
+      title = metaFrom && metaTo ? `Status do cliente alterado: ${fromLabel} → ${toLabel}` : "Status do cliente alterado";
+    } else if (areaLower === "cliente" && /módulos atualizados/i.test(verb) && metaActiveModules !== null && Number.isFinite(metaActiveModules)) {
+      title = `Módulos atualizados (${metaActiveModules} ativos)`;
+    } else if (/material \(arquivo\) enviado/i.test(verb)) {
+      title = metaTitle ? `Material enviado: ${metaTitle}` : "Material enviado";
+    } else if (metaName) {
+      title = `${verb}: ${metaName}`;
+    } else if (metaTitle) {
+      title = `${verb}: ${metaTitle}`;
+    }
+
+    const subtitleParts: string[] = [];
+    const entityLabel = resolveAuditEntityLabel(log);
+    const showArea = area && areaLower !== "cliente" && !title.toLowerCase().startsWith(`${areaLower} `);
+    if (showArea) subtitleParts.push(area);
+
+    const resolvedTenantLabel = metaTenant || (areaLower === "cliente" ? metaName : "");
+    if (resolvedTenantLabel) subtitleParts.push(`Cliente: ${resolvedTenantLabel}`);
+
+    const hideEntityLabel =
+      (/módulos atualizados/i.test(verb) && entityLabel === "Cliente: " + (metaTenant || metaName || clientData?.tenant.name || "")) ||
+      (/módulos atualizados/i.test(verb) && entityLabel === "Módulos do cliente") ||
+      (entityLabel.startsWith("Cliente:") && Boolean(resolvedTenantLabel));
+
+    if (entityLabel && entityLabel !== area && !hideEntityLabel) subtitleParts.push(entityLabel);
+    subtitleParts.push(`por ${resolveAuditActorLabel(log.actor_user_id)}`);
+
+    return {
+      title,
+      subtitle: subtitleParts.join(" · "),
+      whenLabel: formatRelativeTimePtBR(log.created_at),
+      whenTitle: new Date(log.created_at).toLocaleString("pt-BR"),
+    };
   }
 
   async function recordTenantAuditLog(payload: {
@@ -4150,7 +4331,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       name: family.name,
       notes: family.notes ?? "",
       members: members.map((item) => ({
+        id: item.id,
         member_id: item.member_id,
+        name: item.name,
+        date_of_birth: item.date_of_birth ?? "",
         relationship: item.relationship,
         is_primary: item.is_primary,
       })),
@@ -4173,8 +4357,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         return current;
       }
 
+      const member = clientData?.members.find((row) => row.id === familyMemberPickerId) ?? null;
       const nextMember = {
+        id: `ffm-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         member_id: familyMemberPickerId,
+        name: member?.name ?? "",
+        date_of_birth: member?.date_of_birth ?? "",
         relationship: familyMemberRelationship,
         is_primary: familyMemberPrimary,
       };
@@ -4191,10 +4379,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setFamilyMemberPrimary(false);
   }
 
-  function updateFamilyMember(memberId: string, next: Partial<{ relationship: string; is_primary: boolean }>) {
+  function addFamilyDependentToForm() {
+    setFamilyForm((current) => ({
+      ...current,
+      members: current.members.concat({
+        id: `ffm-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        member_id: null,
+        name: "",
+        date_of_birth: "",
+        relationship: "child",
+        is_primary: false,
+      }),
+    }));
+  }
+
+  function updateFamilyMember(rowId: string, next: Partial<{ relationship: string; is_primary: boolean; name: string; date_of_birth: string; member_id: string | null }>) {
     setFamilyForm((current) => {
       const nextMembers = current.members.map((item) => {
-        if (item.member_id !== memberId) {
+        if (item.id !== rowId) {
           return item;
         }
         return { ...item, ...next };
@@ -4203,13 +4405,35 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const shouldPrimary = next.is_primary === true;
       return {
         ...current,
-        members: shouldPrimary ? nextMembers.map((item) => ({ ...item, is_primary: item.member_id === memberId })) : nextMembers,
+        members: shouldPrimary ? nextMembers.map((item) => ({ ...item, is_primary: item.id === rowId })) : nextMembers,
       };
     });
   }
 
-  function removeFamilyMember(memberId: string) {
-    setFamilyForm((current) => ({ ...current, members: current.members.filter((item) => item.member_id !== memberId) }));
+  function updateFamilyMemberLink(rowId: string, memberId: string | null) {
+    const member = memberId ? clientData?.members.find((row) => row.id === memberId) ?? null : null;
+    setFamilyForm((current) => {
+      const hasDuplicate = memberId ? current.members.some((m) => m.id !== rowId && m.member_id === memberId) : false;
+      if (hasDuplicate) return current;
+
+      return {
+        ...current,
+        members: current.members.map((item) => {
+          if (item.id !== rowId) return item;
+          return {
+            ...item,
+            member_id: memberId,
+            name: member ? member.name : item.name,
+            date_of_birth: member ? (member.date_of_birth ?? "") : item.date_of_birth,
+            is_primary: memberId ? item.is_primary : false,
+          };
+        }),
+      };
+    });
+  }
+
+  function removeFamilyMember(rowId: string) {
+    setFamilyForm((current) => ({ ...current, members: current.members.filter((item) => item.id !== rowId) }));
   }
 
   async function handleFamilySubmit(event: FormEvent<HTMLFormElement>) {
@@ -4249,12 +4473,18 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
         const familyMembersByFamilyId = {
           ...current.familyMembersByFamilyId,
-          [familyId]: familyForm.members.map((item) => ({
-            member_id: item.member_id,
-            name: current.members.find((m) => m.id === item.member_id)?.name ?? "Membro",
-            relationship: item.relationship,
-            is_primary: item.is_primary,
-          })),
+          [familyId]: familyForm.members.map((item) => {
+            const member = item.member_id ? current.members.find((m) => m.id === item.member_id) ?? null : null;
+            const resolvedName = member?.name ?? (item.name.trim() || "Dependente");
+            return {
+              id: item.id,
+              member_id: item.member_id,
+              name: resolvedName,
+              date_of_birth: member?.date_of_birth ?? (item.date_of_birth.trim() || null),
+              relationship: item.relationship,
+              is_primary: item.is_primary,
+            };
+          }),
         };
 
         return { ...current, families, familyMembersByFamilyId };
@@ -4291,13 +4521,31 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const familyMembersRows = familyForm.members.map((item) => ({
-      tenant_id: clientData.tenant.id,
-      family_id: familyId,
-      member_id: item.member_id,
-      relationship: item.relationship,
-      is_primary: item.is_primary,
-    }));
+    const familyMembersRows = familyForm.members
+      .map((item) => {
+        const member = item.member_id ? clientData.members.find((m) => m.id === item.member_id) ?? null : null;
+        const name = member?.name ?? item.name.trim();
+        if (!name) return null;
+
+        return {
+          tenant_id: clientData.tenant.id,
+          family_id: familyId,
+          member_id: item.member_id,
+          name,
+          date_of_birth: member?.date_of_birth ?? (item.date_of_birth.trim() || null),
+          relationship: item.relationship,
+          is_primary: item.is_primary,
+        };
+      })
+      .filter(Boolean) as Array<{
+        tenant_id: string;
+        family_id: string;
+        member_id: string | null;
+        name: string;
+        date_of_birth: string | null;
+        relationship: string;
+        is_primary: boolean;
+      }>;
 
     if (familyMembersRows.length) {
       const insertResult = await supabase.from("family_members").insert(familyMembersRows);
@@ -7027,39 +7275,103 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                     {/* ── Audit ── */}
                     <div className="reports-export-card">
-                      <div className="reports-chart-title">
-                        <strong>Auditoria</strong>
-                        <small>Atividades recentes do sistema</small>
-                      </div>
-                      <div className="reports-export-btns" style={{ marginBottom: 12 }}>
-                        <Button type="button" variant="secondary" onClick={() => { if (clientData?.tenant.id) void loadTenantAuditLogs(clientData.tenant.id); }} disabled={tenantAuditStatus === "loading"}>
-                          {tenantAuditStatus === "loading" ? "Carregando..." : "Recarregar"}
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={() => downloadCsv(`auditoria-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`, tenantAuditLogs.map((log) => ({ id: log.id, action: log.action, entity_type: log.entity_type, entity_id: log.entity_id, created_at: log.created_at })))} disabled={tenantAuditLogs.length === 0}>
-                          Exportar auditoria
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={() => openPrintableTable(`Auditoria · ${tenant.name}`, ["Data", "Ação", "Entidade", "ID"], tenantAuditLogs.slice(0, 80).map((log) => [new Date(log.created_at).toLocaleString("pt-BR"), log.action, log.entity_type, log.entity_id ?? ""]))}
-                        disabled={tenantAuditLogs.length === 0}
+                      <div className="reports-audit-head">
+                        <button
+                          className="reports-audit-toggle"
+                          type="button"
+                          onClick={() => setIsTenantAuditOpen((current) => !current)}
+                          aria-expanded={isTenantAuditOpen}
+                          aria-controls="tenant-audit-panel"
                         >
-                          Imprimir
-                        </Button>
-                      </div>
-                      {tenantAuditMessage ? <p className={`login-feedback ${tenantAuditStatus === "error" ? "error" : "success"}`}>{tenantAuditMessage}</p> : null}
-                      {tenantAuditLogs.length === 0 ? (
-                        <div className="catalog-empty">Nenhum evento registrado ainda.</div>
-                      ) : (
-                        <div className="catalog-list" style={{ marginTop: 8 }}>
-                          {tenantAuditLogs.slice(0, 25).map((log) => (
-                            <div key={log.id} className="catalog-row">
-                              <div style={{ display: "grid", gap: 4 }}>
-                                <strong style={{ fontSize: "0.95rem" }}>{log.action}</strong>
-                                <small style={{ color: "var(--color-neutral-500)" }}>{log.entity_type}{log.entity_id ? ` · ${log.entity_id}` : ""}</small>
-                              </div>
-                              <span style={{ color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                          <div className="reports-audit-left">
+                            <strong>Auditoria</strong>
+                            <small>Atividades recentes do sistema</small>
+                            <div className="reports-audit-summary">
+                              <span>
+                                {tenantAuditStatus === "loading"
+                                  ? "Carregando..."
+                                  : `${tenantAuditLogs.length} registro${tenantAuditLogs.length === 1 ? "" : "s"}`}
+                              </span>
+                              {tenantAuditLogs[0]?.created_at ? (
+                                <span title={new Date(tenantAuditLogs[0].created_at).toLocaleString("pt-BR")}>
+                                  Último: {formatRelativeTimePtBR(tenantAuditLogs[0].created_at)}
+                                </span>
+                              ) : null}
+                              <span className="reports-audit-hint">
+                                {isTenantAuditOpen ? "Clique para recolher" : "Clique para expandir"}
+                              </span>
                             </div>
-                          ))}
+                          </div>
+
+                          <span className="reports-audit-toggle-right" aria-hidden="true">
+                            <span className="reports-audit-toggle-label">{isTenantAuditOpen ? "Recolher" : "Expandir"}</span>
+                            {isTenantAuditOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </span>
+                        </button>
+
+                        <div className="reports-audit-actions">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => { if (clientData?.tenant.id) void loadTenantAuditLogs(clientData.tenant.id); }}
+                            disabled={tenantAuditStatus === "loading"}
+                          >
+                            {tenantAuditStatus === "loading" ? "Carregando..." : "Recarregar"}
+                          </Button>
+                          {isTenantAuditOpen ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => downloadCsv(
+                                  `auditoria-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                                  tenantAuditLogs.map((log) => ({ id: log.id, action: log.action, entity_type: log.entity_type, entity_id: log.entity_id, created_at: log.created_at })),
+                                )}
+                                disabled={tenantAuditLogs.length === 0}
+                              >
+                                Exportar
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => openPrintableTable(
+                                  `Auditoria · ${tenant.name}`,
+                                  ["Data", "Ação", "Entidade", "ID"],
+                                  tenantAuditLogs.slice(0, 80).map((log) => [new Date(log.created_at).toLocaleString("pt-BR"), log.action, log.entity_type, log.entity_id ?? ""]),
+                                )}
+                                disabled={tenantAuditLogs.length === 0}
+                              >
+                                Imprimir
+                              </Button>
+                            </>
+                          ) : null}
                         </div>
-                      )}
+                      </div>
+
+                      {tenantAuditMessage ? <p className={`login-feedback ${tenantAuditStatus === "error" ? "error" : "success"}`}>{tenantAuditMessage}</p> : null}
+
+                      {isTenantAuditOpen ? (
+                        tenantAuditLogs.length === 0 ? (
+                          <div id="tenant-audit-panel" className="catalog-empty">Nenhum evento registrado ainda.</div>
+                        ) : (
+                          <div id="tenant-audit-panel" className="reports-audit-list" style={{ marginTop: 8 }}>
+                            {tenantAuditLogs.slice(0, 25).map((log) => {
+                              const ui = formatTenantAuditLogUi(log);
+                              return (
+                                <div key={log.id} className="catalog-row reports-audit-row">
+                                  <div style={{ display: "grid", gap: 4 }}>
+                                    <strong style={{ fontSize: "0.95rem" }}>{ui.title}</strong>
+                                    <small style={{ color: "var(--color-neutral-500)" }}>{ui.subtitle}</small>
+                                  </div>
+                                  <span title={ui.whenTitle} style={{ color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>
+                                    {ui.whenLabel || ui.whenTitle}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -11051,6 +11363,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <Button type="button" variant="secondary" onClick={addFamilyMemberToForm}>
                     Adicionar
                   </Button>
+                  <Button type="button" variant="secondary" onClick={addFamilyDependentToForm}>
+                    Novo dependente
+                  </Button>
                 </div>
 
                 <div className="catalog-list">
@@ -11059,15 +11374,54 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ) : null}
 
                   {familyForm.members.map((item) => {
-                    const member = clientData.members.find((row) => row.id === item.member_id);
+                    const member = item.member_id ? clientData.members.find((row) => row.id === item.member_id) ?? null : null;
+                    const canBePrimary = Boolean(item.member_id);
                     return (
-                      <div key={item.member_id} className="ministry-row">
+                      <div key={item.id} className="ministry-row">
                         <div className="family-row-content">
-                          <strong>{member?.name ?? "Membro"}</strong>
+                          <div style={{ display: "grid", gap: 6 }}>
+                            <select
+                              className="catalog-input"
+                              value={item.member_id ?? ""}
+                              onChange={(event) => updateFamilyMemberLink(item.id, event.target.value ? event.target.value : null)}
+                            >
+                              <option value="">Sem vínculo (dependente)</option>
+                              {clientData.members.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name}
+                                </option>
+                              ))}
+                            </select>
+
+                            {item.member_id ? (
+                              <strong>{member?.name ?? "Membro"}</strong>
+                            ) : (
+                              <div className="modal-grid">
+                                <label>
+                                  <span>Nome</span>
+                                  <input
+                                    className="catalog-input"
+                                    placeholder="Nome do dependente"
+                                    value={item.name}
+                                    onChange={(event) => updateFamilyMember(item.id, { name: event.target.value })}
+                                  />
+                                </label>
+                                <label>
+                                  <span>Data de nascimento</span>
+                                  <input
+                                    className="catalog-input"
+                                    type="date"
+                                    value={item.date_of_birth}
+                                    onChange={(event) => updateFamilyMember(item.id, { date_of_birth: event.target.value })}
+                                  />
+                                </label>
+                              </div>
+                            )}
+                          </div>
                           <select
                             className="catalog-input"
                             value={item.relationship}
-                            onChange={(event) => updateFamilyMember(item.member_id, { relationship: event.target.value })}
+                            onChange={(event) => updateFamilyMember(item.id, { relationship: event.target.value })}
                           >
                             <option value="self">Titular</option>
                             <option value="spouse">Cônjuge</option>
@@ -11081,12 +11435,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                             <input
                               type="checkbox"
                               checked={item.is_primary}
-                              onChange={(event) => updateFamilyMember(item.member_id, { is_primary: event.target.checked })}
+                              disabled={!canBePrimary}
+                              onChange={(event) => updateFamilyMember(item.id, { is_primary: event.target.checked })}
                             />
                             <span>Principal</span>
                           </label>
                         </div>
-                        <button type="button" onClick={() => removeFamilyMember(item.member_id)} aria-label="Remover">
+                        <button type="button" onClick={() => removeFamilyMember(item.id)} aria-label="Remover">
                           <X size={16} />
                         </button>
                       </div>
