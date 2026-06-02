@@ -1557,7 +1557,7 @@ function openPrintablePdf(html: string, title: string) {
 </head>
 <body>
 ${html}
-<script>window.print();<\/script>
+<script>window.print();</script>
 </body>
 </html>`);
   popup.document.close();
@@ -1830,6 +1830,28 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [eventNotifyMessage, setEventNotifyMessage] = useState("");
   const [eventPreviewOpen, setEventPreviewOpen] = useState(false);
   const [eventPreviewTarget, setEventPreviewTarget] = useState<EventRecord | null>(null);
+  const [pushComposerOpen, setPushComposerOpen] = useState(false);
+  const [pushComposerModule, setPushComposerModule] = useState<"worship" | "kids" | "bible-school">("worship");
+  const [pushComposerMode, setPushComposerMode] = useState<
+    | "worship_ministry"
+    | "worship_admins"
+    | "worship_selected"
+    | "kids_checked_in"
+    | "kids_selected"
+    | "bible_all"
+    | "bible_selected"
+  >("worship_ministry");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
+  const [pushRecipientSearch, setPushRecipientSearch] = useState("");
+  const [pushCandidatesStatus, setPushCandidatesStatus] = useState<LoadStatus>("idle");
+  const [pushCandidatesMessage, setPushCandidatesMessage] = useState("");
+  const [pushCandidates, setPushCandidates] = useState<Array<{ profile_id: string; label: string; meta?: string }>>([]);
+  const [pushSelectedProfileIds, setPushSelectedProfileIds] = useState<string[]>([]);
+  const [pushKidsGroupId, setPushKidsGroupId] = useState<string>("");
+  const [pushKidsDate, setPushKidsDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [pushSendStatus, setPushSendStatus] = useState<LoginStatus>("idle");
+  const [pushSendMessage, setPushSendMessage] = useState("");
   const [worshipEventForm, setWorshipEventForm] = useState<WorshipEventFormState>(emptyWorshipEventForm);
   const [worshipAssignmentForm, setWorshipAssignmentForm] = useState<WorshipAssignmentFormState>(
     emptyWorshipAssignmentForm,
@@ -2029,6 +2051,508 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageBibleSchool = canManageModuleCode("bible-school");
   const canManageAnnouncements = canManageModuleCode("announcements");
   const canManageSocialMedia = canManageModuleCode("social_media");
+
+  const pushRouteDefaults: Record<"worship" | "kids" | "bible-school", string> = {
+    worship: "/(app)/modulos/louvor",
+    kids: "/(app)/modulos/kids",
+    "bible-school": "/(app)/modulos/escola-biblica",
+  };
+
+  function closePushComposer() {
+    setPushComposerOpen(false);
+    setPushSendStatus("idle");
+    setPushSendMessage("");
+    setPushCandidatesStatus("idle");
+    setPushCandidatesMessage("");
+    setPushCandidates([]);
+    setPushSelectedProfileIds([]);
+    setPushRecipientSearch("");
+  }
+
+  async function loadPushCandidates(mode: typeof pushComposerMode, moduleCode: typeof pushComposerModule) {
+    if (!clientData) return;
+
+    setPushCandidatesStatus("loading");
+    setPushCandidatesMessage("");
+    setPushCandidates([]);
+    setPushSelectedProfileIds([]);
+
+    if (moduleCode === "worship" && mode === "worship_selected") {
+      const moduleId = activeModuleIdByCode.worship ?? null;
+      const adminProfileIds: string[] = [];
+      const adminMemberIds: string[] = [];
+
+      if (moduleId) {
+        const moduleAdminsResult = await supabase
+          .from("tenant_module_admins")
+          .select("profile_id, member_id")
+          .eq("tenant_id", clientData.tenant.id)
+          .eq("module_id", moduleId);
+
+        if (!moduleAdminsResult.error) {
+          (moduleAdminsResult.data ?? []).forEach((row) => {
+            if (row.profile_id) adminProfileIds.push(String(row.profile_id));
+            if (row.member_id) adminMemberIds.push(String(row.member_id));
+          });
+        }
+      }
+
+      const tenantMinistry = await supabase
+        .from("catalog_ministries")
+        .select("id")
+        .eq("tenant_id", clientData.tenant.id)
+        .ilike("name", "%louvor%")
+        .limit(1)
+        .maybeSingle<{ id: string }>();
+
+      const systemMinistry = !tenantMinistry.data?.id
+        ? await supabase
+            .from("catalog_ministries")
+            .select("id")
+            .is("tenant_id", null)
+            .ilike("name", "%louvor%")
+            .limit(1)
+            .maybeSingle<{ id: string }>()
+        : null;
+
+      const ministryId = tenantMinistry.data?.id ?? systemMinistry?.data?.id ?? null;
+
+      const ministryMemberIds: string[] = [];
+      if (ministryId) {
+        const ministryMembersResult = await supabase
+          .from("member_ministries")
+          .select("member_id")
+          .eq("tenant_id", clientData.tenant.id)
+          .eq("ministry_id", ministryId);
+
+        if (!ministryMembersResult.error) {
+          (ministryMembersResult.data ?? []).forEach((row) => {
+            if (row.member_id) ministryMemberIds.push(String(row.member_id));
+          });
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, member_id, tenant_role")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active");
+
+      if (error) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Não foi possível carregar a lista de usuários.");
+        return;
+      }
+
+      const adminProfileSet = new Set(adminProfileIds);
+      const adminMemberSet = new Set(adminMemberIds);
+      const ministryMemberSet = new Set(ministryMemberIds);
+
+      const filtered = (data ?? []).filter((row) => {
+        const tenantRole = row.tenant_role as TenantRole | null;
+        if (tenantRole === "owner" || tenantRole === "admin") return true;
+        if (adminProfileSet.has(String(row.id))) return true;
+        const memberId = row.member_id ? String(row.member_id) : null;
+        if (!memberId) return false;
+        return adminMemberSet.has(memberId) || ministryMemberSet.has(memberId);
+      });
+
+      const list = filtered
+        .map((row) => ({
+          profile_id: String(row.id),
+          label: String(row.full_name ?? row.email ?? "Usuário"),
+          meta: row.email as string | undefined,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+      setPushCandidates(list);
+      setPushCandidatesStatus("ready");
+      return;
+    }
+
+    if (moduleCode === "kids" && (mode === "kids_checked_in" || mode === "kids_selected")) {
+      const groupId = pushKidsGroupId || kidsFilterGroupId || "";
+      if (!groupId) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Selecione uma turma para listar os responsáveis.");
+        return;
+      }
+
+      const date = pushKidsDate || kidsAttendanceDate;
+      const attendanceResult = await supabase
+        .from("kids_attendance")
+        .select("child_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("attendance_date", date)
+        .eq("group_id", groupId)
+        .not("checked_in_at", "is", null);
+
+      if (attendanceResult.error) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Não foi possível carregar as crianças com check-in.");
+        return;
+      }
+
+      const childIds = Array.from(new Set((attendanceResult.data ?? []).map((row) => row.child_id).filter(Boolean)));
+      if (childIds.length === 0) {
+        setPushCandidatesStatus("ready");
+        setPushCandidatesMessage("Nenhuma criança com check-in para a turma/data selecionadas.");
+        return;
+      }
+
+      const guardiansResult = await supabase
+        .from("kids_guardians")
+        .select("member_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .in("child_id", childIds)
+        .not("member_id", "is", null);
+
+      if (guardiansResult.error) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Não foi possível carregar os responsáveis.");
+        return;
+      }
+
+      const guardianMemberIds = Array.from(new Set((guardiansResult.data ?? []).map((row) => row.member_id).filter(Boolean)));
+      if (guardianMemberIds.length === 0) {
+        setPushCandidatesStatus("ready");
+        setPushCandidatesMessage("Nenhum responsável vinculado a membro para enviar push.");
+        return;
+      }
+
+      const profileResult = await supabase
+        .from("profiles")
+        .select("id, full_name, email, member_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active")
+        .in("member_id", guardianMemberIds);
+
+      if (profileResult.error) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Não foi possível mapear responsáveis para usuários do sistema.");
+        return;
+      }
+
+      const list = (profileResult.data ?? [])
+        .map((row) => ({
+          profile_id: row.id as string,
+          label: String(row.full_name ?? row.email ?? "Responsável"),
+          meta: row.email as string | undefined,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+      setPushCandidates(list);
+      setPushCandidatesStatus("ready");
+      return;
+    }
+
+    if (moduleCode === "bible-school" && mode === "bible_selected") {
+      const enrollmentsResult = await supabase
+        .from("bible_school_enrollments")
+        .select("student_id, bible_school_students (member_id, name)")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active");
+
+      if (enrollmentsResult.error) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Não foi possível carregar a lista de alunos matriculados.");
+        return;
+      }
+
+      const memberIds = Array.from(new Set((enrollmentsResult.data ?? [])
+        .map((row) => (row as unknown as { bible_school_students?: { member_id: string | null } | null }).bible_school_students?.member_id)
+        .filter(Boolean)));
+
+      if (memberIds.length === 0) {
+        setPushCandidatesStatus("ready");
+        setPushCandidatesMessage("Nenhum aluno vinculado a membro para enviar push.");
+        return;
+      }
+
+      const profileResult = await supabase
+        .from("profiles")
+        .select("id, full_name, email, member_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active")
+        .in("member_id", memberIds);
+
+      if (profileResult.error) {
+        setPushCandidatesStatus("error");
+        setPushCandidatesMessage("Não foi possível mapear alunos para usuários do sistema.");
+        return;
+      }
+
+      const byMemberId = new Map((profileResult.data ?? []).map((row) => [row.member_id as string, row] as const));
+      const enrollmentLabels = new Map<string, string>();
+      (enrollmentsResult.data ?? []).forEach((row) => {
+        const student = (row as unknown as { bible_school_students?: { member_id: string | null; name: string } | null }).bible_school_students;
+        if (student?.member_id) enrollmentLabels.set(student.member_id, student.name);
+      });
+
+      const list = Array.from(byMemberId.values())
+        .map((row) => ({
+          profile_id: row.id as string,
+          label: String(enrollmentLabels.get(String(row.member_id)) ?? row.full_name ?? row.email ?? "Aluno"),
+          meta: row.email as string | undefined,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+      setPushCandidates(list);
+      setPushCandidatesStatus("ready");
+      return;
+    }
+
+    if (moduleCode === "bible-school" && mode === "bible_all") {
+      setPushCandidatesStatus("ready");
+      return;
+    }
+
+    setPushCandidatesStatus("ready");
+  }
+
+  async function openPushComposer(moduleCode: "worship" | "kids" | "bible-school") {
+    const defaultMode =
+      moduleCode === "worship"
+        ? "worship_ministry"
+        : moduleCode === "kids"
+        ? "kids_checked_in"
+        : "bible_all";
+
+    setPushComposerModule(moduleCode);
+    setPushComposerMode(defaultMode);
+    setPushTitle("");
+    setPushBody("");
+    setPushSendStatus("idle");
+    setPushSendMessage("");
+    setPushCandidatesStatus("idle");
+    setPushCandidatesMessage("");
+    setPushCandidates([]);
+    setPushSelectedProfileIds([]);
+    setPushRecipientSearch("");
+    setPushKidsGroupId(kidsFilterGroupId || "");
+    setPushKidsDate(kidsAttendanceDate);
+    setPushComposerOpen(true);
+
+    const needsList =
+      defaultMode === "worship_selected" || defaultMode === "kids_selected" || defaultMode === "bible_selected";
+    if (needsList) {
+      await loadPushCandidates(defaultMode, moduleCode);
+    } else if (defaultMode === "kids_checked_in") {
+      await loadPushCandidates(defaultMode, moduleCode);
+    }
+  }
+
+  async function resolvePushProfileIds(mode: typeof pushComposerMode, moduleCode: typeof pushComposerModule): Promise<string[]> {
+    if (!clientData) return [];
+
+    const uniq = (ids: string[]) => Array.from(new Set(ids.filter(Boolean)));
+
+    if (mode === "worship_selected" || mode === "kids_selected" || mode === "bible_selected") {
+      return uniq(pushSelectedProfileIds);
+    }
+
+    if (moduleCode === "worship" && mode === "worship_admins") {
+      const moduleId = activeModuleIdByCode.worship;
+      if (!moduleId) return [];
+
+      const { data: rows, error } = await supabase
+        .from("tenant_module_admins")
+        .select("profile_id, member_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("module_id", moduleId);
+      if (error) return [];
+
+      const direct = (rows ?? []).map((r) => r.profile_id).filter(Boolean) as string[];
+      const memberIds = (rows ?? []).map((r) => r.member_id).filter(Boolean) as string[];
+
+      if (memberIds.length === 0) return uniq(direct);
+
+      const profileResult = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active")
+        .in("member_id", memberIds);
+
+      if (profileResult.error) return uniq(direct);
+
+      const fromMembers = (profileResult.data ?? []).map((p) => p.id as string);
+      return uniq([...direct, ...fromMembers]);
+    }
+
+    if (moduleCode === "worship" && mode === "worship_ministry") {
+      const tenantMinistry = await supabase
+        .from("catalog_ministries")
+        .select("id")
+        .eq("tenant_id", clientData.tenant.id)
+        .ilike("name", "%louvor%")
+        .limit(1)
+        .maybeSingle<{ id: string }>();
+
+      const systemMinistry = !tenantMinistry.data?.id
+        ? await supabase
+            .from("catalog_ministries")
+            .select("id")
+            .is("tenant_id", null)
+            .ilike("name", "%louvor%")
+            .limit(1)
+            .maybeSingle<{ id: string }>()
+        : null;
+
+      const ministryId = tenantMinistry.data?.id ?? systemMinistry?.data?.id ?? null;
+      if (!ministryId) return [];
+
+      const mmResult = await supabase
+        .from("member_ministries")
+        .select("member_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("ministry_id", ministryId);
+
+      if (mmResult.error) return [];
+      const memberIds = (mmResult.data ?? []).map((r) => r.member_id).filter(Boolean) as string[];
+      if (memberIds.length === 0) return [];
+
+      const profileResult = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active")
+        .in("member_id", memberIds);
+
+      if (profileResult.error) return [];
+      return uniq((profileResult.data ?? []).map((p) => p.id as string));
+    }
+
+    if (moduleCode === "kids" && mode === "kids_checked_in") {
+      const groupId = pushKidsGroupId || kidsFilterGroupId || "";
+      if (!groupId) return [];
+      const date = pushKidsDate || kidsAttendanceDate;
+
+      const attendanceResult = await supabase
+        .from("kids_attendance")
+        .select("child_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("attendance_date", date)
+        .eq("group_id", groupId)
+        .not("checked_in_at", "is", null);
+
+      if (attendanceResult.error) return [];
+      const childIds = uniq((attendanceResult.data ?? []).map((row) => row.child_id as string));
+      if (childIds.length === 0) return [];
+
+      const guardiansResult = await supabase
+        .from("kids_guardians")
+        .select("member_id")
+        .eq("tenant_id", clientData.tenant.id)
+        .in("child_id", childIds)
+        .not("member_id", "is", null);
+
+      if (guardiansResult.error) return [];
+      const memberIds = uniq((guardiansResult.data ?? []).map((row) => row.member_id as string));
+      if (memberIds.length === 0) return [];
+
+      const profileResult = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active")
+        .in("member_id", memberIds);
+
+      if (profileResult.error) return [];
+      return uniq((profileResult.data ?? []).map((row) => row.id as string));
+    }
+
+    if (moduleCode === "bible-school" && mode === "bible_all") {
+      const enrollmentsResult = await supabase
+        .from("bible_school_enrollments")
+        .select("student_id, bible_school_students (member_id)")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active");
+
+      if (enrollmentsResult.error) return [];
+
+      const memberIds = uniq((enrollmentsResult.data ?? [])
+        .map((row) => (row as unknown as { bible_school_students?: { member_id: string | null } | null }).bible_school_students?.member_id as string | null)
+        .filter(Boolean) as string[]);
+
+      if (memberIds.length === 0) return [];
+
+      const profileResult = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status", "active")
+        .in("member_id", memberIds);
+
+      if (profileResult.error) return [];
+      return uniq((profileResult.data ?? []).map((row) => row.id as string));
+    }
+
+    return [];
+  }
+
+  async function handleSendPush() {
+    if (!clientData) return;
+
+    setPushSendStatus("loading");
+    setPushSendMessage("");
+
+    const title = pushTitle.trim();
+    const messageBody = pushBody.trim();
+    const route = pushRouteDefaults[pushComposerModule];
+
+    if (!title || !messageBody) {
+      setPushSendStatus("error");
+      setPushSendMessage("Preencha título e mensagem.");
+      return;
+    }
+
+    const profileIds = await resolvePushProfileIds(pushComposerMode, pushComposerModule);
+    if (profileIds.length === 0) {
+      setPushSendStatus("error");
+      setPushSendMessage("Nenhum destinatário encontrado para enviar push.");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke("send-push", {
+        body: {
+          profile_ids: profileIds,
+          title,
+          body: messageBody,
+          data: { route },
+          module_code: pushComposerModule,
+        },
+      });
+
+      if (error) {
+        setPushSendStatus("error");
+        if (error.message === "Failed to send a request to the Edge Function") {
+          setPushSendMessage(
+            "Não foi possível conectar ao serviço de push (Edge Function). Verifique se a função send-push já foi deployada no Supabase e se as variáveis NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY apontam para o projeto correto.",
+          );
+        } else {
+          setPushSendMessage(error.message);
+        }
+        return;
+      }
+
+      const sent = (data as { sent?: number })?.sent ?? 0;
+      const failed = (data as { failed?: number })?.failed ?? 0;
+      const tokenCount = (data as { token_count?: number })?.token_count ?? 0;
+      setPushSendStatus("success");
+      if (tokenCount === 0) {
+        setPushSendMessage(
+          "Nenhum dispositivo com push habilitado foi encontrado para esses destinatários. Peça para os usuários abrirem o app no celular, aceitarem a permissão de notificações e fazerem login para registrar o token.",
+        );
+      } else {
+        setPushSendMessage(`Push enviado: ${sent} token(s) com sucesso${failed ? `, ${failed} com falha` : ""}.`);
+      }
+    } catch (err) {
+      setPushSendStatus("error");
+      setPushSendMessage("Erro ao enviar push.");
+    }
+  }
 
   const visibleClientTabs = useMemo(() => {
     return clientTabs.filter((tab) => {
@@ -7767,6 +8291,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <span>Louvor</span>
                   <h4>Escalas de culto e ensaio</h4>
                 </div>
+                {canManageWorship ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    icon={<Bell size={16} />}
+                    onClick={() => openPushComposer("worship")}
+                  >
+                    Enviar push
+                  </Button>
+                ) : null}
               </div>
 
               {worshipSaveMessage ? (
@@ -9184,6 +9718,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <Button type="button" variant="secondary" onClick={openBibleSchoolGradeForm} icon={<Plus size={16} />}>
                         Nova nota
                       </Button>
+                      <Button type="button" variant="secondary" onClick={() => openPushComposer("bible-school")} icon={<Bell size={16} />}>
+                        Enviar push
+                      </Button>
                     </>
                   ) : null}
                 </div>
@@ -9873,17 +10410,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     <span>Kids / Infantil</span>
                     <h4>Gestão do ministério infantil</h4>
                   </div>
-                  <div className="worship-view-toggle">
-                    {(["dashboard", "children", "schedule", "attendance", "activities", "communications"] as const).map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        className={kidsView === v ? "active" : ""}
-                        onClick={() => setKidsView(v)}
-                      >
-                        {v === "dashboard" ? "Visão geral" : v === "children" ? "Crianças" : v === "schedule" ? "Escala" : v === "attendance" ? "Presença" : v === "activities" ? "Atividades" : "Comunicados"}
-                      </button>
-                    ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <div className="worship-view-toggle">
+                      {(["dashboard", "children", "schedule", "attendance", "activities", "communications"] as const).map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          className={kidsView === v ? "active" : ""}
+                          onClick={() => setKidsView(v)}
+                        >
+                          {v === "dashboard" ? "Visão geral" : v === "children" ? "Crianças" : v === "schedule" ? "Escala" : v === "attendance" ? "Presença" : v === "activities" ? "Atividades" : "Comunicados"}
+                        </button>
+                      ))}
+                    </div>
+                    {canManageKids ? (
+                      <Button type="button" variant="secondary" icon={<Bell size={16} />} onClick={() => openPushComposer("kids")}>
+                        Enviar push
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -12449,6 +12993,189 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 </p>
               ) : null}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pushComposerOpen ? (
+        <div className="modal-overlay" onClick={closePushComposer}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <div className="modal-header">
+              <div>
+                <Bell size={20} />
+                <strong>
+                  Enviar push — {pushComposerModule === "worship" ? "Louvor" : pushComposerModule === "kids" ? "Kids" : "Escola Bíblica"}
+                </strong>
+              </div>
+              <button className="modal-close" type="button" onClick={closePushComposer}><X size={18} /></button>
+            </div>
+            <form
+              className="modal-body"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendPush();
+              }}
+            >
+              <div className="modal-grid">
+                <label style={{ gridColumn: "span 2" }}>
+                  <span>Enviar para</span>
+                  <select
+                    value={pushComposerMode}
+                    onChange={(e) => {
+                      const next = e.target.value as typeof pushComposerMode;
+                      setPushComposerMode(next);
+                      setPushCandidates([]);
+                      setPushSelectedProfileIds([]);
+                      setPushRecipientSearch("");
+                      setPushCandidatesMessage("");
+                      void loadPushCandidates(next, pushComposerModule);
+                    }}
+                  >
+                    {pushComposerModule === "worship" ? (
+                      <>
+                        <option value="worship_ministry">Membros do ministério de Louvor</option>
+                        <option value="worship_admins">Admins do módulo</option>
+                        <option value="worship_selected">Selecionar usuários</option>
+                      </>
+                    ) : pushComposerModule === "kids" ? (
+                      <>
+                        <option value="kids_checked_in">Responsáveis (check-in da turma)</option>
+                        <option value="kids_selected">Selecionar responsáveis</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="bible_all">Todos os alunos matriculados</option>
+                        <option value="bible_selected">Selecionar alunos</option>
+                      </>
+                    )}
+                  </select>
+                </label>
+              </div>
+
+              {pushComposerModule === "kids" ? (
+                <div className="modal-grid" style={{ marginTop: 12 }}>
+                  <label>
+                    <span>Turma</span>
+                    <select
+                      value={pushKidsGroupId}
+                      onChange={(e) => {
+                        setPushKidsGroupId(e.target.value);
+                        void loadPushCandidates(pushComposerMode, pushComposerModule);
+                      }}
+                    >
+                      <option value="">Selecione</option>
+                      {(clientData?.kidsGroups ?? []).map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Data</span>
+                    <input
+                      type="date"
+                      className="catalog-input"
+                      value={pushKidsDate}
+                      onChange={(e) => {
+                        setPushKidsDate(e.target.value);
+                        void loadPushCandidates(pushComposerMode, pushComposerModule);
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              {pushComposerMode === "worship_selected" || pushComposerMode === "kids_selected" || pushComposerMode === "bible_selected" ? (
+                <div style={{ marginTop: 12 }}>
+                  <label>
+                    <span>Buscar</span>
+                    <input
+                      className="catalog-input"
+                      placeholder="Digite para filtrar..."
+                      value={pushRecipientSearch}
+                      onChange={(e) => setPushRecipientSearch(e.target.value)}
+                    />
+                  </label>
+
+                  {pushCandidatesMessage ? (
+                    <p className={`login-feedback ${pushCandidatesStatus === "error" ? "error" : "success"}`} style={{ marginTop: 10 }}>
+                      {pushCandidatesMessage}
+                    </p>
+                  ) : null}
+
+                  <div style={{ marginTop: 10, maxHeight: 260, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
+                    {pushCandidatesStatus === "loading" ? (
+                      <div className="catalog-empty">Carregando usuários...</div>
+                    ) : (
+                      (() => {
+                        const term = pushRecipientSearch.trim().toLowerCase();
+                        const filtered = term
+                          ? pushCandidates.filter((c) => `${c.label} ${c.meta ?? ""}`.toLowerCase().includes(term))
+                          : pushCandidates;
+
+                        if (filtered.length === 0) {
+                          return <div className="catalog-empty">Nenhum usuário encontrado.</div>;
+                        }
+
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {filtered.map((c) => {
+                              const checked = pushSelectedProfileIds.includes(c.profile_id);
+                              return (
+                                <label key={c.profile_id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      setPushSelectedProfileIds((prev) =>
+                                        prev.includes(c.profile_id) ? prev.filter((id) => id !== c.profile_id) : [...prev, c.profile_id],
+                                      );
+                                    }}
+                                  />
+                                  <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+                                    <strong style={{ fontSize: "0.9rem" }}>{c.label}</strong>
+                                    {c.meta ? <small style={{ color: "var(--color-text-secondary)" }}>{c.meta}</small> : null}
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()
+                    )}
+                  </div>
+
+                  <small style={{ display: "block", marginTop: 8, color: "var(--color-text-secondary)" }}>
+                    Selecionados: {pushSelectedProfileIds.length}
+                  </small>
+                </div>
+              ) : null}
+
+              <div className="modal-grid" style={{ marginTop: 12 }}>
+                <label style={{ gridColumn: "span 2" }}>
+                  <span>Título</span>
+                  <input className="catalog-input" required value={pushTitle} onChange={(e) => setPushTitle(e.target.value)} placeholder="Ex.: Nova escala publicada" />
+                </label>
+                <label style={{ gridColumn: "span 2" }}>
+                  <span>Mensagem</span>
+                  <textarea className="catalog-input catalog-textarea" required rows={4} value={pushBody} onChange={(e) => setPushBody(e.target.value)} placeholder="Digite a mensagem do push..." />
+                </label>
+              </div>
+
+              {pushSendMessage ? (
+                <p className={`login-feedback ${pushSendStatus}`} style={{ marginTop: 12 }}>
+                  {pushSendMessage}
+                </p>
+              ) : null}
+
+              <div className="modal-actions">
+                <Button type="button" variant="secondary" onClick={closePushComposer}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={pushSendStatus === "loading"} icon={<Send size={16} />}>
+                  {pushSendStatus === "loading" ? "Enviando..." : "Enviar push"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
