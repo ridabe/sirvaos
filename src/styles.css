@@ -3510,6 +3510,10 @@ h1 {
   gap: 12px;
 }
 
+.reports-kpis--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .reports-kpi {
   background: #fff;
   border: 1px solid var(--border);
@@ -3801,13 +3805,80 @@ h1 {
   padding-right: 6px;
 }
 
+.financial-donut-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.financial-donut-toggle button {
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-neutral-600);
+  cursor: pointer;
+}
+
+.financial-donut-toggle button.active {
+  background: rgba(8, 124, 122, 0.10);
+  color: var(--color-brand-primary);
+}
+
+.financial-donut-toggle button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(2, 132, 199, 0.40);
+}
+
+.financial-legend-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.financial-legend-btn:hover {
+  background: rgba(241, 245, 249, 0.55);
+}
+
+.financial-legend-btn.active {
+  border-color: rgba(8, 124, 122, 0.35);
+}
+
+.financial-legend-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.financial-hover-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--color-neutral-600);
+  margin-top: 6px;
+}
+
+.financial-hover-summary strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
 @media (max-width: 900px) {
   .reports-kpis { grid-template-columns: repeat(2, 1fr); }
+  .reports-kpis--4 { grid-template-columns: repeat(2, 1fr); }
   .reports-charts-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
   .reports-kpis { grid-template-columns: 1fr 1fr; }
+  .reports-kpis--4 { grid-template-columns: 1fr 1fr; }
   .reports-hbar-row { grid-template-columns: 80px 1fr 24px; }
 }
 /* ── End reports dashboard ───────────────────────────────────────────────── */

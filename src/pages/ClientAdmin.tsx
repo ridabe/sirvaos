@@ -1268,7 +1268,7 @@ const clientTabs = [
   { key: "bible-school", label: "Escola Bíblica", icon: BookOpen },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "social-media", label: "Mídias Sociais", icon: Play },
-  { key: "lists", label: "Listagens", icon: Edit3 },
+  { key: "lists", label: "Cargos/Ministérios", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
   { key: "users", label: "Usuários", icon: ShieldCheck },
   { key: "policies", label: "Política & LGPD", icon: ScrollText },
@@ -1897,6 +1897,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [financialFilterCategoryId, setFinancialFilterCategoryId] = useState("");
   const [financialFilterMonth, setFinancialFilterMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [financialReceiptTransactionId, setFinancialReceiptTransactionId] = useState<string | null>(null);
+  const [financialDashboardDonutType, setFinancialDashboardDonutType] = useState<"income" | "expense">("income");
+  const [financialDashboardHoverMonth, setFinancialDashboardHoverMonth] = useState<string | null>(null);
+  const [financialDashboardHoverCategory, setFinancialDashboardHoverCategory] = useState<string | null>(null);
   const [kidsView, setKidsView] = useState<"dashboard" | "children" | "schedule" | "attendance" | "activities" | "communications">("dashboard");
   const [kidsGroupForm, setKidsGroupForm] = useState<KidsGroupFormState>(emptyKidsGroupForm);
   const [kidsChildForm, setKidsChildForm] = useState<KidsChildFormState>(emptyKidsChildForm);
@@ -5841,6 +5844,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setFinancialSaveMessage(isEditing ? "Lançamento atualizado." : "Lançamento registrado.");
       setIsFinancialTransactionFormOpen(false);
       setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
+      setFinancialFilterMonth(payload.date.slice(0, 7));
       return;
     }
 
@@ -5858,6 +5862,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setFinancialSaveMessage(isEditing ? "Lançamento atualizado." : "Lançamento registrado.");
     setIsFinancialTransactionFormOpen(false);
     setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
+    setFinancialFilterMonth(payload.date.slice(0, 7));
     await loadClientData(profile.id);
   }
 
@@ -6803,7 +6808,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   : activeTab === "social-media"
                   ? "Mídias Sociais"
                   : activeTab === "lists"
-                  ? "Listagens do tenant"
+                  ? "Cargos e ministérios"
                   : activeTab === "theme"
                   ? "Identidade visual"
                   : activeTab === "policies"
@@ -8355,15 +8360,28 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           {activeTab === "financial" ? (() => {
             const allTx = clientData.financialTransactions;
             const thisMonth = financialFilterMonth;
-            const txThisMonth = allTx.filter((t) => t.date.slice(0, 7) === thisMonth);
-            const incomeThisMonth = txThisMonth.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-            const expenseThisMonth = txThisMonth.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+            const normalizeTxDate = (raw: unknown) => {
+              const s = typeof raw === "string" ? raw : String(raw ?? "");
+              const base = s.includes("T") ? s.split("T")[0] : s;
+              return base.slice(0, 10);
+            };
+            const txMonthKey = (t: FinancialTransactionRecord) => normalizeTxDate(t.date).slice(0, 7);
+            const txAmount = (t: FinancialTransactionRecord) => {
+              const raw = (t as unknown as { amount?: unknown }).amount;
+              if (typeof raw === "number") return raw;
+              const n = Number(String(raw ?? "").replace(",", "."));
+              return Number.isFinite(n) ? n : 0;
+            };
+
+            const txThisMonth = allTx.filter((t) => txMonthKey(t) === thisMonth);
+            const incomeThisMonth = txThisMonth.filter((t) => t.type === "income").reduce((s, t) => s + txAmount(t), 0);
+            const expenseThisMonth = txThisMonth.filter((t) => t.type === "expense").reduce((s, t) => s + txAmount(t), 0);
             const netThisMonth = incomeThisMonth - expenseThisMonth;
 
             const filteredTx = allTx.filter((t) => {
               if (financialFilterType !== "all" && t.type !== financialFilterType) return false;
               if (financialFilterCategoryId && t.category_id !== financialFilterCategoryId) return false;
-              if (financialView === "transactions" && t.date.slice(0, 7) !== financialFilterMonth) return false;
+              if (financialView === "transactions" && txMonthKey(t) !== financialFilterMonth) return false;
               return true;
             });
 
@@ -8381,17 +8399,72 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
             const reportByCategory = (() => {
               const grouped: Record<string, { name: string; color: string | null; income: number; expense: number }> = {};
-              const reportTx = allTx.filter((t) => t.date.slice(0, 7) === financialFilterMonth);
+              const reportTx = allTx.filter((t) => txMonthKey(t) === financialFilterMonth);
               for (const t of reportTx) {
                 const catId = t.category_id ?? "__uncategorized__";
                 const catName = t.financial_categories?.name ?? "Sem categoria";
                 const catColor = t.financial_categories?.color ?? null;
                 if (!grouped[catId]) grouped[catId] = { name: catName, color: catColor, income: 0, expense: 0 };
-                if (t.type === "income") grouped[catId].income += t.amount;
-                else grouped[catId].expense += t.amount;
+                if (t.type === "income") grouped[catId].income += txAmount(t);
+                else grouped[catId].expense += txAmount(t);
               }
               return Object.values(grouped).sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
             })();
+
+            const last6Months = Array.from({ length: 6 }, (_, i) => {
+              const base = new Date();
+              const d = new Date(base.getFullYear(), base.getMonth() - (5 - i), 1);
+              const key = d.toISOString().slice(0, 7);
+              const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+              return { key, label, title: d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) };
+            });
+
+            const financialByMonth = last6Months.map((m) => {
+              const txM = allTx.filter((t) => txMonthKey(t) === m.key);
+              return {
+                ...m,
+                income: txM.filter((t) => t.type === "income").reduce((s, t) => s + txAmount(t), 0),
+                expense: txM.filter((t) => t.type === "expense").reduce((s, t) => s + txAmount(t), 0),
+              };
+            });
+            const maxFinancial = Math.max(...financialByMonth.flatMap((m) => [m.income, m.expense]), 1);
+
+            const donutRows = (() => {
+              const targetType = financialDashboardDonutType;
+              const grouped = txThisMonth
+                .filter((t) => t.type === targetType)
+                .reduce<Record<string, { id: string; name: string; color: string | null; amount: number }>>((acc, t) => {
+                  const id = t.category_id ?? "__uncategorized__";
+                  const name = t.financial_categories?.name ?? "Sem categoria";
+                  const color = t.financial_categories?.color ?? null;
+                  acc[id] = acc[id] ?? { id, name, color, amount: 0 };
+                  acc[id].amount += txAmount(t);
+                  return acc;
+                }, {});
+
+              const rows = Object.values(grouped).sort((a, b) => b.amount - a.amount);
+              const top = rows.slice(0, 5);
+              const rest = rows.slice(5);
+              const restTotal = rest.reduce((s, r) => s + r.amount, 0);
+              return restTotal > 0
+                ? top.concat({ id: "__other__", name: "Outros", color: "#94a3b8", amount: restTotal })
+                : top;
+            })();
+
+            const donutTotal = donutRows.reduce((s, r) => s + r.amount, 0);
+            const donutSegs = donutRows.map((row, idx) => {
+              const fallback = ["#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#ef4444", "#94a3b8"];
+              return { ...row, color: row.color ?? fallback[idx % fallback.length] };
+            });
+
+            const R = 54, CX = 76, CY = 76, circ = 2 * Math.PI * R;
+            let off = 0;
+            const donutPaths = donutSegs.map((seg) => {
+              const dash = donutTotal > 0 ? (seg.amount / donutTotal) * circ : 0;
+              const p = { ...seg, dash, gap: circ - dash, offset: off };
+              off += dash;
+              return p;
+            });
 
             const receiptTx = financialReceiptTransactionId
               ? allTx.find((t) => t.id === financialReceiptTransactionId)
@@ -8598,31 +8671,175 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 {/* ── DASHBOARD ── */}
                 {financialView === "dashboard" ? (
                   <>
-                    <div className="worship-summary financial-summary">
-                      <article className="financial-stat income">
-                        <TrendingUp size={22} />
-                        <div>
-                          <span>Receitas</span>
-                          <strong>{fmtCurrency(incomeThisMonth)}</strong>
-                          <small>{txThisMonth.filter((t) => t.type === "income").length} lançamento(s)</small>
+                    <div className="reports-kpis reports-kpis--4">
+                      {[
+                        {
+                          label: "Receitas",
+                          value: fmtCurrency(incomeThisMonth),
+                          sub: `${txThisMonth.filter((t) => t.type === "income").length} lançamento(s)`,
+                          color: "#22c55e",
+                        },
+                        {
+                          label: "Despesas",
+                          value: fmtCurrency(expenseThisMonth),
+                          sub: `${txThisMonth.filter((t) => t.type === "expense").length} lançamento(s)`,
+                          color: "#ef4444",
+                        },
+                        {
+                          label: "Saldo",
+                          value: fmtCurrency(netThisMonth),
+                          sub: netThisMonth >= 0 ? "superávit" : "déficit",
+                          color: netThisMonth >= 0 ? "#22c55e" : "#ef4444",
+                        },
+                        {
+                          label: "Total",
+                          value: String(txThisMonth.length),
+                          sub: "lançamentos no mês",
+                          color: "#3b82f6",
+                        },
+                      ].map(({ label, value, sub, color }) => (
+                        <div key={label} className="reports-kpi">
+                          <span>{label}</span>
+                          <strong style={{ color }}>{value}</strong>
+                          <small>{sub}</small>
                         </div>
-                      </article>
-                      <article className="financial-stat expense">
-                        <TrendingDown size={22} />
-                        <div>
-                          <span>Despesas</span>
-                          <strong>{fmtCurrency(expenseThisMonth)}</strong>
-                          <small>{txThisMonth.filter((t) => t.type === "expense").length} lançamento(s)</small>
+                      ))}
+                    </div>
+
+                    <div className="reports-charts-row" style={{ marginTop: 16 }}>
+                      <div className="reports-chart-card">
+                        <div className="reports-chart-title">
+                          <strong>Por categoria</strong>
+                          <div className="financial-donut-toggle">
+                            <button
+                              type="button"
+                              className={financialDashboardDonutType === "income" ? "active" : ""}
+                              onClick={() => setFinancialDashboardDonutType("income")}
+                            >
+                              Receitas
+                            </button>
+                            <button
+                              type="button"
+                              className={financialDashboardDonutType === "expense" ? "active" : ""}
+                              onClick={() => setFinancialDashboardDonutType("expense")}
+                            >
+                              Despesas
+                            </button>
+                          </div>
                         </div>
-                      </article>
-                      <article className={`financial-stat ${netThisMonth >= 0 ? "income" : "expense"}`}>
-                        <DollarSign size={22} />
-                        <div>
-                          <span>Saldo líquido</span>
-                          <strong>{fmtCurrency(netThisMonth)}</strong>
-                          <small>{netThisMonth >= 0 ? "Superávit" : "Déficit"} no período</small>
+                        <div className="reports-donut-wrap">
+                          <svg viewBox="0 0 152 152" width="152" height="152">
+                            {donutTotal === 0
+                              ? <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e2e8f0" strokeWidth={18} />
+                              : donutPaths.map((seg) => (
+                                <circle
+                                  key={seg.id}
+                                  cx={CX}
+                                  cy={CY}
+                                  r={R}
+                                  fill="none"
+                                  stroke={seg.color}
+                                  strokeWidth={18}
+                                  strokeDasharray={`${seg.dash} ${seg.gap}`}
+                                  strokeDashoffset={circ / 4 - seg.offset}
+                                  opacity={financialDashboardHoverCategory && financialDashboardHoverCategory !== seg.id ? 0.35 : 1}
+                                  onMouseEnter={() => setFinancialDashboardHoverCategory(seg.id)}
+                                  onMouseLeave={() => setFinancialDashboardHoverCategory(null)}
+                                  onClick={() => {
+                                    if (seg.id === "__other__") return;
+                                    setFinancialFilterCategoryId(seg.id === "__uncategorized__" ? "" : seg.id);
+                                    setFinancialFilterType(financialDashboardDonutType);
+                                    setFinancialView("transactions");
+                                  }}
+                                  style={{ cursor: seg.id === "__other__" ? "default" : "pointer", transition: "opacity .2s ease" }}
+                                />
+                              ))}
+                            <text x={CX} y={CY - 6} textAnchor="middle" fontSize="14" fontWeight="800" fill="#1e293b">
+                              {donutTotal > 0 ? fmtCurrency(donutTotal) : "R$ 0,00"}
+                            </text>
+                            <text x={CX} y={CY + 12} textAnchor="middle" fontSize="10" fill="#64748b">
+                              {financialDashboardDonutType === "income" ? "receitas" : "despesas"}
+                            </text>
+                          </svg>
+                          <div className="reports-donut-legend">
+                            {donutSegs.length > 0 ? donutSegs.map((seg) => (
+                              <button
+                                key={seg.id}
+                                type="button"
+                                className={`reports-legend-item financial-legend-btn ${financialDashboardHoverCategory === seg.id ? "active" : ""}`}
+                                onMouseEnter={() => setFinancialDashboardHoverCategory(seg.id)}
+                                onMouseLeave={() => setFinancialDashboardHoverCategory(null)}
+                                onClick={() => {
+                                  if (seg.id === "__other__") return;
+                                  setFinancialFilterCategoryId(seg.id === "__uncategorized__" ? "" : seg.id);
+                                  setFinancialFilterType(financialDashboardDonutType);
+                                  setFinancialView("transactions");
+                                }}
+                                disabled={seg.id === "__other__"}
+                              >
+                                <span style={{ background: seg.color }} />
+                                <div>
+                                  <strong>{fmtCurrency(seg.amount)}</strong>
+                                  <small>{seg.name}</small>
+                                </div>
+                              </button>
+                            )) : (
+                              <div className="catalog-empty">Sem dados no período.</div>
+                            )}
+                          </div>
                         </div>
-                      </article>
+                      </div>
+
+                      <div className="reports-chart-card reports-chart-card--wide">
+                        <div className="reports-chart-title">
+                          <strong>Evolução — últimos 6 meses</strong>
+                          <div className="reports-legend-inline">
+                            <span><em style={{ background: "#22c55e" }} />Receita</span>
+                            <span><em style={{ background: "#ef4444" }} />Despesa</span>
+                          </div>
+                        </div>
+                        <div className="reports-bar-wrap">
+                          <svg viewBox="0 0 480 150" width="100%" height="150" preserveAspectRatio="xMidYMid meet">
+                            {financialByMonth.map((m, i) => {
+                              const bW = 26, maxH = 110, x = 30 + i * 74;
+                              const incH = (m.income / maxFinancial) * maxH;
+                              const expH = (m.expense / maxFinancial) * maxH;
+                              const isHover = financialDashboardHoverMonth === m.key;
+                              const dim = financialDashboardHoverMonth && !isHover;
+                              return (
+                                <g
+                                  key={m.key}
+                                  onMouseEnter={() => setFinancialDashboardHoverMonth(m.key)}
+                                  onMouseLeave={() => setFinancialDashboardHoverMonth(null)}
+                                  onClick={() => setFinancialFilterMonth(m.key)}
+                                  style={{ cursor: "pointer" }}
+                                >
+                                  <rect x={x} y={120 - incH} width={bW} height={Math.max(incH, 2)} fill="#22c55e" rx={3} opacity={dim ? 0.35 : 0.85} style={{ transition: "opacity .2s ease" }} />
+                                  <rect x={x + bW + 4} y={120 - expH} width={bW} height={Math.max(expH, 2)} fill="#ef4444" rx={3} opacity={dim ? 0.35 : 0.85} style={{ transition: "opacity .2s ease" }} />
+                                  <text x={x + bW} y={136} textAnchor="middle" fontSize="11" fill={isHover ? "#0f172a" : "#64748b"} style={{ transition: "fill .2s ease" }}>{m.label}</text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                        {financialDashboardHoverMonth ? (() => {
+                          const m = financialByMonth.find((row) => row.key === financialDashboardHoverMonth) ?? null;
+                          if (!m) return null;
+                          return (
+                            <div className="financial-hover-summary">
+                              <span>{m.title}</span>
+                              <strong style={{ color: "#22c55e" }}>{fmtCurrency(m.income)}</strong>
+                              <strong style={{ color: "#ef4444" }}>{fmtCurrency(m.expense)}</strong>
+                            </div>
+                          );
+                        })() : (
+                          <div className="financial-hover-summary">
+                            <span>{new Date(financialFilterMonth + "-01").toLocaleString("pt-BR", { month: "long", year: "numeric" })}</span>
+                            <strong style={{ color: "#22c55e" }}>{fmtCurrency(incomeThisMonth)}</strong>
+                            <strong style={{ color: "#ef4444" }}>{fmtCurrency(expenseThisMonth)}</strong>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="panel-heading" style={{ marginTop: "1.5rem" }}>
@@ -8630,10 +8847,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <button type="button" onClick={() => setFinancialView("transactions")}>Ver todos</button>
                     </div>
                     <div className="financial-tx-list">
-                      {allTx.length === 0 ? (
+                      {txThisMonth.length === 0 ? (
                         <div className="catalog-empty">Nenhum lançamento registrado ainda.</div>
                       ) : null}
-                      {allTx.slice(0, 10).map((tx) => (
+                      {txThisMonth.slice(0, 10).map((tx) => (
                         <div key={tx.id} className="financial-tx-row">
                           <div className={`financial-tx-type-badge ${tx.type}`}>
                             {tx.type === "income" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
@@ -8641,13 +8858,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <div className="financial-tx-info">
                             <strong>{tx.description}</strong>
                             <small>
-                              {new Date(tx.date + "T12:00:00").toLocaleDateString("pt-BR")}
+                              {new Date(normalizeTxDate(tx.date) + "T12:00:00").toLocaleDateString("pt-BR")}
                               {tx.financial_categories?.name ? ` · ${tx.financial_categories.name}` : ""}
                               {tx.members?.name ? ` · ${tx.members.name}` : ""}
                             </small>
                           </div>
                           <span className={`financial-tx-amount ${tx.type}`}>
-                            {tx.type === "income" ? "+" : "-"}{fmtCurrency(tx.amount)}
+                            {tx.type === "income" ? "+" : "-"}{fmtCurrency(txAmount(tx))}
                           </span>
                         </div>
                       ))}
@@ -8692,14 +8909,14 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <div className="financial-tx-info">
                             <strong>{tx.description}</strong>
                             <small>
-                              {new Date(tx.date + "T12:00:00").toLocaleDateString("pt-BR")}
+                              {new Date(normalizeTxDate(tx.date) + "T12:00:00").toLocaleDateString("pt-BR")}
                               {" · "}{paymentLabel(tx.payment_method)}
                               {tx.financial_categories?.name ? ` · ${tx.financial_categories.name}` : ""}
                               {tx.members?.name ? ` · ${tx.members.name}` : ""}
                             </small>
                           </div>
                           <span className={`financial-tx-amount ${tx.type}`}>
-                            {tx.type === "income" ? "+" : "-"}{fmtCurrency(tx.amount)}
+                            {tx.type === "income" ? "+" : "-"}{fmtCurrency(txAmount(tx))}
                           </span>
                           {canManageFinancial ? (
                             <div className="member-actions">
@@ -10814,7 +11031,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
             <article className="panel full-width">
               <div className="panel-heading">
                 <div>
-                  <span>Listagens</span>
+                  <span>Cargos/Ministérios</span>
                   <h4>Cargos e ministérios</h4>
                 </div>
               </div>
@@ -11050,7 +11267,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="panel-heading">
                 <div>
                   <span>Usuários</span>
-                  <h4>Perfis e permissões do tenant</h4>
+                  <h4>Perfis e permissões do usuário</h4>
                 </div>
               </div>
 
