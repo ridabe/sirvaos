@@ -1878,6 +1878,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [userSaveStatus, setUserSaveStatus] = useState<Record<string, LoginStatus>>({});
   const [userSaveMessage, setUserSaveMessage] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<TenantProfile | null>(null);
+  const [avatarErrorUrl, setAvatarErrorUrl] = useState<string | null>(null);
   const [catalogRoleDraft, setCatalogRoleDraft] = useState("");
   const [catalogMinistryDraft, setCatalogMinistryDraft] = useState("");
   const [catalogEdits, setCatalogEdits] = useState<Record<string, string>>({});
@@ -2278,6 +2279,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setActiveTab(visibleClientTabs[0]?.key ?? "overview");
     }
   }, [activeTab, visibleClientTabs]);
+
+  useEffect(() => {
+    setAvatarErrorUrl(null);
+  }, [profile?.avatar_url]);
 
   useEffect(() => {
     return () => {
@@ -3924,6 +3929,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     await supabase.auth.signOut();
     setClientData(null);
     setProfile(null);
+    setAvatarErrorUrl(null);
     setLoginStatus("idle");
     setDataStatus("idle");
   }
@@ -6816,10 +6822,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   : "Gestão de usuários"}
               </span>
               <h1>{tenant.name}</h1>
-              <div className="client-header-user">
-                <span>Usuário logado</span>
-                <strong>{profile?.full_name ?? profile?.email}</strong>
-              </div>
               <p>
                 {activeTab === "overview"
                   ? "Acompanhe membros, eventos, módulos ativos e a identidade visual da igreja."
@@ -6849,52 +6851,75 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               </p>
             </div>
           </div>
-          {activeTab === "financial" && canManageFinancial ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
-                setFinancialSaveStatus("idle");
-                setFinancialSaveMessage("");
-                setIsFinancialTransactionFormOpen(true);
-                setFinancialView("transactions");
-              }}
-            >
-              <Plus size={16} /> Novo lançamento
-            </button>
-          ) : null}
-          {activeTab === "members" || activeTab === "families" || activeTab === "events" || activeTab === "notices" ? (
-            <Button
-              icon={<Plus size={18} />}
-              onClick={() => {
-                if (activeTab === "members") openCreateMemberForm();
-                if (activeTab === "families") openCreateFamilyForm();
-                if (activeTab === "events") openCreateEventForm();
-                if (activeTab === "notices") openCreateAnnouncementForm();
-              }}
-              disabled={
-                activeTab === "members" || activeTab === "families"
-                  ? !canManageMembers
-                  : activeTab === "events"
-                  ? !canManageEvents
-                  : !canManageAnnouncements
-              }
-            >
-              {activeTab === "members"
-                ? "Novo membro"
-                : activeTab === "families"
-                ? "Nova família"
-                : activeTab === "events"
-                ? "Novo evento"
-                : "Novo comunicado"}
-            </Button>
-          ) : null}
-          {activeTab === "social-media" && canManageSocialMedia ? (
-            <Button icon={<Plus size={18} />} onClick={openCreateSocialMediaForm}>
-              Novo canal
-            </Button>
-          ) : null}
+          <div className="client-header-actions">
+            {profile ? (
+              <div className="client-header-user" aria-label="Usuário logado">
+                <div className="client-header-avatar" aria-label="Foto do perfil">
+                  {profile.avatar_url && profile.avatar_url !== avatarErrorUrl ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt={`Foto de ${(profile.full_name ?? profile.email ?? "usuário").trim()}`}
+                      onError={() => setAvatarErrorUrl(profile.avatar_url)}
+                    />
+                  ) : (
+                    <span>{(profile.full_name ?? profile.email ?? "?").trim().charAt(0).toUpperCase() || "?"}</span>
+                  )}
+                </div>
+                <div className="client-header-user-meta">
+                  <strong>{profile.full_name ?? profile.email}</strong>
+                  <small>{profile.email}</small>
+                </div>
+              </div>
+            ) : null}
+            <div className="client-header-actions-buttons">
+              {activeTab === "financial" && canManageFinancial ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setFinancialTransactionForm({ ...emptyFinancialTransactionForm, date: new Date().toISOString().slice(0, 10) });
+                    setFinancialSaveStatus("idle");
+                    setFinancialSaveMessage("");
+                    setIsFinancialTransactionFormOpen(true);
+                    setFinancialView("transactions");
+                  }}
+                >
+                  <Plus size={16} /> Novo lançamento
+                </button>
+              ) : null}
+              {activeTab === "members" || activeTab === "families" || activeTab === "events" || activeTab === "notices" ? (
+                <Button
+                  icon={<Plus size={18} />}
+                  onClick={() => {
+                    if (activeTab === "members") openCreateMemberForm();
+                    if (activeTab === "families") openCreateFamilyForm();
+                    if (activeTab === "events") openCreateEventForm();
+                    if (activeTab === "notices") openCreateAnnouncementForm();
+                  }}
+                  disabled={
+                    activeTab === "members" || activeTab === "families"
+                      ? !canManageMembers
+                      : activeTab === "events"
+                      ? !canManageEvents
+                      : !canManageAnnouncements
+                  }
+                >
+                  {activeTab === "members"
+                    ? "Novo membro"
+                    : activeTab === "families"
+                    ? "Nova família"
+                    : activeTab === "events"
+                    ? "Novo evento"
+                    : "Novo comunicado"}
+                </Button>
+              ) : null}
+              {activeTab === "social-media" && canManageSocialMedia ? (
+                <Button icon={<Plus size={18} />} onClick={openCreateSocialMediaForm}>
+                  Novo canal
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </header>
 
         <div className="client-stats">

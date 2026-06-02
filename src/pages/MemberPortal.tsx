@@ -57,6 +57,7 @@ type MemberProfile = {
   id: string;
   full_name: string | null;
   email: string;
+  avatar_url: string | null;
   tenant_id: string | null;
   member_id: string | null;
   tenant_role: "owner" | "admin" | "member" | null;
@@ -338,6 +339,7 @@ export function MemberPortal() {
   const [loginMessage, setLoginMessage] = useState("");
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(null);
   const [portalTenantInfo, setPortalTenantInfo] = useState<PortalTenantInfo | null>(null);
   const [eventPreviewOpen, setEventPreviewOpen] = useState(false);
   const [eventPreviewTarget, setEventPreviewTarget] = useState<PortalEventRecord | null>(null);
@@ -613,7 +615,7 @@ export function MemberPortal() {
 
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
-      .select("id, full_name, email, tenant_id, tenant_role, member_id, status")
+      .select("id, full_name, email, tenant_id, tenant_role, member_id, status, avatar_url")
       .eq("id", userId)
       .single<MemberProfile>();
 
@@ -623,6 +625,7 @@ export function MemberPortal() {
     }
 
     setProfile(profileData);
+    setResolvedAvatarUrl(profileData.avatar_url ?? null);
 
     // Tenant info e eventos são públicos para todo membro do tenant — carregamos
     // antes de qualquer guarda de member_id ou módulo específico.
@@ -1568,6 +1571,7 @@ export function MemberPortal() {
   async function handleSignOut() {
     await supabase.auth.signOut();
     setProfile(null);
+    setResolvedAvatarUrl(null);
     setAssignments([]);
     setMemberMinistries([]);
     setModuleAdminAccesses([]);
@@ -1620,6 +1624,8 @@ export function MemberPortal() {
   const isTenantAdmin = profile?.tenant_role === "owner" || profile?.tenant_role === "admin";
   const canOpenAdminPortal =
     Boolean(isTenantAdmin) || canManageMembers || bibleSchoolCanManage || adminModuleAccesses.length > 0;
+  const displayName = profile?.full_name?.trim() || profile?.email || "";
+  const displayInitial = displayName ? displayName.trim().charAt(0).toUpperCase() : "?";
   const highlightedAdminModules = [
     ...(canManageMembers && !adminModuleAccesses.some((row) => row.platform_modules?.code === "members")
       ? [{
@@ -1848,6 +1854,17 @@ export function MemberPortal() {
             ) : null}
           </div>
         <div className="member-portal-userbox">
+          <div className="member-portal-avatar" aria-label="Foto do perfil">
+            {resolvedAvatarUrl ? (
+              <img
+                src={resolvedAvatarUrl}
+                alt={`Foto de ${displayName || "usuário"}`}
+                onError={() => setResolvedAvatarUrl(null)}
+              />
+            ) : (
+              <span>{displayInitial}</span>
+            )}
+          </div>
           <span>{profile.full_name ?? profile.email}</span>
           <small>{profile.email}</small>
           <button type="button" className="member-portal-signout" onClick={() => void handleSignOut()}>
