@@ -1,10 +1,14 @@
 import {
   ArrowRight,
+  Baby,
   Bell,
+  BookOpen,
   Building2,
+  CalendarDays,
   CheckCircle2,
   CircleDashed,
   Clock3,
+  DollarSign,
   Edit3,
   ExternalLink,
   Eye,
@@ -13,6 +17,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Music,
   PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
@@ -167,6 +172,14 @@ type AdminDashboardData = {
     modules: number;
     membersTotal: number;
     membersActive: number;
+  };
+  engagement: {
+    financialTransactionsTotal: number;
+    worshipEventsTotal: number;
+    kidsChildrenTotal: number;
+    bibleSchoolEnrollmentsActive: number;
+    tenantEventsLast30Days: number;
+    worshipConfirmationRate: number | null;
   };
 };
 
@@ -669,6 +682,38 @@ export function AdminGlobalAccess() {
     const membersTotal = tenantsWithMetrics.reduce((sum, tenant) => sum + (tenant.members_total ?? 0), 0);
     const membersActive = tenantsWithMetrics.reduce((sum, tenant) => sum + (tenant.members_active ?? 0), 0);
 
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoIso = thirtyDaysAgo.toISOString().slice(0, 10);
+
+    const [
+      financialTxResult,
+      worshipEventsResult,
+      kidsChildrenResult,
+      bsEnrollmentsResult,
+      tenantEventsResult,
+      worshipAssignmentsResult,
+    ] = await Promise.all([
+      supabase.from("financial_transactions").select("id", { count: "exact", head: true }),
+      supabase.from("worship_events").select("id", { count: "exact", head: true }),
+      supabase.from("kids_children").select("id", { count: "exact", head: true }).eq("is_active", true),
+      supabase.from("bible_school_enrollments").select("id", { count: "exact", head: true }).eq("status", "active"),
+      supabase
+        .from("tenant_events")
+        .select("id", { count: "exact", head: true })
+        .gte("event_date", thirtyDaysAgoIso),
+      supabase
+        .from("worship_assignments")
+        .select("id, status", { count: "exact" })
+        .in("status", ["confirmed", "declined"]),
+    ]);
+
+    const totalAssignments = worshipAssignmentsResult.count ?? 0;
+    const confirmedAssignments =
+      (worshipAssignmentsResult.data ?? []).filter((a) => a.status === "confirmed").length;
+    const confirmationRate =
+      totalAssignments > 0 ? Math.round((confirmedAssignments / totalAssignments) * 100) : null;
+
     setDashboardData({
       tenants: tenantsWithMetrics,
       auditLogs: auditLogsResult.data ?? [],
@@ -684,6 +729,14 @@ export function AdminGlobalAccess() {
         modules: modulesCount,
         membersTotal,
         membersActive,
+      },
+      engagement: {
+        financialTransactionsTotal: financialTxResult.count ?? 0,
+        worshipEventsTotal: worshipEventsResult.count ?? 0,
+        kidsChildrenTotal: kidsChildrenResult.count ?? 0,
+        bibleSchoolEnrollmentsActive: bsEnrollmentsResult.count ?? 0,
+        tenantEventsLast30Days: tenantEventsResult.count ?? 0,
+        worshipConfirmationRate: confirmationRate,
       },
     });
     setDataStatus("ready");
@@ -2135,6 +2188,45 @@ export function AdminGlobalAccess() {
                   <small>{dashboardData.counts.suspendedTenants} tenants suspensos</small>
                 </article>
               </div>
+
+              {activeSection === "dashboard" ? (
+                <div className="global-stats" style={{ marginTop: "1rem" }}>
+                  <article>
+                    <DollarSign size={20} />
+                    <span>Lançamentos financeiros</span>
+                    <strong>{dashboardData.engagement.financialTransactionsTotal}</strong>
+                    <small>Total na plataforma</small>
+                  </article>
+                  <article>
+                    <Music size={20} />
+                    <span>Eventos de louvor</span>
+                    <strong>{dashboardData.engagement.worshipEventsTotal}</strong>
+                    <small>
+                      {dashboardData.engagement.worshipConfirmationRate !== null
+                        ? `${dashboardData.engagement.worshipConfirmationRate}% confirmação`
+                        : "Sem confirmações ainda"}
+                    </small>
+                  </article>
+                  <article>
+                    <Baby size={20} />
+                    <span>Crianças (Kids)</span>
+                    <strong>{dashboardData.engagement.kidsChildrenTotal}</strong>
+                    <small>Cadastros ativos</small>
+                  </article>
+                  <article>
+                    <BookOpen size={20} />
+                    <span>Matrículas ativas</span>
+                    <strong>{dashboardData.engagement.bibleSchoolEnrollmentsActive}</strong>
+                    <small>Escola Bíblica</small>
+                  </article>
+                  <article>
+                    <CalendarDays size={20} />
+                    <span>Eventos (30 dias)</span>
+                    <strong>{dashboardData.engagement.tenantEventsLast30Days}</strong>
+                    <small>Agenda das igrejas</small>
+                  </article>
+                </div>
+              ) : null}
 
               <div className="global-admin-grid">
                 <section

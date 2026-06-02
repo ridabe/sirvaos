@@ -19,6 +19,7 @@ import {
   ScrollText,
   ShieldCheck,
   Trash2,
+  Users2,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -904,14 +905,58 @@ export function MemberPortal() {
     setBibleSchoolIsModuleAdmin(canManageModule);
     setBibleSchoolCanManage(canManageModule || isTeacher);
 
+    // Portal only shows active classes. Admins/teachers see all active; regular members
+    // only see classes where they have an active enrollment.
     const bibleClassesResult = await supabase
       .from("bible_school_classes")
       .select("id, tenant_id, name, description, starts_at, ends_at, is_active")
       .eq("tenant_id", profileData.tenant_id)
+      .eq("is_active", true)
       .order("created_at", { ascending: false })
       .returns<BibleSchoolClassRecord[]>();
 
-    const bibleClasses = bibleClassesResult.data ?? [];
+    const allActiveClasses = bibleClassesResult.data ?? [];
+
+    let bibleClasses = allActiveClasses;
+    if (!canManageModule && !isTeacher && profileData.member_id) {
+      // For regular members: only show classes they're enrolled in (active enrollment)
+      const enrollmentCheckResult = await supabase
+        .from("bible_school_enrollments")
+        .select("class_id")
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("status", "active")
+        .in("class_id", allActiveClasses.map((c) => c.id).filter(Boolean))
+        .returns<{ class_id: string }[]>();
+
+      if (!enrollmentCheckResult.error && enrollmentCheckResult.data) {
+        // We need to match via student (member_id → student → enrollment)
+        const studentResult = await supabase
+          .from("bible_school_students")
+          .select("id")
+          .eq("tenant_id", profileData.tenant_id)
+          .eq("member_id", profileData.member_id)
+          .returns<{ id: string }[]>();
+
+        if (!studentResult.error && studentResult.data?.length) {
+          const studentIds = studentResult.data.map((s) => s.id);
+          const memberEnrollmentResult = await supabase
+            .from("bible_school_enrollments")
+            .select("class_id")
+            .eq("tenant_id", profileData.tenant_id)
+            .eq("status", "active")
+            .in("student_id", studentIds)
+            .returns<{ class_id: string }[]>();
+
+          const enrolledClassIds = new Set(
+            (memberEnrollmentResult.data ?? []).map((e) => e.class_id),
+          );
+          bibleClasses = allActiveClasses.filter((c) => enrolledClassIds.has(c.id));
+        } else {
+          bibleClasses = [];
+        }
+      }
+    }
+
     setBibleSchoolClasses(bibleClasses);
 
     if (bibleClasses.length === 0) {
@@ -1626,7 +1671,7 @@ export function MemberPortal() {
         <div className="member-portal-shell">
           <div className="member-portal-login-card">
             <div className="member-portal-brand">
-              <Music size={28} />
+              <Users2 size={28} />
               <div>
                 <strong>Portal do Membro</strong>
                 <span>Tenha acesso as principais áreas do sistema</span>
@@ -1697,7 +1742,7 @@ export function MemberPortal() {
       <div className="member-portal-shell">
         <div className="member-portal-login-card">
           <div className="member-portal-brand">
-            <Music size={28} />
+            <Users2 size={28} />
             <div>
               <strong>Portal do Membro</strong>
               <span>Confirme sua participação nas escalas</span>

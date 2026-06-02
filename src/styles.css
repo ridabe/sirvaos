@@ -373,27 +373,32 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.76rem;
   font-weight: 800;
+  white-space: nowrap;
   color: var(--color-white);
   background: var(--color-brand-primary);
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .module-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 28px;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: 10px;
+  margin-top: 24px;
 }
 
 .module-strip article {
-  padding: 18px;
+  padding: 12px 14px;
   background: var(--color-neutral-50);
   border: 1px solid var(--color-neutral-200);
-  border-radius: 14px;
+  border-radius: 12px;
+  min-width: 0;
 }
 
 .module-strip span,
@@ -403,14 +408,16 @@ h1 {
 }
 
 .module-strip span {
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 760;
 }
 
 .module-strip strong {
   display: block;
-  margin: 12px 0 6px;
-  font-size: 2.1rem;
+  margin: 8px 0 4px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .module-strip small {
@@ -1327,7 +1334,7 @@ h1 {
 .tenant-table-head,
 .tenant-table-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.35fr) minmax(120px, 0.72fr) 86px 96px minmax(210px, auto);
+  grid-template-columns: minmax(190px, 1.35fr) minmax(120px, 0.72fr) minmax(86px, auto) minmax(96px, auto) minmax(210px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -2529,6 +2536,10 @@ h1 {
 .notification-list strong,
 .notification-list small {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .member-row small,
@@ -2558,18 +2569,23 @@ h1 {
 }
 
 .event-list > div {
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 82px minmax(0, 1fr);
 }
 
 .event-list time {
   display: grid;
   min-height: 44px;
-  font-size: 0.82rem;
+  padding: 4px 6px;
+  font-size: 0.78rem;
   font-weight: 900;
+  text-align: center;
+  line-height: 1.3;
   color: var(--color-brand-primary-dark);
   background: var(--color-brand-primary-soft);
   border-radius: 10px;
   place-items: center;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .notification-list > div {
@@ -2761,11 +2777,25 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+}
+
+.worship-event-card header > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.worship-event-card header > div:first-child > div {
+  min-width: 0;
 }
 
 .worship-event-card strong,
 .worship-event-card small {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .worship-event-card small {
@@ -3350,6 +3380,39 @@ h1 {
   margin-top: 0.5rem;
 }
 
+/* Kids dashboard stat cards (reuses same grid as financial) */
+.financial-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 0.5rem;
+}
+
+.financial-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 12px;
+}
+
+.financial-metric-card span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-brand-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.financial-metric-card strong {
+  font-size: 1.9rem;
+  font-weight: 900;
+  color: var(--color-neutral-950);
+  line-height: 1;
+}
+
 .financial-stat {
   display: flex;
   align-items: center;
@@ -3559,7 +3622,7 @@ h1 {
 /* ── Member portal shell ─────────────────────────────── */
 .member-portal-shell {
   min-height: 100vh;
-  background: #f4f7f6;
+  background: linear-gradient(135deg, var(--color-brand-primary-soft) 0%, #f4f7f6 55%, var(--color-brand-accent-soft) 100%);
   display: flex;
   flex-direction: column;
 }
@@ -5492,12 +5555,28 @@ h1 {
     padding: 18px;
   }
 
-  .topbar,
-  .nav-actions,
   .hero-actions,
   .form-options {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .nav-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .nav-actions .ghost-button,
+  .nav-actions .ghost-link,
+  .nav-actions .ghost-icon {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 0.84rem;
   }
 
   .brand-mark {
@@ -5560,6 +5639,11 @@ h1 {
   .member-portal-access-grid,
   .member-portal-permission-list {
     grid-template-columns: 1fr;
+  }
+
+  .client-stats,
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .member-portal-social-channel-head {
@@ -5662,10 +5746,13 @@ h1 {
   }
 
   .dashboard-sidebar nav,
-  .client-stats,
-  .dashboard-grid,
   .worship-summary {
     grid-template-columns: 1fr;
+  }
+
+  .client-stats,
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .dashboard-sidebar button {
@@ -5781,5 +5868,29 @@ h1 {
 
   .global-admin-content {
     padding-top: 68px;
+  }
+
+  /* Compact header banner on mobile */
+  .client-admin-page .global-admin-header p {
+    display: none;
+  }
+
+  .client-admin-page .global-admin-header {
+    padding: 12px 14px;
+  }
+
+  .client-header-logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+  }
+
+  .client-header-brand {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .client-admin-page .global-admin-header h1 {
+    font-size: 1.15rem;
   }
 }

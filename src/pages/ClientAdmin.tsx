@@ -12,6 +12,7 @@ import {
   Edit3,
   Eye,
   FileCheck2,
+  FileText,
   ImagePlus,
   LayoutDashboard,
   LockKeyhole,
@@ -1506,6 +1507,214 @@ function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function openPrintablePdf(html: string, title: string) {
+  const popup = window.open("", "_blank", "noopener,noreferrer");
+  if (!popup) return;
+  popup.document.open();
+  popup.document.write(`<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; padding: 24px; color: #1a1a1a; font-size: 13px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .meta { color: #666; font-size: 11px; margin-bottom: 20px; }
+    .section-title { font-size: 13px; font-weight: bold; color: #444; margin: 20px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+    th, td { border: 1px solid #ddd; padding: 7px 9px; font-size: 12px; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; font-weight: bold; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .summary-card { border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; }
+    .summary-card .label { font-size: 11px; color: #666; margin-bottom: 4px; }
+    .summary-card .value { font-size: 20px; font-weight: bold; }
+    .income { color: #1a7a44; }
+    .expense { color: #c0392b; }
+    .neutral { color: #1a3d6b; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+    .badge-present { background: #d4edda; color: #155724; }
+    .badge-absent { background: #f8d7da; color: #721c24; }
+    .badge-excused { background: #fff3cd; color: #856404; }
+    @media print { body { padding: 12px; } }
+  </style>
+</head>
+<body>
+${html}
+<script>window.print();<\/script>
+</body>
+</html>`);
+  popup.document.close();
+}
+
+function exportFinancialPdf(
+  tenantName: string,
+  period: string,
+  income: number,
+  expense: number,
+  net: number,
+  reportByCategory: Array<{ name: string; income: number; expense: number; color?: string | null }>,
+  transactions: Array<{ date: string; description: string | null; type: "income" | "expense"; amount: number; financial_categories?: { name: string } | null; members?: { name: string } | null; payment_method?: string | null }>,
+) {
+  const fmt = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const esc = (v: string | null | undefined) =>
+    (v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const catRows = reportByCategory
+    .map(
+      (r) =>
+        `<tr>
+          <td>${esc(r.name)}</td>
+          <td class="income">${r.income > 0 ? fmt(r.income) : "—"}</td>
+          <td class="expense">${r.expense > 0 ? fmt(r.expense) : "—"}</td>
+          <td>${fmt(r.income - r.expense)}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const txRows = transactions
+    .slice(0, 200)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(
+      (t) =>
+        `<tr>
+          <td>${new Date(t.date + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+          <td>${esc(t.description)}</td>
+          <td>${esc(t.financial_categories?.name)}</td>
+          <td>${esc(t.members?.name)}</td>
+          <td>${esc(t.payment_method ?? "—")}</td>
+          <td class="${t.type === "income" ? "income" : "expense"}">${t.type === "income" ? "+" : "-"}${fmt(t.amount)}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const html = `
+    <h1>Relatório Financeiro — ${esc(tenantName)}</h1>
+    <div class="meta">Período: ${esc(period)} · Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="label">Receitas</div><div class="value income">${fmt(income)}</div></div>
+      <div class="summary-card"><div class="label">Despesas</div><div class="value expense">${fmt(expense)}</div></div>
+      <div class="summary-card"><div class="label">Saldo</div><div class="value ${net >= 0 ? "income" : "expense"}">${fmt(net)}</div></div>
+    </div>
+    <div class="section-title">Por categoria</div>
+    <table>
+      <thead><tr><th>Categoria</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr></thead>
+      <tbody>${catRows || "<tr><td colspan='4'>Sem dados</td></tr>"}</tbody>
+    </table>
+    <div class="section-title">Lançamentos (${transactions.length})</div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Membro</th><th>Forma pgto.</th><th>Valor</th></tr></thead>
+      <tbody>${txRows || "<tr><td colspan='6'>Sem lançamentos</td></tr>"}</tbody>
+    </table>`;
+
+  openPrintablePdf(html, `Financeiro ${period} · ${tenantName}`);
+}
+
+function exportBibleSchoolPdf(
+  tenantName: string,
+  className: string,
+  enrollments: Array<{ id: string; bible_school_students: { name: string } | null }>,
+  sessions: Array<{ id: string; session_date: string; topic: string | null }>,
+  attendance: Array<{ session_id: string; enrollment_id: string; status: "present" | "absent" | "excused" }>,
+  grades: Array<{ enrollment_id: string; title: string; score: number | null; max_score: number | null }>,
+) {
+  const esc = (v: string | null | undefined) =>
+    (v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const statusLabel = { present: "Presente", absent: "Falta", excused: "Justificada" };
+  const statusClass = { present: "badge-present", absent: "badge-absent", excused: "badge-excused" };
+
+  const attHeaders = sessions
+    .slice()
+    .sort((a, b) => a.session_date.localeCompare(b.session_date))
+    .map(
+      (s) =>
+        `<th title="${esc(s.topic ?? "")}">${new Date(s.session_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</th>`,
+    )
+    .join("");
+
+  const attRows = enrollments
+    .map((enr) => {
+      const cells = sessions
+        .slice()
+        .sort((a, b) => a.session_date.localeCompare(b.session_date))
+        .map((s) => {
+          const rec = attendance.find((a) => a.session_id === s.id && a.enrollment_id === enr.id);
+          if (!rec) return `<td style="color:#aaa">—</td>`;
+          return `<td><span class="badge ${statusClass[rec.status]}">${statusLabel[rec.status]}</span></td>`;
+        })
+        .join("");
+      return `<tr><td>${esc(enr.bible_school_students?.name)}</td>${cells}</tr>`;
+    })
+    .join("");
+
+  const gradeRows = grades
+    .map((g) => {
+      const enr = enrollments.find((e) => e.id === g.enrollment_id);
+      const score =
+        g.score === null && g.max_score === null
+          ? "—"
+          : g.max_score === null
+            ? String(g.score ?? "—")
+            : `${g.score ?? "—"} / ${g.max_score}`;
+      return `<tr><td>${esc(enr?.bible_school_students?.name ?? "—")}</td><td>${esc(g.title)}</td><td>${score}</td></tr>`;
+    })
+    .join("");
+
+  const html = `
+    <h1>Escola Bíblica — ${esc(className)}</h1>
+    <div class="meta">${esc(tenantName)} · Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+    <div class="section-title">Frequência (${sessions.length} aulas · ${enrollments.length} alunos)</div>
+    <table>
+      <thead><tr><th>Aluno</th>${attHeaders}</tr></thead>
+      <tbody>${attRows || "<tr><td>Sem alunos</td></tr>"}</tbody>
+    </table>
+    <div class="section-title">Notas (${grades.length} registros)</div>
+    <table>
+      <thead><tr><th>Aluno</th><th>Avaliação</th><th>Nota</th></tr></thead>
+      <tbody>${gradeRows || "<tr><td colspan='3'>Nenhuma nota lançada</td></tr>"}</tbody>
+    </table>`;
+
+  openPrintablePdf(html, `Escola Bíblica · ${className} · ${tenantName}`);
+}
+
+function exportKidsAttendancePdf(
+  tenantName: string,
+  date: string,
+  attendance: Array<{ kids_children?: { name: string } | null; kids_groups?: { name: string } | null; checked_in_at: string | null; checked_out_at: string | null; guardian_name: string | null }>,
+) {
+  const esc = (v: string | null | undefined) =>
+    (v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const rows = attendance
+    .map(
+      (a) =>
+        `<tr>
+          <td>${esc(a.kids_children?.name)}</td>
+          <td>${esc(a.kids_groups?.name)}</td>
+          <td>${a.checked_in_at ? new Date(a.checked_in_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+          <td>${a.checked_out_at ? new Date(a.checked_out_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+          <td>${esc(a.guardian_name)}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const html = `
+    <h1>Kids — Presença do dia</h1>
+    <div class="meta">${esc(tenantName)} · ${new Date(date + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })} · Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+    <div class="summary-grid" style="grid-template-columns: repeat(2,auto);">
+      <div class="summary-card"><div class="label">Crianças presentes</div><div class="value neutral">${attendance.length}</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Criança</th><th>Turma</th><th>Entrada</th><th>Saída</th><th>Responsável</th></tr></thead>
+      <tbody>${rows || "<tr><td colspan='5'>Nenhuma presença registrada</td></tr>"}</tbody>
+    </table>`;
+
+  openPrintablePdf(html, `Kids · Presença ${date} · ${tenantName}`);
 }
 
 function openPrintableTable(title: string, headers: string[], rows: string[][]) {
@@ -6456,6 +6665,74 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               </div>
 
               <div style={{ padding: 16, display: "grid", gap: 16 }}>
+                {/* ── Engajamento ── */}
+                {(() => {
+                  const now = new Date();
+                  const thisMonth = now.toISOString().slice(0, 7);
+                  const in30 = new Date(now);
+                  in30.setDate(in30.getDate() + 30);
+
+                  const membersActive = clientData.members.filter((m) => m.status === "active" || m.status_v2 === "active").length;
+                  const membersVisitor = clientData.members.filter((m) => m.status === "visitor" || m.status_v2 === "visitor").length;
+
+                  const eventsNext30 = clientData.events.filter((e) => {
+                    const d = new Date(e.event_date);
+                    return d >= now && d <= in30 && e.status === "publicado";
+                  }).length;
+
+                  const worshipEvents = clientData.worshipEvents;
+                  const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
+                  const worshipConfirmed = allAssignments.filter((a) => a.status === "confirmed").length;
+                  const worshipResponded = allAssignments.filter((a) => a.status === "confirmed" || a.status === "declined").length;
+                  const worshipRate = worshipResponded > 0 ? Math.round((worshipConfirmed / worshipResponded) * 100) : null;
+
+                  const txThisMonthCount = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth).length;
+                  const incomeThisMonth = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth && t.type === "income").reduce((s, t) => s + t.amount, 0);
+                  const expenseThisMonth = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth && t.type === "expense").reduce((s, t) => s + t.amount, 0);
+
+                  const kidsActive = clientData.kidsChildren.filter((c) => c.is_active).length;
+                  const kidsAttendanceToday = clientData.kidsAttendance.filter((a) => a.attendance_date === now.toISOString().slice(0, 10)).length;
+
+                  const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+                  return (
+                    <>
+                      <div className="panel-heading" style={{ marginBottom: 0 }}>
+                        <div><span>Resumo de engajamento</span><h4>Visão geral do mês atual e módulos ativos</h4></div>
+                      </div>
+                      <div className="client-stats" style={{ marginTop: 0 }}>
+                        <article>
+                          <span>Membros ativos</span>
+                          <strong>{membersActive}</strong>
+                          <small>{membersVisitor > 0 ? `+ ${membersVisitor} visitantes` : `de ${clientData.members.length} cadastros`}</small>
+                        </article>
+                        <article>
+                          <span>Eventos próx. 30 dias</span>
+                          <strong>{eventsNext30}</strong>
+                          <small>Publicados na agenda</small>
+                        </article>
+                        <article>
+                          <span>Louvor — confirmação</span>
+                          <strong>{worshipRate !== null ? `${worshipRate}%` : "—"}</strong>
+                          <small>{worshipEvents.length} evento{worshipEvents.length !== 1 ? "s" : ""} cadastrado{worshipEvents.length !== 1 ? "s" : ""}</small>
+                        </article>
+                        <article>
+                          <span>Financeiro — saldo mês</span>
+                          <strong style={{ color: incomeThisMonth - expenseThisMonth >= 0 ? "var(--color-success)" : "var(--color-danger)" }}>
+                            {fmt(incomeThisMonth - expenseThisMonth)}
+                          </strong>
+                          <small>{txThisMonthCount} lançamento{txThisMonthCount !== 1 ? "s" : ""} no mês</small>
+                        </article>
+                        <article>
+                          <span>Kids — crianças</span>
+                          <strong>{kidsActive}</strong>
+                          <small>{kidsAttendanceToday > 0 ? `${kidsAttendanceToday} presentes hoje` : "Sem presença hoje"}</small>
+                        </article>
+                      </div>
+                    </>
+                  );
+                })()}
+
                 <div className="client-stats" style={{ marginTop: 0 }}>
                   <article>
                     <span>Membros</span>
@@ -6710,7 +6987,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         <strong>{member.name}</strong>
                         <small>{memberSummaryById[member.id] ?? member.email ?? "Sem vínculos"}</small>
                       </div>
-                      <em className={status === "active" ? "success" : "warning"}>{status}</em>
+                      <em className={status === "active" ? "success" : status === "inactive" ? "warning" : "info"}>
+                        {status === "active" ? "Ativo" : status === "inactive" ? "Inativo" : status === "visitor" ? "Visitante" : status === "in_process" ? "Em processo" : status}
+                      </em>
                       {canManageMembers ? (
                         <div className="member-actions">
                           <button type="button" onClick={() => openEditMemberForm(member)}>
@@ -7013,10 +7292,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <article>
                   <span>Escalados</span>
                   <strong>{worshipAssignmentCount}</strong>
-                  <small>Participacoes planejadas</small>
+                  <small>Participações planejadas</small>
                 </article>
                 <article>
-                  <span>Funcoes</span>
+                  <span>Funções</span>
                   <strong>{clientData.worshipRoles.length}</strong>
                   <small>Instrumentos e responsabilidades ativas</small>
                 </article>
@@ -8120,6 +8399,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                     <div className="panel-heading" style={{ marginTop: "1.5rem" }}>
                       <strong>Por categoria — {new Date(financialFilterMonth + "-01").toLocaleString("pt-BR", { month: "long", year: "numeric" })}</strong>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        icon={<FileText size={15} />}
+                        onClick={() =>
+                          exportFinancialPdf(
+                            tenant.name,
+                            new Date(financialFilterMonth + "-01").toLocaleString("pt-BR", { month: "long", year: "numeric" }),
+                            incomeThisMonth,
+                            expenseThisMonth,
+                            netThisMonth,
+                            reportByCategory,
+                            txThisMonth,
+                          )
+                        }
+                      >
+                        Exportar PDF
+                      </Button>
                     </div>
 
                     {reportByCategory.length === 0 ? (
@@ -8399,6 +8696,26 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         <span>Notas</span>
                         <h4>Avaliações e lançamentos</h4>
                       </div>
+                      {bibleSchoolGrades.length > 0 || bibleSchoolAttendance.length > 0 ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          icon={<FileText size={15} />}
+                          onClick={() => {
+                            const cls = bibleSchoolClasses.find((c) => c.id === selectedBibleSchoolClassId);
+                            exportBibleSchoolPdf(
+                              tenant.name,
+                              cls?.name ?? "Turma",
+                              bibleSchoolEnrollments,
+                              bibleSchoolSessions,
+                              bibleSchoolAttendance,
+                              bibleSchoolGrades,
+                            );
+                          }}
+                        >
+                          Exportar PDF
+                        </Button>
+                      ) : null}
                     </div>
 
                     {bibleSchoolGrades.length === 0 ? (
@@ -9330,20 +9647,22 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         <div className="catalog-list">
                           {allGroups.map((g) => (
                             <div key={g.id} className="catalog-row">
-                              <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                                 {g.color ? <span style={{ width: 12, height: 12, borderRadius: "50%", background: g.color, flexShrink: 0, display: "inline-block" }} /> : null}
                                 <strong>{g.name}</strong>
                                 {g.age_min != null && g.age_max != null ? <small style={{ color: "var(--color-neutral-500)" }}>{g.age_min}–{g.age_max} anos</small> : null}
                               </span>
-                              <span style={{ color: "var(--color-neutral-500)", fontSize: "0.85rem" }}>
-                                {allChildren.filter((c) => c.group_id === g.id).length} criança(s)
+                              <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                <span style={{ color: "var(--color-neutral-500)", fontSize: "0.85rem" }}>
+                                  {allChildren.filter((c) => c.group_id === g.id).length} criança(s)
+                                </span>
+                                <button type="button" className="btn-icon-ghost" onClick={() => {
+                                  setKidsGroupForm({ id: g.id, name: g.name, description: g.description ?? "", age_min: g.age_min != null ? String(g.age_min) : "", age_max: g.age_max != null ? String(g.age_max) : "", color: g.color ?? "#5a8a2f", is_active: g.is_active });
+                                  setIsKidsGroupFormOpen(true);
+                                }}>
+                                  <Edit3 size={15} />
+                                </button>
                               </span>
-                              <button type="button" className="btn-icon-ghost" onClick={() => {
-                                setKidsGroupForm({ id: g.id, name: g.name, description: g.description ?? "", age_min: g.age_min != null ? String(g.age_min) : "", age_max: g.age_max != null ? String(g.age_max) : "", color: g.color ?? "#5a8a2f", is_active: g.is_active });
-                                setIsKidsGroupFormOpen(true);
-                              }}>
-                                <Edit3 size={15} />
-                              </button>
                             </div>
                           ))}
                         </div>
@@ -9502,7 +9821,23 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <QrCode size={15} /> Check-in por QR
                         </button>
                       </div>
-                      <button type="button" onClick={() => { setKidsAttendanceForm({ ...emptyKidsAttendanceForm, attendance_date: kidsAttendanceDate }); setIsKidsAttendanceFormOpen(true); }}>+ Registrar check-in</button>
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                        <button type="button" onClick={() => { setKidsAttendanceForm({ ...emptyKidsAttendanceForm, attendance_date: kidsAttendanceDate }); setIsKidsAttendanceFormOpen(true); }}>+ Registrar check-in</button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          icon={<FileText size={15} />}
+                          onClick={() =>
+                            exportKidsAttendancePdf(
+                              tenant.name,
+                              kidsAttendanceDate,
+                              allAttendance.filter((a) => a.attendance_date === kidsAttendanceDate),
+                            )
+                          }
+                        >
+                          Exportar PDF
+                        </Button>
+                      </div>
                     </div>
                     {kidsQrScannerMessage ? (
                       <p className={`login-feedback ${kidsQrScannerMessage.includes("lido") ? "success" : "error"}`}>{kidsQrScannerMessage}</p>
@@ -9671,7 +10006,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         <div
                           key={item.id}
                           style={{
-                            flexDirection: "column", alignItems: "flex-start", gap: 6,
+                            display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6,
                             opacity: isExpired ? 0.6 : 1,
                           }}
                         >
