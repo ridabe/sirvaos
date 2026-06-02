@@ -228,12 +228,15 @@ type FamilyRecord = {
 };
 
 type FamilyMemberRecord = {
+  id: string;
   tenant_id: string;
   family_id: string;
-  member_id: string;
+  member_id: string | null;
+  name: string;
+  date_of_birth: string | null;
   relationship: string;
   is_primary: boolean;
-  members: { name: string; email: string | null } | null;
+  members: { name: string; email: string | null; date_of_birth: string | null } | null;
 };
 
 type MemberHistoryRecord = {
@@ -523,7 +526,7 @@ type ClientDashboardData = {
   memberRoleIdsByMemberId: Record<string, string[]>;
   memberMinistriesByMemberId: Record<string, Array<{ ministry_id: string; name: string; is_admin: boolean }>>;
   families: FamilyRecord[];
-  familyMembersByFamilyId: Record<string, Array<{ member_id: string; name: string; relationship: string; is_primary: boolean }>>;
+  familyMembersByFamilyId: Record<string, Array<{ id: string; member_id: string | null; name: string; date_of_birth: string | null; relationship: string; is_primary: boolean }>>;
   events: EventRecord[];
   announcements: AnnouncementRecord[];
   worshipRoles: WorshipRoleRecord[];
@@ -962,8 +965,9 @@ const sampleClientDashboardData: ClientDashboardData = {
   ],
   familyMembersByFamilyId: {
     "family-1": [
-      { member_id: "member-1", name: "Mariana Souza", relationship: "self", is_primary: true },
-      { member_id: "member-2", name: "Paulo Alves", relationship: "spouse", is_primary: false },
+      { id: "fm-1", member_id: "member-1", name: "Mariana Souza", date_of_birth: null, relationship: "self", is_primary: true },
+      { id: "fm-2", member_id: "member-2", name: "Paulo Alves", date_of_birth: null, relationship: "spouse", is_primary: false },
+      { id: "fm-3", member_id: null, name: "Isabela Souza", date_of_birth: "2023-03-10", relationship: "child", is_primary: false },
     ],
   },
   events: [
@@ -1793,6 +1797,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [familyMemberPickerId, setFamilyMemberPickerId] = useState("");
   const [familyMemberRelationship, setFamilyMemberRelationship] = useState("other");
   const [familyMemberPrimary, setFamilyMemberPrimary] = useState(false);
+  const [memberDependentPickerId, setMemberDependentPickerId] = useState("");
+  const [memberDependentRelationship, setMemberDependentRelationship] = useState("child");
+  const [memberDependentName, setMemberDependentName] = useState("");
+  const [memberDependentDob, setMemberDependentDob] = useState("");
   const [eventForm, setEventForm] = useState<EventFormState>(emptyEventForm);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [eventSaveStatus, setEventSaveStatus] = useState<LoginStatus>("idle");
@@ -1900,6 +1908,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [kidsFilterGroupId, setKidsFilterGroupId] = useState("");
   const [kidsAttendanceDate, setKidsAttendanceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [kidsSelectedChildId, setKidsSelectedChildId] = useState<string | null>(null);
+  const [kidsChildSearch, setKidsChildSearch] = useState("");
   const [kidsQrToken, setKidsQrToken] = useState("");
   const [isKidsQrScannerOpen, setIsKidsQrScannerOpen] = useState(false);
   const [kidsQrScannerMessage, setKidsQrScannerMessage] = useState("");
@@ -2009,6 +2018,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
   const visibleClientTabs = useMemo(() => {
     return clientTabs.filter((tab) => {
+      if (tab.key === "families") return false;
       if (defaultClientTabs.has(tab.key)) {
         return isTenantAdmin;
       }
@@ -2024,7 +2034,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const moduleCode = clientTabModuleCode[tab.key];
       const isActiveModule = Boolean(moduleCode && activeModuleIdByCode[moduleCode]);
 
-      if ((tab.key === "members" || tab.key === "families") && canManageMembers && isActiveModule) {
+      if (tab.key === "members" && canManageMembers && isActiveModule) {
         return true;
       }
 
@@ -2534,7 +2544,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .returns<FamilyRecord[]>(),
         supabase
           .from("family_members")
-          .select("tenant_id, family_id, member_id, relationship, is_primary, members (name, email)")
+          .select("id, tenant_id, family_id, member_id, name, date_of_birth, relationship, is_primary, members (name, email, date_of_birth)")
           .eq("tenant_id", tenantId)
           .returns<FamilyMemberRecord[]>(),
         supabase
@@ -2736,14 +2746,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }, {});
 
     const familyMembersByFamilyId = (familyMembersResult.data ?? []).reduce<
-      Record<string, Array<{ member_id: string; name: string; relationship: string; is_primary: boolean }>>
+      Record<string, Array<{ id: string; member_id: string | null; name: string; date_of_birth: string | null; relationship: string; is_primary: boolean }>>
     >((acc, row) => {
       if (!acc[row.family_id]) {
         acc[row.family_id] = [];
       }
       acc[row.family_id].push({
+        id: row.id,
         member_id: row.member_id,
-        name: row.members?.name ?? "Membro",
+        name: row.name || row.members?.name || "Dependente",
+        date_of_birth: row.date_of_birth ?? row.members?.date_of_birth ?? null,
         relationship: row.relationship,
         is_primary: row.is_primary,
       });
@@ -3748,6 +3760,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setMemberHistoryDraftType("");
     setMemberHistoryDraftNotes("");
     setMinistryPickerId("");
+    setMemberDependentPickerId("");
+    setMemberDependentRelationship("child");
+    setMemberDependentName("");
+    setMemberDependentDob("");
     setIsMemberFormOpen(true);
   }
 
@@ -3792,6 +3808,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setMemberHistoryDraftType("");
     setMemberHistoryDraftNotes("");
     setMinistryPickerId("");
+    setMemberDependentPickerId("");
+    setMemberDependentRelationship("child");
+    setMemberDependentName("");
+    setMemberDependentDob("");
     setIsMemberFormOpen(true);
     void loadMemberHistory(member.id);
   }
@@ -4304,6 +4324,88 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     if (!error) {
       await loadClientData(profile.id);
     }
+  }
+
+  async function handleAddMemberDependent() {
+    if (!clientData || !profile || !memberForm.id) return;
+    const tenantId = clientData.tenant.id;
+    const memberId = memberForm.id;
+
+    // Resolve name and dob: linked member takes precedence, otherwise manual fields
+    const linkedMember = memberDependentPickerId ? clientData.members.find((m) => m.id === memberDependentPickerId) : null;
+    const resolvedName = linkedMember?.name ?? memberDependentName.trim();
+    if (!resolvedName) return;
+    const resolvedDob = (linkedMember?.date_of_birth ?? memberDependentDob) || null;
+
+    const existingFamily = clientData.families.find((f) =>
+      clientData.familyMembersByFamilyId[f.id]?.some((fm) => fm.member_id === memberId),
+    );
+
+    if (demoMode) {
+      const familyId = existingFamily?.id ?? `family-${Date.now()}`;
+      const primaryMember = clientData.members.find((m) => m.id === memberId);
+      setClientData((c) => {
+        if (!c) return c;
+        const existingFamilies = existingFamily ? c.families : [...c.families, { id: familyId, tenant_id: tenantId, name: `Família de ${primaryMember?.name ?? "Membro"}`, notes: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+        const currentMembers = c.familyMembersByFamilyId[familyId] ?? [];
+        const withPrimary = existingFamily ? currentMembers : [{ id: `fm-p-${Date.now()}`, member_id: memberId, name: primaryMember?.name ?? "", date_of_birth: null, relationship: "self", is_primary: true }, ...currentMembers];
+        const next = [...withPrimary, { id: `fm-${Date.now()}`, member_id: memberDependentPickerId || null, name: resolvedName, date_of_birth: resolvedDob, relationship: memberDependentRelationship, is_primary: false }];
+        return { ...c, families: existingFamilies, familyMembersByFamilyId: { ...c.familyMembersByFamilyId, [familyId]: next } };
+      });
+      setMemberDependentPickerId(""); setMemberDependentName(""); setMemberDependentDob("");
+      return;
+    }
+
+    let familyId: string;
+
+    if (existingFamily) {
+      familyId = existingFamily.id;
+    } else {
+      const primaryMember = clientData.members.find((m) => m.id === memberId);
+      const familyResult = await supabase
+        .from("families")
+        .insert({ tenant_id: tenantId, name: `Família de ${primaryMember?.name ?? "Membro"}` })
+        .select("id")
+        .single<{ id: string }>();
+      if (familyResult.error || !familyResult.data) return;
+      familyId = familyResult.data.id;
+      await supabase.from("family_members").insert({ tenant_id: tenantId, family_id: familyId, member_id: memberId, name: primaryMember?.name ?? "Titular", date_of_birth: primaryMember?.date_of_birth ?? null, relationship: "self", is_primary: true });
+    }
+
+    await supabase.from("family_members").insert({
+      tenant_id: tenantId,
+      family_id: familyId,
+      member_id: memberDependentPickerId || null,
+      name: resolvedName,
+      date_of_birth: resolvedDob,
+      relationship: memberDependentRelationship,
+      is_primary: false,
+    });
+
+    setMemberDependentPickerId(""); setMemberDependentName(""); setMemberDependentDob("");
+    await loadClientData(profile.id);
+  }
+
+  async function handleRemoveMemberDependent(depId: string) {
+    if (!clientData || !profile || !memberForm.id) return;
+    const memberId = memberForm.id;
+
+    const existingFamily = clientData.families.find((f) =>
+      clientData.familyMembersByFamilyId[f.id]?.some((fm) => fm.member_id === memberId),
+    );
+    if (!existingFamily) return;
+
+    if (demoMode) {
+      setClientData((c) => {
+        if (!c) return c;
+        const next = (c.familyMembersByFamilyId[existingFamily.id] ?? []).filter((fm) => fm.id !== depId);
+        return { ...c, familyMembersByFamilyId: { ...c.familyMembersByFamilyId, [existingFamily.id]: next } };
+      });
+      return;
+    }
+
+    await supabase.from("family_members").delete().eq("id", depId);
+    await loadClientData(profile.id);
   }
 
   const EVENT_BANNERS_BUCKET = "event-banners";
@@ -5723,6 +5825,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setKidsSaveStatus("success");
       setKidsSaveMessage(isEditing ? "Criança atualizada." : "Criança cadastrada.");
       setKidsChildForm(emptyKidsChildForm);
+      setKidsChildSearch("");
       setIsKidsChildFormOpen(false);
       return;
     }
@@ -5750,6 +5853,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setKidsSaveStatus("success");
     setKidsSaveMessage(isEditing ? "Criança atualizada." : "Criança cadastrada.");
     setKidsChildForm(emptyKidsChildForm);
+    setKidsChildSearch("");
     setIsKidsChildFormOpen(false);
     await loadClientData(profile.id);
   }
@@ -6659,285 +6763,307 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="panel-heading">
                 <div>
                   <span>Relatórios</span>
-                  <h4>Exportação e auditoria</h4>
+                  <h4>Dashboard analítico</h4>
                 </div>
                 <Receipt size={20} />
               </div>
 
-              <div style={{ padding: 16, display: "grid", gap: 16 }}>
-                {/* ── Engajamento ── */}
-                {(() => {
-                  const now = new Date();
-                  const thisMonth = now.toISOString().slice(0, 7);
-                  const in30 = new Date(now);
-                  in30.setDate(in30.getDate() + 30);
+              {(() => {
+                const now = new Date();
+                const thisMonth = now.toISOString().slice(0, 7);
 
-                  const membersActive = clientData.members.filter((m) => m.status === "active" || m.status_v2 === "active").length;
-                  const membersVisitor = clientData.members.filter((m) => m.status === "visitor" || m.status_v2 === "visitor").length;
+                // ── Status membros ──────────────────────────────────────────
+                const statusCounts = { active: 0, visitor: 0, inactive: 0, in_process: 0 };
+                for (const m of clientData.members) {
+                  const s = (m.status_v2 ?? m.status) as keyof typeof statusCounts;
+                  if (s in statusCounts) statusCounts[s]++;
+                }
+                const totalMembers = clientData.members.length;
 
-                  const eventsNext30 = clientData.events.filter((e) => {
-                    const d = new Date(e.event_date);
-                    return d >= now && d <= in30 && e.status === "publicado";
-                  }).length;
+                // ── Age calc ────────────────────────────────────────────────
+                const calcAgeR = (dob: string | null) => {
+                  if (!dob) return null;
+                  const birth = new Date(dob + "T12:00:00");
+                  let age = now.getFullYear() - birth.getFullYear();
+                  if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+                  return age;
+                };
 
-                  const worshipEvents = clientData.worshipEvents;
-                  const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
-                  const worshipConfirmed = allAssignments.filter((a) => a.status === "confirmed").length;
-                  const worshipResponded = allAssignments.filter((a) => a.status === "confirmed" || a.status === "declined").length;
-                  const worshipRate = worshipResponded > 0 ? Math.round((worshipConfirmed / worshipResponded) * 100) : null;
+                // ── Age distribution ────────────────────────────────────────
+                const ageBuckets = { kids: 0, youth: 0, adult: 0, senior: 0, unknown: 0 };
+                for (const m of clientData.members) {
+                  const age = calcAgeR(m.date_of_birth ?? null);
+                  if (age === null) ageBuckets.unknown++;
+                  else if (age < 13) ageBuckets.kids++;
+                  else if (age < 26) ageBuckets.youth++;
+                  else if (age < 61) ageBuckets.adult++;
+                  else ageBuckets.senior++;
+                }
+                for (const deps of Object.values(clientData.familyMembersByFamilyId)) {
+                  for (const dep of deps) {
+                    if (dep.member_id) continue;
+                    const age = calcAgeR(dep.date_of_birth);
+                    if (age === null) continue;
+                    if (age < 13) ageBuckets.kids++;
+                    else if (age < 26) ageBuckets.youth++;
+                    else if (age < 61) ageBuckets.adult++;
+                    else ageBuckets.senior++;
+                  }
+                }
 
-                  const txThisMonthCount = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth).length;
-                  const incomeThisMonth = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth && t.type === "income").reduce((s, t) => s + t.amount, 0);
-                  const expenseThisMonth = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth && t.type === "expense").reduce((s, t) => s + t.amount, 0);
+                // ── Financial last 6 months ─────────────────────────────────
+                const last6Months = Array.from({ length: 6 }, (_, i) => {
+                  const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+                  return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") };
+                });
+                const financialByMonth = last6Months.map(({ key, label }) => ({
+                  label,
+                  income: clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === key && t.type === "income").reduce((s, t) => s + t.amount, 0),
+                  expense: clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === key && t.type === "expense").reduce((s, t) => s + t.amount, 0),
+                }));
+                const maxFinancial = Math.max(...financialByMonth.flatMap((m) => [m.income, m.expense]), 1);
 
-                  const kidsActive = clientData.kidsChildren.filter((c) => c.is_active).length;
-                  const kidsAttendanceToday = clientData.kidsAttendance.filter((a) => a.attendance_date === now.toISOString().slice(0, 10)).length;
+                // ── Ministries ──────────────────────────────────────────────
+                const ministryCounts: Record<string, number> = {};
+                for (const mins of Object.values(clientData.memberMinistriesByMemberId)) {
+                  for (const min of mins) { ministryCounts[min.name] = (ministryCounts[min.name] ?? 0) + 1; }
+                }
+                const topMinistries = Object.entries(ministryCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                const maxMinistry = Math.max(...topMinistries.map((m) => m[1]), 1);
 
-                  const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                // ── KPIs ────────────────────────────────────────────────────
+                const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
+                const worshipConfirmed = allAssignments.filter((a) => a.status === "confirmed").length;
+                const worshipResponded = allAssignments.filter((a) => a.status === "confirmed" || a.status === "declined").length;
+                const worshipRate = worshipResponded > 0 ? Math.round((worshipConfirmed / worshipResponded) * 100) : 0;
+                const in30 = new Date(now); in30.setDate(in30.getDate() + 30);
+                const eventsNext30 = clientData.events.filter((e) => { const d = new Date(e.event_date); return d >= now && d <= in30 && e.status === "publicado"; }).length;
+                const incomeThisMonth = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth && t.type === "income").reduce((s, t) => s + t.amount, 0);
+                const expenseThisMonth = clientData.financialTransactions.filter((t) => t.date.slice(0, 7) === thisMonth && t.type === "expense").reduce((s, t) => s + t.amount, 0);
+                const balance = incomeThisMonth - expenseThisMonth;
+                const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                const kidsActive = clientData.kidsChildren.filter((c) => c.is_active).length;
 
-                  return (
-                    <>
-                      <div className="panel-heading" style={{ marginBottom: 0 }}>
-                        <div><span>Resumo de engajamento</span><h4>Visão geral do mês atual e módulos ativos</h4></div>
-                      </div>
-                      <div className="client-stats" style={{ marginTop: 0 }}>
-                        <article>
-                          <span>Membros ativos</span>
-                          <strong>{membersActive}</strong>
-                          <small>{membersVisitor > 0 ? `+ ${membersVisitor} visitantes` : `de ${clientData.members.length} cadastros`}</small>
-                        </article>
-                        <article>
-                          <span>Eventos próx. 30 dias</span>
-                          <strong>{eventsNext30}</strong>
-                          <small>Publicados na agenda</small>
-                        </article>
-                        <article>
-                          <span>Louvor — confirmação</span>
-                          <strong>{worshipRate !== null ? `${worshipRate}%` : "—"}</strong>
-                          <small>{worshipEvents.length} evento{worshipEvents.length !== 1 ? "s" : ""} cadastrado{worshipEvents.length !== 1 ? "s" : ""}</small>
-                        </article>
-                        <article>
-                          <span>Financeiro — saldo mês</span>
-                          <strong style={{ color: incomeThisMonth - expenseThisMonth >= 0 ? "var(--color-success)" : "var(--color-danger)" }}>
-                            {fmt(incomeThisMonth - expenseThisMonth)}
-                          </strong>
-                          <small>{txThisMonthCount} lançamento{txThisMonthCount !== 1 ? "s" : ""} no mês</small>
-                        </article>
-                        <article>
-                          <span>Kids — crianças</span>
-                          <strong>{kidsActive}</strong>
-                          <small>{kidsAttendanceToday > 0 ? `${kidsAttendanceToday} presentes hoje` : "Sem presença hoje"}</small>
-                        </article>
-                      </div>
-                    </>
-                  );
-                })()}
+                // ── Donut segments ──────────────────────────────────────────
+                const donutSegs = [
+                  { label: "Ativos", count: statusCounts.active, color: "#22c55e" },
+                  { label: "Visitantes", count: statusCounts.visitor, color: "#3b82f6" },
+                  { label: "Inativos", count: statusCounts.inactive, color: "#f59e0b" },
+                  { label: "Em processo", count: statusCounts.in_process, color: "#a855f7" },
+                ].filter((s) => s.count > 0);
+                const R = 54, CX = 76, CY = 76, circ = 2 * Math.PI * R;
+                let off = 0;
+                const donutPaths = donutSegs.map((seg) => {
+                  const dash = totalMembers > 0 ? (seg.count / totalMembers) * circ : 0;
+                  const p = { ...seg, dash, gap: circ - dash, offset: off };
+                  off += dash; return p;
+                });
 
-                <div className="client-stats" style={{ marginTop: 0 }}>
-                  <article>
-                    <span>Membros</span>
-                    <strong>{clientData.members.length}</strong>
-                    <small>Cadastros no tenant</small>
-                  </article>
-                  <article>
-                    <span>Famílias</span>
-                    <strong>{clientData.families.length}</strong>
-                    <small>Estrutura familiar</small>
-                  </article>
-                  <article>
-                    <span>Eventos</span>
-                    <strong>{clientData.events.length}</strong>
-                    <small>Itens do calendário</small>
-                  </article>
-                  <article>
-                    <span>Financeiro</span>
-                    <strong>{clientData.financialTransactions.length}</strong>
-                    <small>Lançamentos carregados</small>
-                  </article>
-                </div>
+                // ── Age rows ────────────────────────────────────────────────
+                const ageRows = [
+                  { label: "Kids (< 13)", count: ageBuckets.kids, color: "#f59e0b" },
+                  { label: "Jovens (13–25)", count: ageBuckets.youth, color: "#22c55e" },
+                  { label: "Adultos (26–60)", count: ageBuckets.adult, color: "#3b82f6" },
+                  { label: "Sênior (60+)", count: ageBuckets.senior, color: "#a855f7" },
+                  { label: "Sem data", count: ageBuckets.unknown, color: "#94a3b8" },
+                ].filter((r) => r.count > 0);
+                const maxAge = Math.max(...ageRows.map((r) => r.count), 1);
 
-                <section className="panel" style={{ padding: 16 }}>
-                  <div className="panel-heading">
-                    <div>
-                      <span>Exportação</span>
-                      <h4>CSV</h4>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() =>
-                        downloadCsv(
-                          `membros-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
-                          clientData.members.map((m) => ({
-                            id: m.id,
-                            name: m.name,
-                            email: m.email,
-                            phone: m.phone,
-                            status: m.status,
-                            status_v2: m.status_v2,
-                            created_at: m.created_at,
-                          })),
-                        )
-                      }
-                    >
-                      Exportar membros
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() =>
-                        downloadCsv(
-                          `familias-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
-                          clientData.families.map((f) => ({
-                            id: f.id,
-                            name: f.name,
-                            notes: f.notes,
-                            created_at: f.created_at,
-                            updated_at: f.updated_at,
-                          })),
-                        )
-                      }
-                    >
-                      Exportar famílias
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() =>
-                        downloadCsv(
-                          `eventos-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
-                          clientData.events.map((e) => ({
-                            id: e.id,
-                            title: e.title,
-                            location: e.location,
-                            event_date: e.event_date,
-                            created_at: e.created_at,
-                          })),
-                        )
-                      }
-                    >
-                      Exportar eventos
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() =>
-                        downloadCsv(
-                          `financeiro-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
-                          clientData.financialTransactions.map((t) => ({
-                            id: t.id,
-                            type: t.type,
-                            amount: t.amount,
-                            description: t.description,
-                            date: t.date,
-                            payment_method: t.payment_method,
-                            category: t.financial_categories?.name ?? null,
-                            member: t.members?.name ?? null,
-                            notes: t.notes,
-                            created_at: t.created_at,
-                          })),
-                        )
-                      }
-                    >
-                      Exportar financeiro
-                    </Button>
-                  </div>
-                </section>
-
-                <section className="panel" style={{ padding: 16 }}>
-                  <div className="panel-heading">
-                    <div>
-                      <span>Auditoria</span>
-                      <h4>Atividades recentes</h4>
-                    </div>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          if (clientData?.tenant.id) {
-                            void loadTenantAuditLogs(clientData.tenant.id);
-                          }
-                        }}
-                        disabled={tenantAuditStatus === "loading"}
-                      >
-                        {tenantAuditStatus === "loading" ? "Carregando..." : "Recarregar"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() =>
-                          downloadCsv(
-                            `auditoria-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
-                            tenantAuditLogs.map((log) => ({
-                              id: log.id,
-                              action: log.action,
-                              entity_type: log.entity_type,
-                              entity_id: log.entity_id,
-                              created_at: log.created_at,
-                            })),
-                          )
-                        }
-                        disabled={tenantAuditLogs.length === 0}
-                      >
-                        Exportar auditoria
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() =>
-                          openPrintableTable(
-                            `Auditoria · ${tenant.name}`,
-                            ["Data", "Ação", "Entidade", "ID"],
-                            tenantAuditLogs.slice(0, 80).map((log) => [
-                              new Date(log.created_at).toLocaleString("pt-BR"),
-                              log.action,
-                              log.entity_type,
-                              log.entity_id ?? "",
-                            ]),
-                          )
-                        }
-                        disabled={tenantAuditLogs.length === 0}
-                      >
-                        Imprimir
-                      </Button>
-                    </div>
-                  </div>
-
-                  {tenantAuditMessage ? (
-                    <p className={`login-feedback ${tenantAuditStatus === "error" ? "error" : "success"}`}>{tenantAuditMessage}</p>
-                  ) : null}
-
-                  {tenantAuditLogs.length === 0 ? (
-                    <div className="catalog-empty" style={{ marginTop: 12 }}>
-                      Nenhum evento registrado ainda.
-                    </div>
-                  ) : (
-                    <div className="catalog-list" style={{ marginTop: 12 }}>
-                      {tenantAuditLogs.slice(0, 25).map((log) => (
-                        <div key={log.id} className="catalog-row">
-                          <div style={{ display: "grid", gap: 4 }}>
-                            <strong style={{ fontSize: "0.95rem" }}>{log.action}</strong>
-                            <small style={{ color: "var(--color-neutral-500)" }}>
-                              {log.entity_type}
-                              {log.entity_id ? ` · ${log.entity_id}` : ""}
-                            </small>
-                          </div>
-                          <span style={{ color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>
-                            {new Date(log.created_at).toLocaleString("pt-BR")}
-                          </span>
+                return (
+                  <div className="reports-dashboard">
+                    {/* ── KPI strip ── */}
+                    <div className="reports-kpis">
+                      {[
+                        { label: "Membros ativos", value: String(statusCounts.active), sub: `de ${totalMembers} cadastros`, color: "#22c55e" },
+                        { label: "Próx. 30 dias", value: String(eventsNext30), sub: "eventos publicados", color: "#3b82f6" },
+                        { label: "Louvor", value: `${worshipRate}%`, sub: "taxa de confirmação", color: "#a855f7" },
+                        { label: "Saldo do mês", value: fmt(balance), sub: balance >= 0 ? "superávit" : "déficit", color: balance >= 0 ? "#22c55e" : "#ef4444" },
+                        { label: "Kids", value: String(kidsActive), sub: "crianças ativas", color: "#f59e0b" },
+                      ].map(({ label, value, sub, color }) => (
+                        <div key={label} className="reports-kpi">
+                          <span>{label}</span>
+                          <strong style={{ color }}>{value}</strong>
+                          <small>{sub}</small>
                         </div>
                       ))}
                     </div>
-                  )}
-                </section>
-              </div>
+
+                    {/* ── Charts row 1 ── */}
+                    <div className="reports-charts-row">
+                      {/* Donut — status */}
+                      <div className="reports-chart-card">
+                        <div className="reports-chart-title">
+                          <strong>Distribuição de membros</strong>
+                          <small>por status atual</small>
+                        </div>
+                        <div className="reports-donut-wrap">
+                          <svg viewBox="0 0 152 152" width="152" height="152">
+                            {totalMembers === 0
+                              ? <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e2e8f0" strokeWidth={18} />
+                              : donutPaths.map((seg) => (
+                                <circle key={seg.label} cx={CX} cy={CY} r={R} fill="none" stroke={seg.color} strokeWidth={18}
+                                  strokeDasharray={`${seg.dash} ${seg.gap}`}
+                                  strokeDashoffset={circ / 4 - seg.offset}
+                                />
+                              ))}
+                            <text x={CX} y={CY - 7} textAnchor="middle" fontSize="24" fontWeight="700" fill="#1e293b">{totalMembers}</text>
+                            <text x={CX} y={CY + 11} textAnchor="middle" fontSize="10" fill="#64748b">membros</text>
+                          </svg>
+                          <div className="reports-donut-legend">
+                            {donutSegs.map((seg) => (
+                              <div key={seg.label} className="reports-legend-item">
+                                <span style={{ background: seg.color }} />
+                                <div><strong>{seg.count}</strong><small>{seg.label}</small></div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bar chart — financial */}
+                      <div className="reports-chart-card reports-chart-card--wide">
+                        <div className="reports-chart-title">
+                          <strong>Financeiro — últimos 6 meses</strong>
+                          <div className="reports-legend-inline">
+                            <span><em style={{ background: "#22c55e" }} />Receita</span>
+                            <span><em style={{ background: "#ef4444" }} />Despesa</span>
+                          </div>
+                        </div>
+                        <div className="reports-bar-wrap">
+                          <svg viewBox="0 0 480 150" width="100%" height="150" preserveAspectRatio="xMidYMid meet">
+                            {financialByMonth.map((m, i) => {
+                              const bW = 26, maxH = 110, x = 30 + i * 74;
+                              const incH = (m.income / maxFinancial) * maxH;
+                              const expH = (m.expense / maxFinancial) * maxH;
+                              return (
+                                <g key={m.label}>
+                                  <rect x={x} y={120 - incH} width={bW} height={Math.max(incH, 2)} fill="#22c55e" rx={3} opacity={0.85} />
+                                  <rect x={x + bW + 4} y={120 - expH} width={bW} height={Math.max(expH, 2)} fill="#ef4444" rx={3} opacity={0.85} />
+                                  <text x={x + bW} y={136} textAnchor="middle" fontSize="11" fill="#64748b">{m.label}</text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Charts row 2 ── */}
+                    <div className="reports-charts-row">
+                      {/* Horizontal bar — age */}
+                      <div className="reports-chart-card">
+                        <div className="reports-chart-title">
+                          <strong>Faixa etária</strong>
+                          <small>membros e dependentes</small>
+                        </div>
+                        <div className="reports-hbar-list">
+                          {ageRows.length > 0 ? ageRows.map((row) => (
+                            <div key={row.label} className="reports-hbar-row">
+                              <span>{row.label}</span>
+                              <div className="reports-hbar-track">
+                                <div className="reports-hbar-fill" style={{ width: `${(row.count / maxAge) * 100}%`, background: row.color }} />
+                              </div>
+                              <strong>{row.count}</strong>
+                            </div>
+                          )) : <div className="catalog-empty">Cadastre datas de nascimento para visualizar.</div>}
+                        </div>
+                      </div>
+
+                      {/* Horizontal bar — ministries */}
+                      <div className="reports-chart-card">
+                        <div className="reports-chart-title">
+                          <strong>Ministérios</strong>
+                          <small>membros por ministério</small>
+                        </div>
+                        <div className="reports-hbar-list">
+                          {topMinistries.length > 0 ? topMinistries.map(([name, count], idx) => {
+                            const colors = ["#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#ef4444"];
+                            return (
+                              <div key={name} className="reports-hbar-row">
+                                <span>{name}</span>
+                                <div className="reports-hbar-track">
+                                  <div className="reports-hbar-fill" style={{ width: `${(count / maxMinistry) * 100}%`, background: colors[idx % colors.length] }} />
+                                </div>
+                                <strong>{count}</strong>
+                              </div>
+                            );
+                          }) : <div className="catalog-empty">Nenhum ministério com membros.</div>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Export ── */}
+                    <div className="reports-export-card">
+                      <div className="reports-chart-title">
+                        <strong>Exportação CSV</strong>
+                        <small>Dados completos para análise externa</small>
+                      </div>
+                      <div className="reports-export-btns">
+                        <Button type="button" variant="secondary" onClick={() => {
+                          const rows: Record<string, unknown>[] = [];
+                          for (const m of clientData.members) {
+                            const family = clientData.families.find((f) => clientData.familyMembersByFamilyId[f.id]?.some((fm) => fm.member_id === m.id));
+                            const deps = family ? (clientData.familyMembersByFamilyId[family.id] ?? []).filter((fm) => fm.member_id !== m.id) : [];
+                            rows.push({ tipo: "membro", membro_responsavel: "", nome: m.name, email: m.email ?? "", telefone: m.phone ?? "", status: m.status_v2 ?? m.status, data_nascimento: m.date_of_birth ?? "", cpf_rg: m.document_number ?? "", cidade: m.address_city ?? "", estado: m.address_state ?? "", familia: family?.name ?? "", dependentes: deps.map((d) => d.name).join("; "), criado_em: m.created_at });
+                            for (const dep of deps) {
+                              rows.push({ tipo: "dependente", membro_responsavel: m.name, nome: dep.name, email: "", telefone: "", status: "", data_nascimento: dep.date_of_birth ?? "", cpf_rg: "", cidade: "", estado: "", familia: family?.name ?? "", dependentes: "", criado_em: "" });
+                            }
+                          }
+                          downloadCsv(`membros-dependentes-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+                        }}>
+                          Membros e dependentes
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => downloadCsv(`eventos-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`, clientData.events.map((e) => ({ id: e.id, title: e.title, location: e.location, event_date: e.event_date, created_at: e.created_at })))}>
+                          Eventos
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => downloadCsv(`financeiro-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`, clientData.financialTransactions.map((t) => ({ id: t.id, type: t.type, amount: t.amount, description: t.description, date: t.date, payment_method: t.payment_method, category: t.financial_categories?.name ?? null, member: t.members?.name ?? null, notes: t.notes, created_at: t.created_at })))}>
+                          Financeiro
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => downloadCsv(`kids-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`, clientData.kidsChildren.map((c) => ({ id: c.id, name: c.name, date_of_birth: c.date_of_birth, group: c.kids_groups?.name ?? "", allergies: c.allergies ?? "", special_needs: c.special_needs ?? "", notes: c.notes ?? "", created_at: c.created_at })))}>
+                          Kids
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* ── Audit ── */}
+                    <div className="reports-export-card">
+                      <div className="reports-chart-title">
+                        <strong>Auditoria</strong>
+                        <small>Atividades recentes do sistema</small>
+                      </div>
+                      <div className="reports-export-btns" style={{ marginBottom: 12 }}>
+                        <Button type="button" variant="secondary" onClick={() => { if (clientData?.tenant.id) void loadTenantAuditLogs(clientData.tenant.id); }} disabled={tenantAuditStatus === "loading"}>
+                          {tenantAuditStatus === "loading" ? "Carregando..." : "Recarregar"}
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => downloadCsv(`auditoria-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`, tenantAuditLogs.map((log) => ({ id: log.id, action: log.action, entity_type: log.entity_type, entity_id: log.entity_id, created_at: log.created_at })))} disabled={tenantAuditLogs.length === 0}>
+                          Exportar auditoria
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => openPrintableTable(`Auditoria · ${tenant.name}`, ["Data", "Ação", "Entidade", "ID"], tenantAuditLogs.slice(0, 80).map((log) => [new Date(log.created_at).toLocaleString("pt-BR"), log.action, log.entity_type, log.entity_id ?? ""]))}
+                        disabled={tenantAuditLogs.length === 0}
+                        >
+                          Imprimir
+                        </Button>
+                      </div>
+                      {tenantAuditMessage ? <p className={`login-feedback ${tenantAuditStatus === "error" ? "error" : "success"}`}>{tenantAuditMessage}</p> : null}
+                      {tenantAuditLogs.length === 0 ? (
+                        <div className="catalog-empty">Nenhum evento registrado ainda.</div>
+                      ) : (
+                        <div className="catalog-list" style={{ marginTop: 8 }}>
+                          {tenantAuditLogs.slice(0, 25).map((log) => (
+                            <div key={log.id} className="catalog-row">
+                              <div style={{ display: "grid", gap: 4 }}>
+                                <strong style={{ fontSize: "0.95rem" }}>{log.action}</strong>
+                                <small style={{ color: "var(--color-neutral-500)" }}>{log.entity_type}{log.entity_id ? ` · ${log.entity_id}` : ""}</small>
+                              </div>
+                              <span style={{ color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </article>
           ) : null}
 
@@ -6980,12 +7106,25 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                 {filteredMembers.map((member) => {
                   const status = (member.status_v2 ?? member.status) as MemberFormState["status"];
+                  const memberFamily = clientData.families.find((f) =>
+                    clientData.familyMembersByFamilyId[f.id]?.some((fm) => fm.member_id === member.id),
+                  );
+                  const memberDependents = memberFamily
+                    ? (clientData.familyMembersByFamilyId[memberFamily.id] ?? []).filter((fm) => fm.member_id !== member.id)
+                    : [];
                   return (
                     <div key={member.id} className="member-row">
                       <span>{member.name.slice(0, 1)}</span>
                       <div>
                         <strong>{member.name}</strong>
                         <small>{memberSummaryById[member.id] ?? member.email ?? "Sem vínculos"}</small>
+                        {memberDependents.length > 0 ? (
+                          <div className="member-deps-chips">
+                            {memberDependents.map((dep) => (
+                              <span key={dep.member_id} className="member-dep-chip">{dep.name}</span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <em className={status === "active" ? "success" : status === "inactive" ? "warning" : "info"}>
                         {status === "active" ? "Ativo" : status === "inactive" ? "Inativo" : status === "visitor" ? "Visitante" : status === "in_process" ? "Em processo" : status}
@@ -7025,17 +7164,30 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 {clientData.families.map((family) => {
                   const familyMembers = clientData.familyMembersByFamilyId[family.id] ?? [];
                   const primary = familyMembers.find((item) => item.is_primary);
+                  const familyMemberIds = new Set(familyMembers.map((fm) => fm.member_id));
+                  const linkedKids = clientData.kidsChildren.filter((ch) => ch.member_id && familyMemberIds.has(ch.member_id));
                   const subtitleParts = [
                     primary ? `Principal: ${primary.name}` : null,
                     familyMembers.length ? `${familyMembers.length} pessoas` : "Sem dependentes",
+                    linkedKids.length ? `${linkedKids.length} criança${linkedKids.length > 1 ? "s" : ""} no Kids` : null,
                   ].filter(Boolean);
 
                   return (
-                    <div key={family.id} className="member-row">
+                    <div key={family.id} className="member-row family-row-expandable">
                       <span>{family.name.slice(0, 1)}</span>
                       <div>
                         <strong>{family.name}</strong>
                         <small>{subtitleParts.join(" · ")}</small>
+                        {linkedKids.length > 0 ? (
+                          <div className="family-kids-chips">
+                            {linkedKids.map((ch) => (
+                              <span key={ch.id} className="family-kid-chip">
+                                <Baby size={11} />
+                                {ch.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <em className={familyMembers.length > 0 ? "success" : "warning"}>
                         {familyMembers.length > 0 ? "com vínculos" : "pendente"}
@@ -9245,6 +9397,112 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </div>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsChildSubmit}>
+                        {(() => {
+                          const calcAgeLocal = (dob: string | null) => {
+                            if (!dob) return null;
+                            const birth = new Date(dob + "T12:00:00");
+                            const now = new Date();
+                            let age = now.getFullYear() - birth.getFullYear();
+                            if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+                            return age;
+                          };
+                          const alreadyKidsIds = new Set(clientData.kidsChildren.map((ch) => ch.member_id).filter(Boolean));
+                          // Members under 13
+                          const memberCandidates = clientData.members
+                            .filter((m) => {
+                              if (!m.date_of_birth) return false;
+                              const age = calcAgeLocal(m.date_of_birth);
+                              return age !== null && age < 13;
+                            })
+                            .map((m) => ({ id: m.id, name: m.name, date_of_birth: m.date_of_birth!, member_id: m.id as string | null, source: "member" as const }));
+                          // Build a lookup: dep.id → family's primary member_id
+                          const depIdToFamilyPrimaryMemberId: Record<string, string | null> = {};
+                          Object.values(clientData.familyMembersByFamilyId).forEach((members) => {
+                            const primary = members.find((m) => m.is_primary && m.member_id) ?? members.find((m) => m.member_id);
+                            members.forEach((dep) => {
+                              if (!dep.member_id) {
+                                depIdToFamilyPrimaryMemberId[dep.id] = primary?.member_id ?? null;
+                              }
+                            });
+                          });
+                          // Family dependents under 13 (no member account)
+                          const familyDepCandidates = Object.values(clientData.familyMembersByFamilyId)
+                            .flat()
+                            .filter((dep) => {
+                              if (!dep.date_of_birth) return false;
+                              if (dep.member_id) return false; // already covered by memberCandidates
+                              const age = calcAgeLocal(dep.date_of_birth);
+                              return age !== null && age < 13;
+                            })
+                            .map((dep) => ({
+                              id: dep.id,
+                              name: dep.name,
+                              date_of_birth: dep.date_of_birth!,
+                              member_id: depIdToFamilyPrimaryMemberId[dep.id] ?? null,
+                              source: "family" as const,
+                            }));
+                          // Merge, deduplicate by name+dob
+                          const seenKeys = new Set<string>();
+                          const childCandidates = [...memberCandidates, ...familyDepCandidates].filter((c) => {
+                            const key = `${c.name}|${c.date_of_birth}`;
+                            if (seenKeys.has(key)) return false;
+                            seenKeys.add(key);
+                            return true;
+                          });
+                          const searchLower = kidsChildSearch.toLowerCase();
+                          const filtered = kidsChildSearch
+                            ? childCandidates.filter((m) => m.name.toLowerCase().includes(searchLower))
+                            : childCandidates;
+                          return (
+                            <div className="kids-picker-section">
+                              <div className="kids-picker-header">
+                                <strong>Buscar da lista</strong>
+                                <small>Membros e dependentes com menos de 13 anos</small>
+                              </div>
+                              <input
+                                className="catalog-input"
+                                placeholder="Pesquisar por nome..."
+                                value={kidsChildSearch}
+                                onChange={(e) => setKidsChildSearch(e.target.value)}
+                              />
+                              {filtered.length > 0 ? (
+                                <div className="kids-picker-list">
+                                  {filtered.map((cand) => {
+                                    const age = calcAgeLocal(cand.date_of_birth);
+                                    const registered = cand.member_id ? alreadyKidsIds.has(cand.member_id) : false;
+                                    return (
+                                      <button
+                                        key={cand.id}
+                                        type="button"
+                                        className={`kids-picker-item${registered ? " registered" : ""}`}
+                                        onClick={() => {
+                                          setKidsChildForm((c) => ({
+                                            ...c,
+                                            name: cand.name,
+                                            date_of_birth: cand.date_of_birth,
+                                            member_id: cand.member_id ?? "",
+                                          }));
+                                          setKidsChildSearch("");
+                                        }}
+                                      >
+                                        <span>{cand.name}</span>
+                                        <small>
+                                          {age !== null ? `${age} ano${age !== 1 ? "s" : ""}` : ""}
+                                          {cand.source === "family" ? " · familiar" : ""}
+                                          {registered ? " · já cadastrado" : ""}
+                                        </small>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : kidsChildSearch ? (
+                                <p className="kids-picker-empty">Nenhum resultado para "{kidsChildSearch}"</p>
+                              ) : (
+                                <p className="kids-picker-empty">Nenhum dependente com menos de 13 anos cadastrado.</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <label>
                           <span>Nome completo</span>
                           <input className="catalog-input" required placeholder="Nome da criança" value={kidsChildForm.name} onChange={(e) => setKidsChildForm((c) => ({ ...c, name: e.target.value }))} />
@@ -9282,7 +9540,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <textarea className="catalog-input catalog-textarea" rows={2} value={kidsChildForm.notes} onChange={(e) => setKidsChildForm((c) => ({ ...c, notes: e.target.value }))} />
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); }}>Cancelar</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); setKidsChildSearch(""); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsChildForm.id ? "Salvar" : "Cadastrar"}</Button>
                         </div>
                       </form>
@@ -11169,6 +11427,133 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   />
                 </div>
               ) : null}
+
+              {memberForm.id ? (() => {
+                const memberFamily = clientData.families.find((f) =>
+                  clientData.familyMembersByFamilyId[f.id]?.some((fm) => fm.member_id === memberForm.id),
+                );
+                const dependents = memberFamily
+                  ? (clientData.familyMembersByFamilyId[memberFamily.id] ?? []).filter((fm) => fm.member_id !== memberForm.id)
+                  : [];
+                const calcAgeDep = (dob: string | null) => {
+                  if (!dob) return null;
+                  const birth = new Date(dob + "T12:00:00");
+                  const now = new Date();
+                  let age = now.getFullYear() - birth.getFullYear();
+                  if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+                  return age;
+                };
+                const alreadyDepIds = new Set(dependents.map((d) => d.member_id));
+                const availableForDep = clientData.members.filter((m) => m.id !== memberForm.id && !alreadyDepIds.has(m.id));
+                return (
+                  <div className="modal-section">
+                    <div className="modal-section-header">
+                      <strong>Dependentes</strong>
+                      <small>Filhos, cônjuge e demais familiares vinculados a este membro.</small>
+                    </div>
+                    {dependents.length === 0 ? (
+                      <div className="catalog-empty">Nenhum dependente vinculado ainda.</div>
+                    ) : (
+                      <div className="catalog-list">
+                        {dependents.map((dep) => {
+                          const age = calcAgeDep(dep.date_of_birth);
+                          const isKidsEligible = age !== null && age < 13;
+                          const relLabel: Record<string, string> = { self: "Titular", spouse: "Cônjuge", child: "Filho(a)", parent: "Pai/Mãe", guardian: "Responsável", sibling: "Irmão(ã)", other: "Outro" };
+                          return (
+                            <div key={dep.id} className="ministry-row">
+                              <div>
+                                <strong>{dep.name}</strong>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <small>{relLabel[dep.relationship] ?? dep.relationship}{dep.date_of_birth ? ` · ${age !== null ? `${age} anos` : dep.date_of_birth}` : ""}</small>
+                                  {isKidsEligible ? <em className="dep-kids-badge"><Baby size={10} /> Kids</em> : null}
+                                </div>
+                              </div>
+                              <button type="button" onClick={() => handleRemoveMemberDependent(dep.id)} aria-label="Remover">
+                                <X size={16} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="dep-add-form">
+                      <div className="dep-add-row">
+                        <select
+                          className="catalog-input"
+                          value={memberDependentPickerId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setMemberDependentPickerId(id);
+                            if (id) {
+                              const m = clientData.members.find((x) => x.id === id);
+                              if (m) { setMemberDependentName(m.name); setMemberDependentDob(m.date_of_birth ?? ""); }
+                            } else {
+                              setMemberDependentName(""); setMemberDependentDob("");
+                            }
+                          }}
+                        >
+                          <option value="">— Ou selecionar membro existente —</option>
+                          {availableForDep.map((m) => {
+                            const age = calcAgeDep(m.date_of_birth ?? null);
+                            return (
+                              <option key={m.id} value={m.id}>
+                                {m.name}{age !== null ? ` (${age} anos)` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <select
+                          className="catalog-input"
+                          value={memberDependentRelationship}
+                          onChange={(e) => setMemberDependentRelationship(e.target.value)}
+                        >
+                          <option value="child">Filho(a)</option>
+                          <option value="spouse">Cônjuge</option>
+                          <option value="parent">Pai/Mãe</option>
+                          <option value="sibling">Irmão(ã)</option>
+                          <option value="guardian">Responsável</option>
+                          <option value="other">Outro</option>
+                        </select>
+                      </div>
+                      <div className="dep-add-row">
+                        <input
+                          className="catalog-input"
+                          placeholder="Nome completo do dependente"
+                          value={memberDependentName}
+                          onChange={(e) => setMemberDependentName(e.target.value)}
+                          disabled={!!memberDependentPickerId}
+                        />
+                        <label style={{ display: "flex", flexDirection: "column", gap: 2, flex: "0 0 160px" }}>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Data de nascimento</span>
+                          <input
+                            className="catalog-input"
+                            type="date"
+                            value={memberDependentDob}
+                            onChange={(e) => setMemberDependentDob(e.target.value)}
+                            disabled={!!memberDependentPickerId}
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleAddMemberDependent}
+                          disabled={!memberDependentName.trim() && !memberDependentPickerId}
+                        >
+                          Adicionar
+                        </Button>
+                      </div>
+                      {memberDependentDob && (() => {
+                        const age = calcAgeDep(memberDependentDob);
+                        return age !== null && age < 13 ? (
+                          <p style={{ fontSize: 11, color: "#2e7d32", margin: 0 }}>
+                            ✓ Com menos de 13 anos — aparecerá automaticamente na busca do módulo Kids.
+                          </p>
+                        ) : null;
+                      })()}
+                    </div>
+                  </div>
+                );
+              })() : null}
 
               {memberSaveMessage ? <p className={`login-feedback ${memberSaveStatus}`}>{memberSaveMessage}</p> : null}
 

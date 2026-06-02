@@ -2485,6 +2485,145 @@ h1 {
   min-height: 42px;
 }
 
+.member-deps-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.member-dep-chip {
+  background: #f0f4ff;
+  color: #3b5bdb;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.dep-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dep-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.dep-add-row .catalog-input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.dep-kids-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.family-kids-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.family-kid-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.kids-picker-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kids-picker-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kids-picker-header strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.kids-picker-header small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.kids-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.kids-picker-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.kids-picker-item:hover {
+  background: #eaf4ff;
+  border-color: var(--primary);
+}
+
+.kids-picker-item.registered {
+  opacity: 0.6;
+}
+
+.kids-picker-item span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.kids-picker-item small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.kids-picker-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 6px 0;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -3356,6 +3495,229 @@ h1 {
 
 /* ── Módulo Financeiro ───────────────────────────────── */
 .financial-panel {}
+
+/* ── Reports dashboard ──────────────────────────────────────────────────── */
+.reports-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+
+.reports-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.reports-kpi {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+
+.reports-kpi span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+
+.reports-kpi strong {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.reports-kpi small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reports-charts-row {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+
+.reports-chart-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+
+.reports-chart-card--wide {
+  grid-column: auto;
+}
+
+.reports-chart-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reports-chart-title strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.reports-chart-title small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reports-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.reports-donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.reports-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-legend-item > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.reports-legend-item > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.reports-legend-item strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.reports-legend-item small {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.reports-legend-inline {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.reports-legend-inline span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.reports-legend-inline em {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.reports-bar-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
+.reports-hbar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reports-hbar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-hbar-row span {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reports-hbar-track {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.reports-hbar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .4s ease;
+  min-width: 2px;
+}
+
+.reports-hbar-row strong {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--text);
+}
+
+.reports-export-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+
+.reports-export-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .reports-kpis { grid-template-columns: repeat(2, 1fr); }
+  .reports-charts-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .reports-kpis { grid-template-columns: 1fr 1fr; }
+  .reports-hbar-row { grid-template-columns: 80px 1fr 24px; }
+}
+/* ── End reports dashboard ───────────────────────────────────────────────── */
 
 .financial-period-bar {
   display: flex;
