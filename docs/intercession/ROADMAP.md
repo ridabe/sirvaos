@@ -13,7 +13,7 @@
 
 ---
 
-## Etapa 15-B — ClientAdmin: Tab Intercessão 🔲 PRÓXIMA
+## Etapa 15-B — ClientAdmin: Tab Intercessão ✅ CONCLUÍDA
 - [ ] Tab "Intercessão" no ClientAdmin (visibilidade por módulo ativo)
 - [ ] Lista de pedidos com ordenação correta (new → assigned/interceding → done)
 - [ ] Badge de status colorido por estado
@@ -22,47 +22,56 @@
 
 ---
 
-## Etapa 15-C — Distribuição de Pedidos 🔲
-- [ ] Botão "Distribuir todos aleatoriamente" com modal de confirmação
-- [ ] Lógica round-robin aleatório client-side (Fisher-Yates)
-- [ ] Atribuição direta por pedido (select de membro do ministério)
-- [ ] Batch insert em `prayer_assignments`
-- [ ] Atualização de status em `prayer_requests`
-- [ ] Push ao intercessor após atribuição
+## Etapa 15-C — Distribuição de Pedidos ✅ CONCLUÍDA
+- [x] Botão "Distribuir todos aleatoriamente" com modal de confirmação
+- [x] Lógica round-robin aleatório client-side (Fisher-Yates)
+- [x] Atribuição direta por pedido (select de membro do ministério)
+- [x] Batch insert em `prayer_assignments`
+- [x] Atualização de status em `prayer_requests`
+- [x] Push ao intercessor após atribuição
 
 ---
 
-## Etapa 15-D — MemberPortal: Fazer Pedido 🔲
-- [ ] Seção "Pedido de Oração" visível para todos os membros
-- [ ] Formulário com textarea + opção anônimo
-- [ ] Aviso ao marcar anônimo sobre ausência de notificações
-- [ ] Histórico dos próprios pedidos com status visual
-- [ ] Badge de status (novo / sendo intercedido / intercedido)
+## Etapa 15-D — MemberPortal: Fazer Pedido ✅ CONCLUÍDA
+- [x] Seção "Pedido de Oração" visível para todos os membros
+- [x] Formulário com textarea + opção anônimo
+- [x] Aviso ao marcar anônimo sobre ausência de notificações
+- [x] Histórico dos próprios pedidos com status visual
+- [x] Badge de status (novo / sendo intercedido / intercedido)
 
 ---
 
-## Etapa 15-E — MemberPortal: Área do Intercessor 🔲
-- [ ] Seção "Minha Intercessão" visível apenas para membros do ministério Intercessão
-- [ ] Lista de pedidos atribuídos (pending + interceding)
-- [ ] Card com conteúdo do pedido (anônimo mostra "Pedido anônimo")
-- [ ] Botão "Começar a interceder" → atualiza assignment + push ao solicitante
-- [ ] Botão "Conclui a intercessão" → atualiza assignment + request + push ao solicitante
-- [ ] Badge com contagem de pedidos pendentes
+## Etapa 15-E — MemberPortal: Área do Intercessor ✅ CONCLUÍDA
+- [x] Seção "Minha Intercessão" visível apenas para membros do ministério Intercessão
+- [x] Lista de pedidos atribuídos (pending + interceding)
+- [x] Card com conteúdo do pedido (anônimo mostra "Pedido anônimo")
+- [x] Botão "Começar a interceder" → atualiza assignment + push ao solicitante
+- [x] Botão "Conclui a intercessão" → atualiza assignment + request + push ao solicitante
+- [x] Badge com contagem de pedidos pendentes
 
 ---
 
-## Etapa 15-F — Notificações Push 🔲
-- [ ] Push ao intercessor quando pedido é atribuído: "Você recebeu um pedido de oração"
-- [ ] Push ao solicitante quando intercessão começa: "Estão orando pelo seu pedido"
-- [ ] Push ao solicitante quando intercessão conclui: "Oramos pelo seu pedido"
-- [ ] Sem push para pedidos anônimos (verificação de profile_id)
-- [ ] Badge visual no portal independente de push
+## Etapa 15-F — Notificações Push ✅ CONCLUÍDA (integrada nas etapas C/D/E)
+- [x] Push ao intercessor quando pedido é atribuído
+- [x] Push ao solicitante quando intercessão começa
+- [x] Push ao solicitante quando intercessão conclui
+- [x] Sem push para pedidos anônimos (verificação de profile_id)
+- [x] Badge visual no portal independente de push
 
 ---
 
-## Etapas Futuras (fora do escopo 15)
+## Etapa 15-G — Moderação, Histórico, Relatório e Admin Global ✅ CONCLUÍDA
+- [x] Migration: moderation_status, moderation_notes, tenant_module_settings
+- [x] Sub-view Moderação: toggle por tenant, fila de aprovação/rejeição
+- [x] Sub-view Histórico: intercessões por membro com barra de progresso
+- [x] Sub-view Relatório: pedidos por período, taxa de conclusão, KPIs
+- [x] Dashboard expandido: 8 cards de stats
+- [x] Admin Global: card "Pedidos de Oração" no painel de engajamento global
+- [x] Módulo intercession no catálogo global (automático via platform_modules)
+
+---
+
+## Etapas Futuras
 - Integração com app mobile (Etapa 10 — app)
 - Recebimento de pedidos via app (source = 'app')
-- Histórico de intercessões por membro intercessor
-- Relatório: pedidos por período, taxa de conclusão
-- Moderação / aprovação de pedidos antes de distribuir
+- Exportação PDF/CSV do relatório de pedidos
