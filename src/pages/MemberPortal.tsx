@@ -23,7 +23,7 @@ import {
   Users2,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { renderEventCardHtml } from "../lib/eventCardTemplate";
@@ -31,6 +31,17 @@ import { supabase, supabaseUrl } from "../lib/supabase";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
+type PortalTabId =
+  | "inicio"
+  | "oracao"
+  | "intercessao"
+  | "agenda"
+  | "comunicados"
+  | "kids"
+  | "escola"
+  | "midias"
+  | "admin"
+  | "privacidade";
 
 type MemberAssignment = {
   id: string;
@@ -425,7 +436,7 @@ export function MemberPortal() {
   const [lgpdActionStatus, setLgpdActionStatus] = useState<LoginStatus>("idle");
   const [lgpdActionMessage, setLgpdActionMessage] = useState("");
   // Intercession state
-  const [isIntercessionModule, setIsIntercessionModule] = useState(false);
+  const [activePortalTab, setActivePortalTab] = useState<PortalTabId>("inicio");
   const [isInIntercessionMinistry, setIsInIntercessionMinistry] = useState(false);
   const [ownPrayerRequests, setOwnPrayerRequests] = useState<PortalPrayerRequest[]>([]);
   const [myAssignments, setMyAssignments] = useState<PortalPrayerAssignment[]>([]);
@@ -434,6 +445,54 @@ export function MemberPortal() {
   const [prayerSubmitStatus, setPrayerSubmitStatus] = useState<LoginStatus>("idle");
   const [prayerSubmitMessage, setPrayerSubmitMessage] = useState("");
   const [assignActionStatus, setAssignActionStatus] = useState<Record<string, LoginStatus>>({});
+  const [accordionState, setAccordionState] = useState<Record<string, boolean>>({});
+
+  function isAccordionOpen(id: string, defaultOpen = false) {
+    return accordionState[id] ?? defaultOpen;
+  }
+
+  function toggleAccordion(id: string) {
+    setAccordionState((prev) => ({ ...prev, [id]: !(prev[id] ?? false) }));
+  }
+
+  function AccordionPanel(props: {
+    id: string;
+    title: string;
+    description?: string;
+    icon?: ReactNode;
+    badge?: number | string;
+    defaultOpen?: boolean;
+    className?: string;
+    children: ReactNode;
+  }) {
+    const open = isAccordionOpen(props.id, Boolean(props.defaultOpen));
+
+    return (
+      <section className={`member-portal-accordion ${props.className ?? ""}`}>
+        <button
+          type="button"
+          className="member-portal-accordion-head"
+          aria-expanded={open}
+          onClick={() => toggleAccordion(props.id)}
+        >
+          <span className="member-portal-accordion-title">
+            {props.icon ? <span className="member-portal-accordion-icon">{props.icon}</span> : null}
+            <span>
+              <strong>{props.title}</strong>
+              {props.description ? <small>{props.description}</small> : null}
+            </span>
+          </span>
+          <span className="member-portal-accordion-right">
+            {props.badge !== undefined && props.badge !== null && props.badge !== "" ? (
+              <em className="member-portal-accordion-badge">{props.badge}</em>
+            ) : null}
+            <ChevronDown size={18} className={`member-portal-accordion-chevron ${open ? "open" : ""}`} />
+          </span>
+        </button>
+        {open ? <div className="member-portal-accordion-body">{props.children}</div> : null}
+      </section>
+    );
+  }
 
   const [socialMediaChannels, setSocialMediaChannels] = useState<SocialMediaChannelPortalRecord[]>([]);
   const [socialMediaVideos, setSocialMediaVideos] = useState<Record<string, YouTubeVideoRecord[]>>({});
@@ -598,13 +657,16 @@ export function MemberPortal() {
     setPrayerForm("");
     setPrayerAnonymous(false);
 
-    // Refresh own requests (only if not anonymous — no profile_id stored)
     if (!prayerAnonymous) {
+      const orParts = [`profile_id.eq.${profile.id}`];
+      if (profile.member_id) {
+        orParts.push(`member_id.eq.${profile.member_id}`);
+      }
       const { data } = await supabase
         .from("prayer_requests")
         .select("id, content, is_anonymous, status, created_at")
         .eq("tenant_id", profile.tenant_id)
-        .eq("profile_id", profile.id)
+        .or(orParts.join(","))
         .order("created_at", { ascending: false })
         .limit(20)
         .returns<PortalPrayerRequest[]>();
@@ -636,19 +698,6 @@ export function MemberPortal() {
     if (assignErr) {
       setAssignActionStatus((prev) => ({ ...prev, [assignment.id]: "error" }));
       return;
-    }
-
-    // Update prayer_request status accordingly
-    if (action === "done") {
-      await supabase
-        .from("prayer_requests")
-        .update({ status: "done" })
-        .eq("id", assignment.prayer_request_id);
-    } else if (action === "interceding") {
-      await supabase
-        .from("prayer_requests")
-        .update({ status: "interceding" })
-        .eq("id", assignment.prayer_request_id);
     }
 
     // Notify the requester via push if not anonymous and has profile_id
@@ -907,43 +956,21 @@ export function MemberPortal() {
     setCanManageMembers(Boolean(canManageMembersResult.data));
 
     // ── Intercessão ────────────────────────────────────────────
-    const moduleAccesses = moduleAccessResult.data ?? [];
-    const intercessionModuleActive = moduleAccesses.some(
-      (ma) => (ma.platform_modules as { code: string } | null)?.code === "intercession",
-    );
-    // Also check via tenant_modules (for non-admin members the module must be active)
-    // Check if intercession module is active for tenant via platform_modules join
-    const { data: intercessionModuleRow } = await supabase
-      .from("platform_modules")
-      .select("id")
-      .eq("code", "intercession")
-      .maybeSingle<{ id: string }>();
-
-    let intercessionEnabled = intercessionModuleActive;
-    if (!intercessionEnabled && intercessionModuleRow?.id) {
-      const { data: tmRow } = await supabase
-        .from("tenant_modules")
-        .select("id")
-        .eq("tenant_id", profileData.tenant_id)
-        .eq("module_id", intercessionModuleRow.id)
-        .eq("status", "active")
-        .maybeSingle<{ id: string }>();
-      intercessionEnabled = Boolean(tmRow?.id);
-    }
-    setIsIntercessionModule(intercessionEnabled);
-
     const inIntercessionMinistry = portalMinistries.some((row) =>
       row.catalog_ministries?.name?.toLowerCase().includes("intercess"),
     );
     setIsInIntercessionMinistry(inIntercessionMinistry);
 
-    // Carrega pedidos próprios quando módulo ativo
-    if (intercessionEnabled) {
+    {
+      const orParts = [`profile_id.eq.${profileData.id}`];
+      if (profileData.member_id) {
+        orParts.push(`member_id.eq.${profileData.member_id}`);
+      }
       const { data: ownRequestsData } = await supabase
         .from("prayer_requests")
         .select("id, content, is_anonymous, status, created_at")
         .eq("tenant_id", profileData.tenant_id)
-        .eq("profile_id", profileData.id)
+        .or(orParts.join(","))
         .order("created_at", { ascending: false })
         .limit(20)
         .returns<PortalPrayerRequest[]>();
@@ -1867,7 +1894,6 @@ export function MemberPortal() {
     isSchedulableMinistryName(item.catalog_ministries?.name),
   );
   const showLegacyAssignmentSections = new URLSearchParams(window.location.search).has("legacyPortalAssignments");
-  const showLegacyPortalAnnouncements = new URLSearchParams(window.location.search).has("legacyPortalAnnouncements");
   const nextPortalEvent = portalEvents[0] ?? null;
   const latestAnnouncement = portalAnnouncements[0] ?? null;
   const firstKidsChild = kidsChildren[0] ?? null;
@@ -1876,6 +1902,27 @@ export function MemberPortal() {
     : null;
   const unreadAnnouncementCount = portalAnnouncements.filter((announcement) => !readAnnouncementIds.has(announcement.id)).length;
   const hasAnnouncements = portalAnnouncements.length > 0;
+  const portalTabs = [
+    { id: "inicio" as const, label: "Início", icon: <Check size={16} />, visible: true },
+    { id: "oracao" as const, label: "Pedidos", icon: <Heart size={16} />, visible: true, badge: ownPrayerRequests.length || undefined },
+    { id: "intercessao" as const, label: "Intercessão", icon: <Users2 size={16} />, visible: isInIntercessionMinistry || myAssignments.length > 0, badge: myAssignments.length || undefined },
+    { id: "agenda" as const, label: "Agenda", icon: <CalendarDays size={16} />, visible: hasSchedulePortalAccess || portalEvents.length > 0, badge: (upcomingAssignments.length || portalEvents.length) || undefined },
+    { id: "comunicados" as const, label: "Comunicados", icon: <Bell size={16} />, visible: hasAnnouncements, badge: unreadAnnouncementCount || undefined },
+    { id: "kids" as const, label: "Kids", icon: <Baby size={16} />, visible: kidsChildren.length > 0 || isKidsModuleAdmin },
+    { id: "escola" as const, label: "Escola Bíblica", icon: <BookOpen size={16} />, visible: bibleSchoolEnabled },
+    { id: "midias" as const, label: "Mídias", icon: <Play size={16} />, visible: socialMediaChannels.length > 0 },
+    { id: "admin" as const, label: "Admin", icon: <Check size={16} />, visible: canOpenAdminPortal || highlightedAdminModules.length > 0 },
+    { id: "privacidade" as const, label: "Privacidade", icon: <ShieldCheck size={16} />, visible: true },
+  ];
+  const visiblePortalTabKey = portalTabs.filter((t) => t.visible).map((t) => t.id).join("|");
+
+  useEffect(() => {
+    const ids = visiblePortalTabKey.split("|").filter(Boolean) as PortalTabId[];
+    if (ids.length === 0) return;
+    if (!ids.includes(activePortalTab)) {
+      setActivePortalTab(ids[0]);
+    }
+  }, [activePortalTab, visiblePortalTabKey]);
 
   if (loadStatus === "idle" || loginStatus === "idle" || loginStatus === "loading") {
     if (!profile) {
@@ -2097,60 +2144,93 @@ export function MemberPortal() {
           ) : null}
         </section>
 
-        <section className="member-portal-now" aria-label="Para você agora">
-          <div className="member-portal-section-head">
-            <div>
-              <h2>Para você agora</h2>
-              <p>Os itens mais importantes do seu portal em primeiro lugar.</p>
-            </div>
+        <nav className="member-portal-tabbar" aria-label="Navegação do portal">
+          <div className="member-portal-tabbar-scroll">
+            {portalTabs.filter((t) => t.visible).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`member-portal-tab ${activePortalTab === tab.id ? "active" : ""}`}
+                onClick={() => setActivePortalTab(tab.id)}
+                aria-current={activePortalTab === tab.id ? "page" : undefined}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.badge ? <em className="member-portal-tab-badge">{tab.badge}</em> : null}
+              </button>
+            ))}
           </div>
-          <div className="member-portal-now-grid">
-            {hasSchedulePortalAccess && upcomingAssignments[0]?.worship_events ? (
-              <article className="member-portal-now-card urgent">
-                <span><CalendarCheck size={16} /> Próxima escala</span>
-                <strong>{upcomingAssignments[0].worship_events.title}</strong>
-                <small>{statusLabel(upcomingAssignments[0].status)}</small>
-              </article>
-            ) : null}
-            {nextPortalEvent ? (
-              <article className="member-portal-now-card">
-                <span><CalendarDays size={16} /> Próximo evento</span>
-                <strong>{nextPortalEvent.title}</strong>
-                <small>
-                  {new Date(nextPortalEvent.event_date).toLocaleString("pt-BR", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </small>
-              </article>
-            ) : null}
-            {latestAnnouncement ? (
-              <article className="member-portal-now-card">
-                <span><Bell size={16} /> Comunicado</span>
-                <strong>{latestAnnouncement.title}</strong>
-                <small>{new Date(latestAnnouncement.published_at).toLocaleDateString("pt-BR")}</small>
-              </article>
-            ) : null}
-            {firstKidsChild ? (
-              <article className="member-portal-now-card">
-                <span><Baby size={16} /> Kids</span>
-                <strong>{firstKidsChild.name}</strong>
-                <small>{activeKidsPass ? "QR ativo para check-in" : "Sem QR ativo"}</small>
-              </article>
-            ) : null}
-            {!nextPortalEvent && !latestAnnouncement && !firstKidsChild && upcomingAssignments.length === 0 ? (
-              <div className="member-portal-empty-inline">
-                <Check size={18} />
-                <span>Nenhuma pendência importante no momento.</span>
-              </div>
-            ) : null}
-          </div>
-        </section>
+          <select
+            className="member-portal-tabbar-select"
+            value={activePortalTab}
+            onChange={(e) => setActivePortalTab(e.target.value as PortalTabId)}
+            aria-label="Selecionar aba"
+          >
+            {portalTabs.filter((t) => t.visible).map((tab) => (
+              <option key={tab.id} value={tab.id}>
+                {tab.label}
+              </option>
+            ))}
+          </select>
+        </nav>
 
-        <div className="member-portal-feed-shell">
-          <aside className="member-portal-side-panel" aria-label="Resumo e acessos do portal">
+        {activePortalTab === "inicio" ? (
+          <section className="member-portal-now" aria-label="Para você agora">
+            <div className="member-portal-section-head">
+              <div>
+                <h2>Para você agora</h2>
+                <p>Os itens mais importantes do seu portal em primeiro lugar.</p>
+              </div>
+            </div>
+            <div className="member-portal-now-grid">
+              {hasSchedulePortalAccess && upcomingAssignments[0]?.worship_events ? (
+                <article className="member-portal-now-card urgent">
+                  <span><CalendarCheck size={16} /> Próxima escala</span>
+                  <strong>{upcomingAssignments[0].worship_events.title}</strong>
+                  <small>{statusLabel(upcomingAssignments[0].status)}</small>
+                </article>
+              ) : null}
+              {nextPortalEvent ? (
+                <article className="member-portal-now-card">
+                  <span><CalendarDays size={16} /> Próximo evento</span>
+                  <strong>{nextPortalEvent.title}</strong>
+                  <small>
+                    {new Date(nextPortalEvent.event_date).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </small>
+                </article>
+              ) : null}
+              {latestAnnouncement ? (
+                <article className="member-portal-now-card">
+                  <span><Bell size={16} /> Comunicado</span>
+                  <strong>{latestAnnouncement.title}</strong>
+                  <small>{new Date(latestAnnouncement.published_at).toLocaleDateString("pt-BR")}</small>
+                </article>
+              ) : null}
+              {firstKidsChild ? (
+                <article className="member-portal-now-card">
+                  <span><Baby size={16} /> Kids</span>
+                  <strong>{firstKidsChild.name}</strong>
+                  <small>{activeKidsPass ? "QR ativo para check-in" : "Sem QR ativo"}</small>
+                </article>
+              ) : null}
+              {!nextPortalEvent && !latestAnnouncement && !firstKidsChild && upcomingAssignments.length === 0 ? (
+                <div className="member-portal-empty-inline">
+                  <Check size={18} />
+                  <span>Nenhuma pendência importante no momento.</span>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <div className={`member-portal-feed-shell ${activePortalTab === "inicio" ? "" : "is-single"}`}>
+          {activePortalTab === "inicio" ? (
+            <aside className="member-portal-side-panel" aria-label="Resumo e acessos do portal">
         <section className="member-portal-access-grid member-portal-module-strip" aria-label="Resumo de acessos">
           {hasSchedulePortalAccess ? (
             <article className="member-portal-access-card">
@@ -2233,18 +2313,21 @@ export function MemberPortal() {
           </div>
         </section>
 
-          </aside>
+            </aside>
+          ) : null}
           <div className="member-portal-feed-column">
 
         {/* ── Seção: Próximos Eventos ─────────────────────────────────── */}
-        {portalEvents.length > 0 ? (
-          <section className="member-portal-section member-portal-feed-section member-portal-events-section">
-            <div className="member-portal-section-head">
-              <div>
-                <h2><CalendarDays size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Próximos eventos</h2>
-                <p>Agenda da sua igreja para os próximos dias.</p>
-              </div>
-            </div>
+        {(activePortalTab === "inicio" || activePortalTab === "agenda") && portalEvents.length > 0 ? (
+          <AccordionPanel
+            id="events"
+            title="Próximos eventos"
+            description="Agenda da sua igreja para os próximos dias."
+            icon={<CalendarDays size={18} />}
+            badge={portalEvents.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-events-section"
+          >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {portalEvents.map((evt) => {
                 const typeLabels: Record<string, string> = {
@@ -2284,18 +2367,20 @@ export function MemberPortal() {
                 );
               })}
             </div>
-          </section>
+          </AccordionPanel>
         ) : null}
 
         {/* ── Seção: Comunicados ───────────────────────────────────────── */}
-        {showLegacyPortalAnnouncements && portalAnnouncements.length > 0 ? (
-          <section className="member-portal-section member-portal-feed-section member-portal-announcements-section">
-            <div className="member-portal-section-head">
-              <div>
-                <h2><Bell size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Comunicados</h2>
-                <p>Avisos e recados da sua igreja.</p>
-              </div>
-            </div>
+        {(activePortalTab === "inicio" || activePortalTab === "comunicados") && portalAnnouncements.length > 0 ? (
+          <AccordionPanel
+            id="announcements"
+            title="Comunicados"
+            description="Avisos e recados da sua igreja."
+            icon={<Bell size={18} />}
+            badge={portalAnnouncements.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-announcements-section"
+          >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {portalAnnouncements.map((ann) => {
                 const excerpt = ann.message.length > 110 ? ann.message.slice(0, 110) + "…" : ann.message;
@@ -2324,10 +2409,10 @@ export function MemberPortal() {
                 );
               })}
             </div>
-          </section>
+          </AccordionPanel>
         ) : null}
 
-        {highlightedAdminModules.length > 0 ? (
+        {activePortalTab === "admin" && highlightedAdminModules.length > 0 ? (
           <section className="member-portal-section member-portal-feed-section member-portal-admin-modules-section">
             <div className="member-portal-section-head">
               <div>
@@ -2371,7 +2456,7 @@ export function MemberPortal() {
         ) : null}
 
         {/* ── Seção: Mídias Sociais ─────────────────────────────────────── */}
-        {socialMediaChannels.length > 0 ? (
+        {activePortalTab === "midias" && socialMediaChannels.length > 0 ? (
           <section className="member-portal-section member-portal-feed-section member-portal-social-section">
             <div className="member-portal-section-head">
               <div>
@@ -2468,7 +2553,7 @@ export function MemberPortal() {
           </div>
         ) : null}
 
-        {hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
+        {activePortalTab === "agenda" && hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
           <section className="member-portal-section member-portal-feed-section member-portal-schedule-section">
             <div className="member-portal-empty state-card">
               <CalendarCheck size={34} />
@@ -2478,7 +2563,7 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
+        {activePortalTab === "agenda" && hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
           <section className="member-portal-section member-portal-feed-section member-portal-schedule-section">
             <h2>Próximas escalas</h2>
             <div className="member-portal-cards">
@@ -2604,7 +2689,7 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {!isKidsModuleAdmin ? (
+        {activePortalTab === "kids" && !isKidsModuleAdmin ? (
         <section className="member-portal-section member-portal-feed-section member-portal-kids-section">
           <div className="member-portal-section-head">
             <div>
@@ -2716,7 +2801,7 @@ export function MemberPortal() {
         </section>
         ) : null}
 
-        {bibleSchoolEnabled && (bibleSchoolCanManage || bibleSchoolClasses.length > 0) ? (
+        {activePortalTab === "escola" && bibleSchoolEnabled && (bibleSchoolCanManage || bibleSchoolClasses.length > 0) ? (
           <section className="member-portal-section">
             <div className="member-portal-section-head">
               <h2>Escola Bíblica</h2>
@@ -2953,7 +3038,7 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
+        {activePortalTab === "agenda" && showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
           <div className="member-portal-empty">
             <CalendarCheck size={40} />
             <strong>Nenhuma escala encontrada</strong>
@@ -2961,7 +3046,7 @@ export function MemberPortal() {
           </div>
         ) : null}
 
-        {showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
+        {activePortalTab === "agenda" && showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
           <section className="member-portal-section">
             <h2>Próximas escalas</h2>
             <div className="member-portal-cards">
@@ -3087,7 +3172,7 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {hasSchedulePortalAccess && pastAssignments.length > 0 ? (
+        {activePortalTab === "agenda" && hasSchedulePortalAccess && pastAssignments.length > 0 ? (
           <section className="member-portal-section">
             <h2>Histórico</h2>
             <div className="member-portal-history">
@@ -3114,7 +3199,7 @@ export function MemberPortal() {
         ) : null}
 
         {/* ── Seção Pedido de Oração (todos os membros) ─────────────── */}
-        {isIntercessionModule ? (
+        {activePortalTab === "oracao" ? (
           <section className="member-portal-section">
             <div className="member-portal-section-head">
               <Heart size={18} />
@@ -3122,100 +3207,127 @@ export function MemberPortal() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* Formulário de envio */}
-              <div style={{ background: "var(--color-bg-subtle, #f9fafb)", borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-                <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text)" }}>
-                  Compartilhe seu pedido de oração
-                </label>
-                <textarea
-                  value={prayerForm}
-                  onChange={(e) => setPrayerForm(e.target.value)}
-                  placeholder="Escreva seu pedido de oração aqui..."
-                  maxLength={1000}
-                  rows={4}
-                  style={{
-                    width: "100%", padding: "10px 12px", borderRadius: 8,
-                    border: "1px solid var(--color-border)", resize: "vertical",
-                    fontSize: "0.88rem", lineHeight: 1.5, fontFamily: "inherit",
-                    background: "#fff", boxSizing: "border-box",
-                  }}
-                />
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", fontSize: "0.83rem", color: "var(--color-text-secondary)" }}>
-                  <input
-                    type="checkbox"
-                    checked={prayerAnonymous}
-                    onChange={(e) => setPrayerAnonymous(e.target.checked)}
-                    style={{ marginTop: 2, flexShrink: 0 }}
+              <AccordionPanel
+                id="prayer-new"
+                title="Novo pedido"
+                description="Envie um pedido para o ministério de intercessão."
+                icon={<Heart size={18} />}
+                defaultOpen
+                className="member-portal-accordion-compact"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text)" }}>
+                    Compartilhe seu pedido de oração
+                  </label>
+                  <textarea
+                    value={prayerForm}
+                    onChange={(e) => setPrayerForm(e.target.value)}
+                    placeholder="Escreva seu pedido de oração aqui..."
+                    maxLength={1000}
+                    rows={4}
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: 8,
+                      border: "1px solid var(--color-border)", resize: "vertical",
+                      fontSize: "0.88rem", lineHeight: 1.5, fontFamily: "inherit",
+                      background: "#fff", boxSizing: "border-box",
+                    }}
                   />
-                  Enviar anonimamente
-                </label>
-                {prayerAnonymous ? (
-                  <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-secondary)", background: "rgba(0,0,0,0.04)", borderRadius: 6, padding: "8px 10px", lineHeight: 1.5 }}>
-                    Seu pedido será recebido pelo ministério de Intercessão, mas seu nome não será associado a ele. Por isso, você não receberá atualizações de status.
-                  </p>
-                ) : null}
-                {prayerSubmitMessage ? (
-                  <p className={`login-feedback ${prayerSubmitStatus}`} style={{ margin: 0 }}>{prayerSubmitMessage}</p>
-                ) : null}
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{ alignSelf: "flex-end" }}
-                  disabled={prayerSubmitStatus === "loading" || prayerForm.trim().length < 5}
-                  onClick={handlePrayerSubmit}
-                >
-                  <Heart size={14} />
-                  {prayerSubmitStatus === "loading" ? "Enviando..." : "Enviar pedido"}
-                </button>
-              </div>
-
-              {/* Histórico dos próprios pedidos */}
-              {ownPrayerRequests.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Meus pedidos
-                  </p>
-                  {ownPrayerRequests.map((req) => {
-                    const statusMap: Record<string, { label: string; color: string }> = {
-                      new:        { label: "Aguardando", color: "var(--color-accent)" },
-                      assigned:   { label: "Atribuído",  color: "#e08b00" },
-                      interceding:{ label: "Sendo intercedido", color: "#c07000" },
-                      done:       { label: "Intercedido", color: "var(--color-success)" },
-                    };
-                    const s = statusMap[req.status] ?? statusMap.new;
-                    return (
-                      <div key={req.id} style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>
-                            {new Date(req.created_at).toLocaleDateString("pt-BR")}
-                          </small>
-                          <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, color: s.color, background: `${s.color}18`, padding: "2px 8px", borderRadius: 4 }}>
-                            {s.label}
-                          </em>
-                        </div>
-                        <p style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.5, color: "var(--color-text)" }}>
-                          {req.content.length > 140 ? req.content.slice(0, 140) + "…" : req.content}
-                        </p>
-                        {req.status === "interceding" ? (
-                          <p style={{ margin: 0, fontSize: "0.76rem", color: "#c07000", fontWeight: 600 }}>
-                            Alguém está orando pelo seu pedido agora.
-                          </p>
-                        ) : req.status === "done" ? (
-                          <p style={{ margin: 0, fontSize: "0.76rem", color: "var(--color-success)", fontWeight: 600 }}>
-                            Seu pedido foi intercedido. Deus ouça!
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", fontSize: "0.83rem", color: "var(--color-text-secondary)" }}>
+                    <input
+                      type="checkbox"
+                      checked={prayerAnonymous}
+                      onChange={(e) => setPrayerAnonymous(e.target.checked)}
+                      style={{ marginTop: 2, flexShrink: 0 }}
+                    />
+                    Enviar anonimamente
+                  </label>
+                  {prayerAnonymous ? (
+                    <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-secondary)", background: "rgba(0,0,0,0.04)", borderRadius: 6, padding: "8px 10px", lineHeight: 1.5 }}>
+                      Seu pedido será recebido pelo ministério de Intercessão, mas seu nome não será associado a ele. Por isso, você não receberá atualizações de status.
+                    </p>
+                  ) : null}
+                  {prayerSubmitMessage ? (
+                    <p className={`login-feedback ${prayerSubmitStatus}`} style={{ margin: 0 }}>{prayerSubmitMessage}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ alignSelf: "flex-end" }}
+                    disabled={prayerSubmitStatus === "loading" || prayerForm.trim().length < 5}
+                    onClick={handlePrayerSubmit}
+                  >
+                    <Heart size={14} />
+                    {prayerSubmitStatus === "loading" ? "Enviando..." : "Enviar pedido"}
+                  </button>
                 </div>
-              ) : null}
+              </AccordionPanel>
+
+              <AccordionPanel
+                id="prayer-history"
+                title="Meus pedidos"
+                description="Acompanhe o andamento do seu pedido."
+                icon={<ScrollText size={18} />}
+                badge={ownPrayerRequests.length}
+                defaultOpen={ownPrayerRequests.length > 0}
+                className="member-portal-accordion-compact"
+              >
+                {ownPrayerRequests.length === 0 ? (
+                  <div className="member-portal-empty-inline">
+                    <Heart size={18} />
+                    <span>Você ainda não enviou nenhum pedido de oração.</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {ownPrayerRequests.map((req) => {
+                      const statusMap: Record<string, { label: string; color: string }> = {
+                        new:        { label: "Seu pedido foi recebido", color: "var(--color-accent)" },
+                        assigned:   { label: "Seu pedido já está com um intercessor", color: "#e08b00" },
+                        interceding:{ label: "Já estão orando pelo seu pedido", color: "#c07000" },
+                        done:       { label: "Intercessão finalizada", color: "var(--color-success)" },
+                      };
+                      const s = statusMap[req.status] ?? statusMap.new;
+                      return (
+                        <div key={req.id} style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>
+                              {new Date(req.created_at).toLocaleDateString("pt-BR")}
+                            </small>
+                            <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, color: s.color, background: `${s.color}18`, padding: "2px 8px", borderRadius: 4 }}>
+                              {s.label}
+                            </em>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.5, color: "var(--color-text)" }}>
+                            {req.content.length > 140 ? req.content.slice(0, 140) + "…" : req.content}
+                          </p>
+                          {req.status === "new" ? (
+                            <p style={{ margin: 0, fontSize: "0.76rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>
+                              Em breve, um intercessor será direcionado para o seu pedido.
+                            </p>
+                          ) : req.status === "assigned" ? (
+                            <p style={{ margin: 0, fontSize: "0.76rem", color: "#e08b00", fontWeight: 600 }}>
+                              Seu pedido já está com um intercessor.
+                            </p>
+                          ) : req.status === "interceding" ? (
+                            <p style={{ margin: 0, fontSize: "0.76rem", color: "#c07000", fontWeight: 600 }}>
+                              Já estão orando pelo seu pedido.
+                            </p>
+                          ) : req.status === "done" ? (
+                            <p style={{ margin: 0, fontSize: "0.76rem", color: "var(--color-success)", fontWeight: 600 }}>
+                              A intercessão foi finalizada. Deus abençoe!
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </AccordionPanel>
             </div>
           </section>
         ) : null}
 
         {/* ── Seção Minha Intercessão ── */}
-        {(isInIntercessionMinistry || myAssignments.length > 0) ? (
+        {activePortalTab === "intercessao" && (isInIntercessionMinistry || myAssignments.length > 0) ? (
           <section className="member-portal-section">
             <div className="member-portal-section-head">
               <Heart size={18} style={{ color: "var(--color-accent)" }} />
@@ -3298,7 +3410,7 @@ export function MemberPortal() {
         ) : null}
 
         {/* ── Seção LGPD ──────────────────────────────────────────────── */}
-        {lgpdConsentGranted !== null && (
+        {activePortalTab === "privacidade" && lgpdConsentGranted !== null && (
           <section className="member-portal-section member-portal-lgpd-section">
             <div className="member-portal-section-head">
               <ShieldCheck size={18} />
