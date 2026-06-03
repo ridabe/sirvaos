@@ -149,6 +149,7 @@ type PrayerRequestRecord = {
   is_anonymous: boolean;
   content: string;
   status: "new" | "assigned" | "interceding" | "done";
+  moderation_status: "pending_review" | "approved" | "rejected" | null;
   source: "portal" | "app";
   created_at: string;
   members?: { name: string } | null;
@@ -1946,6 +1947,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [distributeStatus, setDistributeStatus] = useState<LoginStatus>("idle");
   const [distributeMessage, setDistributeMessage] = useState("");
   const [intercessionFilter, setIntercessionFilter] = useState<"all" | "new" | "assigned" | "interceding" | "done">("all");
+  const [intercessionView, setIntercessionView] = useState<"list" | "moderation" | "history" | "report">("list");
+  const [intercessionModerationEnabled, setIntercessionModerationEnabled] = useState(false);
+  const [intercessionPeriodStart, setIntercessionPeriodStart] = useState(() => {
+    const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10);
+  });
+  const [intercessionPeriodEnd, setIntercessionPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [intercessionModerationSaveStatus, setIntercessionModerationSaveStatus] = useState<LoginStatus>("idle");
 
   const [themeForm, setThemeForm] = useState<ThemeFormState>(emptyThemeForm);
   const [themeSaveStatus, setThemeSaveStatus] = useState<LoginStatus>("idle");
@@ -2925,10 +2933,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       .limit(1)
       .maybeSingle<{ id: string }>();
 
-    const [requestsResult, assignmentsResult] = await Promise.all([
+    const [requestsResult, assignmentsResult, moderationSettingResult] = await Promise.all([
       supabase
         .from("prayer_requests")
-        .select("id, tenant_id, member_id, profile_id, is_anonymous, content, status, source, created_at, members(name)")
+        .select("id, tenant_id, member_id, profile_id, is_anonymous, content, status, moderation_status, source, created_at, members(name)")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
         .limit(200)
@@ -2937,8 +2945,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         .from("prayer_assignments")
         .select("id, tenant_id, prayer_request_id, assigned_member_id, assigned_profile_id, assigned_by_profile_id, assigned_at, status, started_at, completed_at, members!prayer_assignments_assigned_member_id_fkey(name)")
         .eq("tenant_id", tenantId)
-        .in("status", ["pending", "interceding"])
+        .in("status", ["pending", "interceding", "done"])
         .returns<PrayerAssignmentRecord[]>(),
+      supabase
+        .from("tenant_module_settings")
+        .select("value")
+        .eq("tenant_id", tenantId)
+        .eq("module_code", "intercession")
+        .eq("key", "moderation_enabled")
+        .maybeSingle<{ value: string }>(),
     ]);
 
     if (requestsResult.error || assignmentsResult.error) {
@@ -2948,6 +2963,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     setPrayerRequests(requestsResult.data ?? []);
     setPrayerAssignments(assignmentsResult.data ?? []);
+    setIntercessionModerationEnabled(moderationSettingResult.data?.value === "true");
 
     // Load intercessors (members of the Intercessão ministry)
     if (ministryRow?.id) {
@@ -2973,6 +2989,48 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     setIntercessionLoadStatus("loaded");
+  }
+
+  async function handleModerationAction(
+    requestId: string,
+    action: "approved" | "rejected",
+    notes?: string,
+  ) {
+    if (!profile?.tenant_id) return;
+    await supabase
+      .from("prayer_requests")
+      .update({
+        moderation_status: action,
+        moderation_notes: notes ?? null,
+        moderated_by_profile_id: profile.id,
+        moderated_at: new Date().toISOString(),
+        status: action === "rejected" ? "done" : "new",
+      })
+      .eq("id", requestId)
+      .eq("tenant_id", profile.tenant_id);
+    await loadIntercessionData(profile.tenant_id);
+  }
+
+  async function handleToggleModeration() {
+    if (!profile?.tenant_id) return;
+    setIntercessionModerationSaveStatus("loading");
+    const newValue = !intercessionModerationEnabled;
+    const { error } = await supabase.from("tenant_module_settings").upsert(
+      {
+        tenant_id: profile.tenant_id,
+        module_code: "intercession",
+        key: "moderation_enabled",
+        value: String(newValue),
+      },
+      { onConflict: "tenant_id,module_code,key" },
+    );
+    if (!error) {
+      setIntercessionModerationEnabled(newValue);
+      setIntercessionModerationSaveStatus("success");
+    } else {
+      setIntercessionModerationSaveStatus("error");
+    }
+    setTimeout(() => setIntercessionModerationSaveStatus("idle"), 2000);
   }
 
   // Fisher-Yates shuffle
@@ -11854,100 +11912,120 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
           {activeTab === "intercession" ? (
             <>
-              {/* Stats row */}
-              <div className="client-stats" style={{ marginBottom: 0 }}>
-                <article>
-                  <span>Novos</span>
-                  <strong style={{ color: "var(--color-accent)" }}>
-                    {prayerRequests.filter((r) => r.status === "new").length}
-                  </strong>
-                  <small>Aguardando atribuição</small>
-                </article>
-                <article>
-                  <span>Atribuídos</span>
-                  <strong style={{ color: "#e08b00" }}>
-                    {prayerRequests.filter((r) => r.status === "assigned").length}
-                  </strong>
-                  <small>Aguardando intercessão</small>
-                </article>
-                <article>
-                  <span>Em Intercessão</span>
-                  <strong style={{ color: "#c07000" }}>
-                    {prayerRequests.filter((r) => r.status === "interceding").length}
-                  </strong>
-                  <small>Sendo intercedidos agora</small>
-                </article>
-                <article>
-                  <span>Concluídos</span>
-                  <strong style={{ color: "var(--color-success)" }}>
-                    {prayerRequests.filter((r) => r.status === "done").length}
-                  </strong>
-                  <small>Pedidos intercedidos</small>
-                </article>
-              </div>
+              {/* ── Dashboard / Stats ───────────────────────────────────── */}
+              {(() => {
+                const total = prayerRequests.length;
+                const done = prayerRequests.filter((r) => r.status === "done").length;
+                const rate = total > 0 ? Math.round((done / total) * 100) : 0;
+                const pendingModeration = prayerRequests.filter((r) => r.moderation_status === "pending_review").length;
+                return (
+                  <>
+                    <div className="client-stats" style={{ marginBottom: 0 }}>
+                      <article>
+                        <span>Novos</span>
+                        <strong style={{ color: "var(--color-accent)" }}>
+                          {prayerRequests.filter((r) => r.status === "new").length}
+                        </strong>
+                        <small>Aguardando atribuição</small>
+                      </article>
+                      <article>
+                        <span>Atribuídos</span>
+                        <strong style={{ color: "#e08b00" }}>
+                          {prayerRequests.filter((r) => r.status === "assigned").length}
+                        </strong>
+                        <small>Aguardando intercessão</small>
+                      </article>
+                      <article>
+                        <span>Em Intercessão</span>
+                        <strong style={{ color: "#c07000" }}>
+                          {prayerRequests.filter((r) => r.status === "interceding").length}
+                        </strong>
+                        <small>Sendo intercedidos agora</small>
+                      </article>
+                      <article>
+                        <span>Concluídos</span>
+                        <strong style={{ color: "var(--color-success)" }}>{done}</strong>
+                        <small>{rate}% taxa de conclusão</small>
+                      </article>
+                    </div>
+
+                    {/* KPI row */}
+                    <div className="client-stats" style={{ marginBottom: 0 }}>
+                      <article>
+                        <span>Total de pedidos</span>
+                        <strong>{total}</strong>
+                        <small>Desde o início</small>
+                      </article>
+                      <article>
+                        <span>Intercessores</span>
+                        <strong>{intercessionMembers.length}</strong>
+                        <small>Membros no ministério</small>
+                      </article>
+                      <article>
+                        <span>Taxa de conclusão</span>
+                        <strong style={{ color: rate >= 70 ? "var(--color-success)" : rate >= 40 ? "#e08b00" : "var(--color-danger)" }}>
+                          {rate}%
+                        </strong>
+                        <small>{done} de {total} intercedidos</small>
+                      </article>
+                      {intercessionModerationEnabled ? (
+                        <article>
+                          <span>Aguardando aprovação</span>
+                          <strong style={{ color: pendingModeration > 0 ? "#e08b00" : "var(--color-success)" }}>
+                            {pendingModeration}
+                          </strong>
+                          <small>Na fila de moderação</small>
+                        </article>
+                      ) : (
+                        <article>
+                          <span>Anônimos</span>
+                          <strong>{prayerRequests.filter((r) => r.is_anonymous).length}</strong>
+                          <small>Pedidos sem identificação</small>
+                        </article>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
 
               <article className="panel full-width">
-                <div className="panel-heading">
-                  <div>
-                    <span>Intercessão</span>
-                    <h4>Pedidos de oração</h4>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    {/* Filter */}
-                    <select
-                      value={intercessionFilter}
-                      onChange={(e) => setIntercessionFilter(e.target.value as typeof intercessionFilter)}
-                      style={{ fontSize: "0.82rem", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--color-border)" }}
-                    >
-                      <option value="all">Todos</option>
-                      <option value="new">Novos</option>
-                      <option value="assigned">Atribuídos</option>
-                      <option value="interceding">Em Intercessão</option>
-                      <option value="done">Concluídos</option>
-                    </select>
-                    {canManageIntercession && prayerRequests.filter((r) => r.status === "new").length > 0 ? (
+                {/* Sub-view navigation */}
+                <div style={{ display: "flex", gap: 4, padding: "0 0 16px", borderBottom: "1px solid var(--color-border)", marginBottom: 16, flexWrap: "wrap" }}>
+                  {(["list", "moderation", "history", "report"] as const).map((view) => {
+                    const labels: Record<string, string> = {
+                      list: "Pedidos",
+                      moderation: `Moderação${intercessionModerationEnabled && prayerRequests.filter((r) => r.moderation_status === "pending_review").length > 0 ? ` (${prayerRequests.filter((r) => r.moderation_status === "pending_review").length})` : ""}`,
+                      history: "Histórico",
+                      report: "Relatório",
+                    };
+                    return (
                       <button
+                        key={view}
                         type="button"
-                        className="btn btn-primary"
-                        disabled={distributeStatus === "loading" || intercessionMembers.length === 0}
-                        onClick={handleDistributeAll}
-                      >
-                        <Heart size={14} />
-                        {distributeStatus === "loading" ? "Distribuindo..." : `Distribuir ${prayerRequests.filter((r) => r.status === "new").length} aleator.`}
-                      </button>
-                    ) : null}
-                  </div>
+                        onClick={() => setIntercessionView(view)}
+                        style={{
+                          padding: "5px 14px", borderRadius: 20, border: "1px solid",
+                          fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+                          borderColor: intercessionView === view ? "var(--color-accent)" : "var(--color-border)",
+                          background: intercessionView === view ? "rgba(var(--color-accent-rgb),0.1)" : "transparent",
+                          color: intercessionView === view ? "var(--color-accent)" : "var(--color-text-secondary)",
+                        }}
+                      >{labels[view]}</button>
+                    );
+                  })}
                 </div>
 
-                {distributeMessage ? (
-                  <p className={`login-feedback ${distributeStatus}`} style={{ margin: "8px 0" }}>{distributeMessage}</p>
-                ) : null}
-
-                {intercessionMembers.length === 0 && canManageIntercession ? (
-                  <div className="member-portal-empty state-card" style={{ margin: "12px 0" }}>
-                    <Heart size={22} />
-                    <strong>Nenhum intercessor cadastrado</strong>
-                    <span>Adicione membros ao ministério "Intercessão" para poder distribuir pedidos.</span>
-                  </div>
-                ) : null}
-
-                {intercessionLoadStatus === "loading" ? (
-                  <div style={{ padding: "32px", textAlign: "center", color: "var(--color-text-secondary)" }}>Carregando pedidos...</div>
-                ) : (() => {
+                {/* ── View: Pedidos ──────────────────────────────────── */}
+                {intercessionView === "list" ? (() => {
                   const statusOrder: Record<string, number> = { new: 0, assigned: 1, interceding: 2, done: 3 };
-                  const filtered = prayerRequests
+                  const listRequests = prayerRequests.filter((r) =>
+                    intercessionModerationEnabled
+                      ? r.moderation_status === "approved" || r.moderation_status === null
+                      : true
+                  );
+                  const filtered = listRequests
                     .filter((r) => intercessionFilter === "all" || r.status === intercessionFilter)
                     .sort((a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9));
-
-                  if (filtered.length === 0) {
-                    return (
-                      <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
-                        <Heart size={32} />
-                        <strong>Nenhum pedido encontrado</strong>
-                        <span>Os pedidos feitos pelos membros aparecerão aqui.</span>
-                      </div>
-                    );
-                  }
 
                   const activeAssignmentByRequestId = Object.fromEntries(
                     prayerAssignments.map((a) => [a.prayer_request_id, a])
@@ -11961,64 +12039,297 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       done:       { label: "Intercedido",    color: "var(--color-success)",  bg: "rgba(var(--color-success-rgb),0.1)" },
                     };
                     const s = map[status] ?? map.new;
-                    return (
-                      <em style={{
-                        fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700,
-                        color: s.color, background: s.bg,
-                        padding: "2px 8px", borderRadius: 4, whiteSpace: "nowrap",
-                      }}>{s.label}</em>
-                    );
+                    return <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, color: s.color, background: s.bg, padding: "2px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{s.label}</em>;
                   };
 
                   return (
-                    <div className="notification-list">
-                      {filtered.map((req) => {
-                        const assignment = activeAssignmentByRequestId[req.id];
-                        const requesterName = req.is_anonymous ? "Anônimo" : ((req.members as { name: string } | null)?.name ?? "Membro");
-                        return (
-                          <div key={req.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, flexWrap: "wrap" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <Heart size={14} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
-                                <strong style={{ fontSize: "0.85rem" }}>{requesterName}</strong>
-                                {statusBadge(req.status)}
-                                {req.source === "app" ? (
-                                  <em style={{ fontSize: "0.68rem", fontStyle: "normal", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>App</em>
+                    <>
+                      <div className="panel-heading" style={{ paddingTop: 0, paddingLeft: 0, paddingRight: 0 }}>
+                        <div>
+                          <span>Intercessão</span>
+                          <h4>Pedidos de oração</h4>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <select
+                            value={intercessionFilter}
+                            onChange={(e) => setIntercessionFilter(e.target.value as typeof intercessionFilter)}
+                            style={{ fontSize: "0.82rem", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--color-border)" }}
+                          >
+                            <option value="all">Todos</option>
+                            <option value="new">Novos</option>
+                            <option value="assigned">Atribuídos</option>
+                            <option value="interceding">Em Intercessão</option>
+                            <option value="done">Concluídos</option>
+                          </select>
+                          {canManageIntercession && listRequests.filter((r) => r.status === "new").length > 0 ? (
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={distributeStatus === "loading" || intercessionMembers.length === 0}
+                              onClick={handleDistributeAll}
+                            >
+                              <Heart size={14} />
+                              {distributeStatus === "loading" ? "Distribuindo..." : `Distribuir ${listRequests.filter((r) => r.status === "new").length} aleator.`}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {distributeMessage ? <p className={`login-feedback ${distributeStatus}`} style={{ margin: "8px 0" }}>{distributeMessage}</p> : null}
+                      {intercessionMembers.length === 0 && canManageIntercession ? (
+                        <div className="member-portal-empty state-card" style={{ margin: "12px 0" }}>
+                          <Heart size={22} />
+                          <strong>Nenhum intercessor cadastrado</strong>
+                          <span>Adicione membros ao ministério "Intercessão" para poder distribuir pedidos.</span>
+                        </div>
+                      ) : null}
+                      {intercessionLoadStatus === "loading" ? (
+                        <div style={{ padding: "32px", textAlign: "center", color: "var(--color-text-secondary)" }}>Carregando pedidos...</div>
+                      ) : filtered.length === 0 ? (
+                        <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                          <Heart size={32} />
+                          <strong>Nenhum pedido encontrado</strong>
+                          <span>Os pedidos feitos pelos membros aparecerão aqui.</span>
+                        </div>
+                      ) : (
+                        <div className="notification-list">
+                          {filtered.map((req) => {
+                            const assignment = activeAssignmentByRequestId[req.id];
+                            const requesterName = req.is_anonymous ? "Anônimo" : ((req.members as { name: string } | null)?.name ?? "Membro");
+                            return (
+                              <div key={req.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, flexWrap: "wrap" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                    <Heart size={14} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+                                    <strong style={{ fontSize: "0.85rem" }}>{requesterName}</strong>
+                                    {statusBadge(req.status)}
+                                    {req.source === "app" ? <em style={{ fontSize: "0.68rem", fontStyle: "normal", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>App</em> : null}
+                                    <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>{new Date(req.created_at).toLocaleDateString("pt-BR")}</small>
+                                  </div>
+                                  {canManageIntercession && req.status === "new" ? (
+                                    <button
+                                      type="button"
+                                      style={{ fontSize: "0.78rem", padding: "3px 10px", borderRadius: 6, border: "1px solid var(--color-accent)", color: "var(--color-accent)", background: "transparent", cursor: "pointer" }}
+                                      onClick={() => { setAssignModalTarget(req); setAssignSelectedMemberId(""); setAssignStatus("idle"); setAssignMessage(""); }}
+                                    >Atribuir</button>
+                                  ) : null}
+                                </div>
+                                <p style={{ margin: 0, fontSize: "0.85rem", lineHeight: 1.5, color: "var(--color-text)", paddingLeft: 22 }}>
+                                  {req.content.length > 180 ? req.content.slice(0, 180) + "…" : req.content}
+                                </p>
+                                {assignment ? (
+                                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-text-secondary)", paddingLeft: 22 }}>
+                                    Intercessor: <strong>{(assignment.members as { name: string } | null)?.name ?? "—"}</strong>
+                                    {assignment.status === "interceding" ? " · orando agora" : ""}
+                                  </p>
                                 ) : null}
-                                <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>
-                                  {new Date(req.created_at).toLocaleDateString("pt-BR")}
-                                </small>
                               </div>
-                              {canManageIntercession && req.status === "new" ? (
-                                <button
-                                  type="button"
-                                  style={{ fontSize: "0.78rem", padding: "3px 10px", borderRadius: 6, border: "1px solid var(--color-accent)", color: "var(--color-accent)", background: "transparent", cursor: "pointer" }}
-                                  onClick={() => {
-                                    setAssignModalTarget(req);
-                                    setAssignSelectedMemberId("");
-                                    setAssignStatus("idle");
-                                    setAssignMessage("");
-                                  }}
-                                >
-                                  Atribuir
-                                </button>
-                              ) : null}
-                            </div>
-                            <p style={{ margin: 0, fontSize: "0.85rem", lineHeight: 1.5, color: "var(--color-text)", paddingLeft: 22 }}>
-                              {req.content.length > 180 ? req.content.slice(0, 180) + "…" : req.content}
-                            </p>
-                            {assignment ? (
-                              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-text-secondary)", paddingLeft: 22 }}>
-                                Intercessor: <strong>{(assignment.members as { name: string } | null)?.name ?? "—"}</strong>
-                                {assignment.status === "interceding" ? " · orando agora" : ""}
-                              </p>
-                            ) : null}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })() : null}
+
+                {/* ── View: Moderação ────────────────────────────────── */}
+                {intercessionView === "moderation" ? (
+                  <>
+                    <div className="panel-heading" style={{ paddingTop: 0, paddingLeft: 0, paddingRight: 0 }}>
+                      <div>
+                        <span>Moderação</span>
+                        <h4>Aprovação de pedidos</h4>
+                      </div>
+                      {canManageIntercession ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                            Moderação {intercessionModerationEnabled ? "ativa" : "desativada"}
+                          </span>
+                          <button
+                            type="button"
+                            className={`btn ${intercessionModerationEnabled ? "btn-secondary" : "btn-primary"}`}
+                            style={{ fontSize: "0.78rem", padding: "4px 12px" }}
+                            disabled={intercessionModerationSaveStatus === "loading"}
+                            onClick={handleToggleModeration}
+                          >
+                            {intercessionModerationSaveStatus === "loading" ? "Salvando..." : intercessionModerationEnabled ? "Desativar" : "Ativar"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {!intercessionModerationEnabled ? (
+                      <div className="member-portal-empty state-card" style={{ margin: "16px 0" }}>
+                        <Heart size={28} />
+                        <strong>Moderação desativada</strong>
+                        <span>Quando ativada, pedidos novos ficam em fila aguardando aprovação antes de serem distribuídos.</span>
+                      </div>
+                    ) : (() => {
+                      const pending = prayerRequests.filter((r) => r.moderation_status === "pending_review");
+                      const rejected = prayerRequests.filter((r) => r.moderation_status === "rejected");
+                      if (pending.length === 0 && rejected.length === 0) {
+                        return (
+                          <div className="member-portal-empty state-card" style={{ margin: "16px 0" }}>
+                            <Heart size={28} />
+                            <strong>Nenhum pedido aguardando aprovação</strong>
+                            <span>Todos os pedidos recebidos já foram revisados.</span>
                           </div>
                         );
-                      })}
-                    </div>
+                      }
+                      return (
+                        <div className="notification-list">
+                          {[...pending, ...rejected].map((req) => {
+                            const requesterName = req.is_anonymous ? "Anônimo" : ((req.members as { name: string } | null)?.name ?? "Membro");
+                            const isPending = req.moderation_status === "pending_review";
+                            return (
+                              <div key={req.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, flexWrap: "wrap" }}>
+                                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                    <strong style={{ fontSize: "0.85rem" }}>{requesterName}</strong>
+                                    <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, padding: "2px 8px", borderRadius: 4, color: isPending ? "#e08b00" : "var(--color-danger)", background: isPending ? "rgba(224,139,0,0.1)" : "rgba(var(--color-danger-rgb),0.1)" }}>
+                                      {isPending ? "Aguardando" : "Rejeitado"}
+                                    </em>
+                                    <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>{new Date(req.created_at).toLocaleDateString("pt-BR")}</small>
+                                  </div>
+                                  {isPending && canManageIntercession ? (
+                                    <div style={{ display: "flex", gap: 6 }}>
+                                      <button type="button" className="btn btn-primary" style={{ fontSize: "0.75rem", padding: "3px 10px" }} onClick={() => handleModerationAction(req.id, "approved")}>Aprovar</button>
+                                      <button type="button" className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "3px 10px", color: "var(--color-danger)", borderColor: "var(--color-danger)" }} onClick={() => handleModerationAction(req.id, "rejected")}>Rejeitar</button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <p style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.5 }}>{req.content}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </>
+                ) : null}
+
+                {/* ── View: Histórico por intercessor ───────────────── */}
+                {intercessionView === "history" ? (() => {
+                  // Build stats per intercessor from all assignments (including done)
+                  const statsById: Record<string, { name: string; total: number; done: number; interceding: number }> = {};
+                  for (const a of prayerAssignments) {
+                    const name = (a.members as { name: string } | null)?.name ?? a.assigned_member_id;
+                    if (!statsById[a.assigned_member_id]) {
+                      statsById[a.assigned_member_id] = { name, total: 0, done: 0, interceding: 0 };
+                    }
+                    statsById[a.assigned_member_id].total++;
+                    if (a.status === "done") statsById[a.assigned_member_id].done++;
+                    if (a.status === "interceding") statsById[a.assigned_member_id].interceding++;
+                  }
+                  const rows = Object.values(statsById).sort((a, b) => b.total - a.total);
+
+                  return (
+                    <>
+                      <div className="panel-heading" style={{ paddingTop: 0, paddingLeft: 0, paddingRight: 0 }}>
+                        <div><span>Histórico</span><h4>Intercessões por membro</h4></div>
+                      </div>
+                      {rows.length === 0 ? (
+                        <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                          <Heart size={32} />
+                          <strong>Nenhuma intercessão registrada ainda</strong>
+                          <span>O histórico aparecerá conforme os intercessores concluírem pedidos.</span>
+                        </div>
+                      ) : (
+                        <div className="notification-list">
+                          {rows.map((row, i) => {
+                            const rate = row.total > 0 ? Math.round((row.done / row.total) * 100) : 0;
+                            return (
+                              <div key={i} style={{ flexDirection: "column", gap: 6 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                  <strong style={{ fontSize: "0.88rem" }}>{row.name}</strong>
+                                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                    <em style={{ fontSize: "0.72rem", fontStyle: "normal", fontWeight: 600, color: "var(--color-text-secondary)" }}>{row.total} atribuídos</em>
+                                    <em style={{ fontSize: "0.72rem", fontStyle: "normal", fontWeight: 700, color: "var(--color-success)" }}>{row.done} concluídos</em>
+                                    {row.interceding > 0 ? <em style={{ fontSize: "0.72rem", fontStyle: "normal", fontWeight: 700, color: "#c07000" }}>{row.interceding} em curso</em> : null}
+                                  </div>
+                                </div>
+                                <div style={{ height: 6, background: "var(--color-bg-subtle)", borderRadius: 3, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${rate}%`, background: rate >= 70 ? "var(--color-success)" : "#e08b00", borderRadius: 3, transition: "width 0.4s" }} />
+                                </div>
+                                <small style={{ fontSize: "0.74rem", color: "var(--color-text-secondary)" }}>{rate}% de conclusão</small>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   );
-                })()}
+                })() : null}
+
+                {/* ── View: Relatório por período ────────────────────── */}
+                {intercessionView === "report" ? (() => {
+                  const start = new Date(intercessionPeriodStart + "T00:00:00");
+                  const end = new Date(intercessionPeriodEnd + "T23:59:59");
+                  const inPeriod = prayerRequests.filter((r) => {
+                    const d = new Date(r.created_at);
+                    return d >= start && d <= end;
+                  });
+                  const totalPeriod = inPeriod.length;
+                  const donePeriod = inPeriod.filter((r) => r.status === "done").length;
+                  const intercedingPeriod = inPeriod.filter((r) => r.status === "interceding").length;
+                  const newPeriod = inPeriod.filter((r) => r.status === "new").length;
+                  const assignedPeriod = inPeriod.filter((r) => r.status === "assigned").length;
+                  const ratePeriod = totalPeriod > 0 ? Math.round((donePeriod / totalPeriod) * 100) : 0;
+                  const anonPeriod = inPeriod.filter((r) => r.is_anonymous).length;
+                  const appPeriod = inPeriod.filter((r) => r.source === "app").length;
+
+                  return (
+                    <>
+                      <div className="panel-heading" style={{ paddingTop: 0, paddingLeft: 0, paddingRight: 0 }}>
+                        <div><span>Relatório</span><h4>Pedidos por período</h4></div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <input type="date" value={intercessionPeriodStart} onChange={(e) => setIntercessionPeriodStart(e.target.value)}
+                            style={{ fontSize: "0.82rem", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--color-border)" }} />
+                          <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>até</span>
+                          <input type="date" value={intercessionPeriodEnd} onChange={(e) => setIntercessionPeriodEnd(e.target.value)}
+                            style={{ fontSize: "0.82rem", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--color-border)" }} />
+                        </div>
+                      </div>
+
+                      <div className="client-stats" style={{ margin: "12px 0" }}>
+                        <article><span>Total no período</span><strong>{totalPeriod}</strong><small>Pedidos recebidos</small></article>
+                        <article><span>Concluídos</span><strong style={{ color: "var(--color-success)" }}>{donePeriod}</strong><small>{ratePeriod}% de conclusão</small></article>
+                        <article><span>Em andamento</span><strong style={{ color: "#c07000" }}>{intercedingPeriod + assignedPeriod}</strong><small>Intercedendo + atribuídos</small></article>
+                        <article><span>Sem atribuição</span><strong style={{ color: newPeriod > 0 ? "var(--color-accent)" : "var(--color-text-secondary)" }}>{newPeriod}</strong><small>Aguardando distribuição</small></article>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                        {[
+                          { label: "Taxa de conclusão", value: ratePeriod, suffix: "%", color: ratePeriod >= 70 ? "var(--color-success)" : ratePeriod >= 40 ? "#e08b00" : "var(--color-danger)" },
+                        ].map((kpi) => (
+                          <div key={kpi.label}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>{kpi.label}</span>
+                              <strong style={{ fontSize: "0.82rem", color: kpi.color }}>{kpi.value}{kpi.suffix}</strong>
+                            </div>
+                            <div style={{ height: 8, background: "var(--color-bg-subtle)", borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${kpi.value}%`, background: kpi.color, borderRadius: 4, transition: "width 0.4s" }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginTop: 16, display: "flex", gap: 20, flexWrap: "wrap" }}>
+                        <div style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                          Anônimos: <strong>{anonPeriod}</strong>
+                        </div>
+                        {appPeriod > 0 ? (
+                          <div style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                            Via app: <strong>{appPeriod}</strong>
+                          </div>
+                        ) : null}
+                        <div style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                          Via portal: <strong>{totalPeriod - appPeriod}</strong>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })() : null}
               </article>
 
               {/* Modal de atribuição direta */}

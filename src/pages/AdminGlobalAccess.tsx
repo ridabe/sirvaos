@@ -12,6 +12,7 @@ import {
   Edit3,
   ExternalLink,
   Eye,
+  Heart,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
@@ -182,6 +183,8 @@ type AdminDashboardData = {
     bibleSchoolEnrollmentsActive: number;
     tenantEventsLast30Days: number;
     worshipConfirmationRate: number | null;
+    prayerRequestsTotal: number;
+    prayerRequestsDone: number;
   };
 };
 
@@ -744,6 +747,8 @@ export function AdminGlobalAccess() {
       bsEnrollmentsResult,
       tenantEventsResult,
       worshipAssignmentsResult,
+      prayerRequestsTotalResult,
+      prayerRequestsDoneResult,
     ] = await Promise.all([
       supabase.from("financial_transactions").select("id", { count: "exact", head: true }),
       supabase.from("worship_events").select("id", { count: "exact", head: true }),
@@ -757,6 +762,8 @@ export function AdminGlobalAccess() {
         .from("worship_assignments")
         .select("id, status", { count: "exact" })
         .in("status", ["confirmed", "declined"]),
+      supabase.from("prayer_requests").select("id", { count: "exact", head: true }),
+      supabase.from("prayer_requests").select("id", { count: "exact", head: true }).eq("status", "done"),
     ]);
 
     const totalAssignments = worshipAssignmentsResult.count ?? 0;
@@ -788,6 +795,8 @@ export function AdminGlobalAccess() {
         bibleSchoolEnrollmentsActive: bsEnrollmentsResult.count ?? 0,
         tenantEventsLast30Days: tenantEventsResult.count ?? 0,
         worshipConfirmationRate: confirmationRate,
+        prayerRequestsTotal: prayerRequestsTotalResult.count ?? 0,
+        prayerRequestsDone: prayerRequestsDoneResult.count ?? 0,
       },
     });
     setDataStatus("ready");
@@ -2449,6 +2458,16 @@ export function AdminGlobalAccess() {
                     <span>Eventos (30 dias)</span>
                     <strong>{dashboardData.engagement.tenantEventsLast30Days}</strong>
                     <small>Agenda das igrejas</small>
+                  </article>
+                  <article>
+                    <Heart size={20} />
+                    <span>Pedidos de Oração</span>
+                    <strong>{dashboardData.engagement.prayerRequestsTotal}</strong>
+                    <small>
+                      {dashboardData.engagement.prayerRequestsTotal > 0
+                        ? `${Math.round((dashboardData.engagement.prayerRequestsDone / dashboardData.engagement.prayerRequestsTotal) * 100)}% intercedidos`
+                        : "Nenhum pedido ainda"}
+                    </small>
                   </article>
                 </div>
               ) : null}
