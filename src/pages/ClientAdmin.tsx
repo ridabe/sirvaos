@@ -2988,7 +2988,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       setIntercessionMembers([]);
     }
 
-    setIntercessionLoadStatus("loaded");
+    setIntercessionLoadStatus("ready");
   }
 
   async function handleModerationAction(
