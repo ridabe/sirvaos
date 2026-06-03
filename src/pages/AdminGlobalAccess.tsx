@@ -193,8 +193,7 @@ type AppConfigRecord = {
 };
 
 type AppConfigFormState = {
-  android_required_version_code: string;
-  android_recommended_version_code: string;
+  android_version_code: string;
   android_play_store_url: string;
 };
 
@@ -381,8 +380,7 @@ export function AdminGlobalAccess() {
   const [appConfig, setAppConfig] = useState<AppConfigRecord[]>([]);
   const [appConfigStatus, setAppConfigStatus] = useState<LoadStatus>("idle");
   const [appConfigForm, setAppConfigForm] = useState<AppConfigFormState>({
-    android_required_version_code: "",
-    android_recommended_version_code: "",
+    android_version_code: "",
     android_play_store_url: "",
   });
   const [appConfigSaveStatus, setAppConfigSaveStatus] = useState<LoginStatus>("idle");
@@ -813,8 +811,7 @@ export function AdminGlobalAccess() {
 
     const toForm = (key: string) => rows.find((r) => r.key === key)?.value ?? "";
     setAppConfigForm({
-      android_required_version_code: toForm("android_required_version_code"),
-      android_recommended_version_code: toForm("android_recommended_version_code"),
+      android_version_code: toForm("android_version_code"),
       android_play_store_url: toForm("android_play_store_url"),
     });
     setAppConfigStatus("ready");
@@ -825,22 +822,11 @@ export function AdminGlobalAccess() {
     setAppConfigSaveStatus("loading");
     setAppConfigSaveMessage("");
 
-    const required = parseInt(appConfigForm.android_required_version_code, 10);
-    const recommended = parseInt(appConfigForm.android_recommended_version_code, 10);
+    const versionCode = parseInt(appConfigForm.android_version_code, 10);
 
-    if (isNaN(required) || required < 1) {
+    if (isNaN(versionCode) || versionCode < 1) {
       setAppConfigSaveStatus("error");
-      setAppConfigSaveMessage("Versão obrigatória deve ser um número inteiro maior que 0.");
-      return;
-    }
-    if (isNaN(recommended) || recommended < 1) {
-      setAppConfigSaveStatus("error");
-      setAppConfigSaveMessage("Versão recomendada deve ser um número inteiro maior que 0.");
-      return;
-    }
-    if (recommended < required) {
-      setAppConfigSaveStatus("error");
-      setAppConfigSaveMessage("A versão recomendada não pode ser menor que a versão obrigatória.");
+      setAppConfigSaveMessage("Informe um número de versão válido (inteiro maior que 0).");
       return;
     }
     if (!appConfigForm.android_play_store_url.trim()) {
@@ -850,8 +836,7 @@ export function AdminGlobalAccess() {
     }
 
     const rows = [
-      { key: "android_required_version_code", value: String(required), updated_at: new Date().toISOString() },
-      { key: "android_recommended_version_code", value: String(recommended), updated_at: new Date().toISOString() },
+      { key: "android_version_code", value: String(versionCode), updated_at: new Date().toISOString() },
       { key: "android_play_store_url", value: appConfigForm.android_play_store_url.trim(), updated_at: new Date().toISOString() },
     ];
 
@@ -2158,11 +2143,10 @@ export function AdminGlobalAccess() {
                   ) : (
                     <>
                       {/* Cards de status atual */}
-                      <p className="app-version-subtitle">Configuração atual no banco de dados</p>
+                      <p className="app-version-subtitle">Configuração atual</p>
                       <div className="app-version-current">
                         {[
-                          { key: "android_required_version_code", label: "Versão mínima obrigatória", icon: "🔴" },
-                          { key: "android_recommended_version_code", label: "Versão recomendada", icon: "🟡" },
+                          { key: "android_version_code", label: "Versão mínima exigida (versionCode)", icon: "📱" },
                           { key: "android_play_store_url", label: "URL da Play Store", icon: "🔗" },
                         ].map(({ key, label, icon }) => {
                           const row = appConfig.find((r) => r.key === key);
@@ -2179,39 +2163,24 @@ export function AdminGlobalAccess() {
 
                       <div className="global-panel-heading" style={{ marginTop: "2rem", marginBottom: 0 }}>
                         <div>
-                          <span>Editar configuração</span>
+                          <span>Editar</span>
                           <h2>Atualizar versão do app Android</h2>
                         </div>
                       </div>
 
                       <form className="tenant-form app-version-form" onSubmit={handleSaveAppConfig}>
                         <label>
-                          <span>Versão mínima obrigatória (versionCode) *</span>
+                          <span>Versão mínima exigida (versionCode) *</span>
                           <input
                             type="number"
                             min="1"
                             step="1"
-                            value={appConfigForm.android_required_version_code}
-                            onChange={(e) => setAppConfigForm((f) => ({ ...f, android_required_version_code: e.target.value }))}
+                            value={appConfigForm.android_version_code}
+                            onChange={(e) => setAppConfigForm((f) => ({ ...f, android_version_code: e.target.value }))}
                             placeholder="Ex.: 2"
                           />
                           <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
-                            Usuários com versão inferior verão um alerta obrigatório sem poder dispensar.
-                          </small>
-                        </label>
-
-                        <label>
-                          <span>Versão recomendada (versionCode) *</span>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={appConfigForm.android_recommended_version_code}
-                            onChange={(e) => setAppConfigForm((f) => ({ ...f, android_recommended_version_code: e.target.value }))}
-                            placeholder="Ex.: 2"
-                          />
-                          <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
-                            Usuários com versão inferior verão um alerta sugerindo atualização, mas poderão dispensar.
+                            Usuários com versão inferior ao informado verão um alerta obrigatório ao abrir o app e serão direcionados para a Play Store.
                           </small>
                         </label>
 
@@ -2226,12 +2195,12 @@ export function AdminGlobalAccess() {
                         </label>
 
                         <div className="app-version-info-box">
-                          <strong>Como usar:</strong>
+                          <strong>Como funciona:</strong>
                           <ol>
                             <li>Incremente o <code>versionCode</code> no <code>app.json</code> do projeto mobile.</li>
                             <li>Gere o build via GitHub Actions e publique na Play Store.</li>
-                            <li>Após aprovação da Play Store, atualize os campos acima.</li>
-                            <li>Na próxima abertura do app, o usuário receberá o alerta automaticamente.</li>
+                            <li>Após aprovação, atualize o número acima para o novo versionCode.</li>
+                            <li>Na próxima abertura, usuários com versão antiga verão o alerta de atualização obrigatória.</li>
                           </ol>
                         </div>
 
