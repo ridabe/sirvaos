@@ -1893,7 +1893,6 @@ export function MemberPortal() {
   const hasSchedulePortalAccess = memberMinistries.some((item) =>
     isSchedulableMinistryName(item.catalog_ministries?.name),
   );
-  const showLegacyAssignmentSections = new URLSearchParams(window.location.search).has("legacyPortalAssignments");
   const nextPortalEvent = portalEvents[0] ?? null;
   const latestAnnouncement = portalAnnouncements[0] ?? null;
   const firstKidsChild = kidsChildren[0] ?? null;
@@ -2261,13 +2260,14 @@ export function MemberPortal() {
           </article>
         </section>
 
-        <section className="member-portal-section member-portal-access-section">
-          <div className="member-portal-section-head">
-            <div>
-              <h2>Acessos e ministérios</h2>
-              <p>Permissões identificadas para este usuário.</p>
-            </div>
-          </div>
+        <AccordionPanel
+          id="access"
+          title="Acessos e ministérios"
+          description="Permissões identificadas para este usuário."
+          icon={<ShieldCheck size={18} />}
+          defaultOpen={true}
+          className="member-portal-section member-portal-access-section"
+        >
           <div className="member-portal-permission-list">
             {canManageMembers ? (
               <a className="member-portal-permission-card featured" href="/admin-cliente">
@@ -2311,7 +2311,7 @@ export function MemberPortal() {
               </div>
             ) : null}
           </div>
-        </section>
+        </AccordionPanel>
 
             </aside>
           ) : null}
@@ -2413,13 +2413,15 @@ export function MemberPortal() {
         ) : null}
 
         {activePortalTab === "admin" && highlightedAdminModules.length > 0 ? (
-          <section className="member-portal-section member-portal-feed-section member-portal-admin-modules-section">
-            <div className="member-portal-section-head">
-              <div>
-                <h2><Check size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Módulos administrativos</h2>
-                <p>Acessos liberados para você administrar pela igreja.</p>
-              </div>
-            </div>
+          <AccordionPanel
+            id="admin-modules"
+            title="Módulos administrativos"
+            description="Acessos liberados para você administrar pela igreja."
+            icon={<Check size={18} />}
+            badge={highlightedAdminModules.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-admin-modules-section"
+          >
             <div className="member-portal-admin-module-grid">
               {highlightedAdminModules.map((module) => (
                 <article key={module.id} className="member-portal-admin-module-card">
@@ -2444,7 +2446,7 @@ export function MemberPortal() {
                           }}
                         >
                           <Plus size={14} />
-                          Cadastrar crianÃ§a
+                          Cadastrar criança
                         </button>
                       ) : null}
                     </span>
@@ -2452,85 +2454,87 @@ export function MemberPortal() {
                 </article>
               ))}
             </div>
-          </section>
+          </AccordionPanel>
         ) : null}
 
         {/* ── Seção: Mídias Sociais ─────────────────────────────────────── */}
         {activePortalTab === "midias" && socialMediaChannels.length > 0 ? (
-          <section className="member-portal-section member-portal-feed-section member-portal-social-section">
-            <div className="member-portal-section-head">
-              <div>
-                <h2><Play size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />Mídias Sociais</h2>
-                <p>Vídeos e transmissões do canal da sua igreja.</p>
-              </div>
-            </div>
-            {socialMediaChannels.map((ch) => {
-              const videos = socialMediaVideos[ch.id] ?? [];
-              const isLoading = socialMediaLoadingIds.has(ch.id);
-              return (
-                <div key={ch.id} className="member-portal-social-channel">
-                  <div className="member-portal-social-channel-head">
-                    <h3>
-                      <Play size={14} />
-                      {ch.name}
-                    </h3>
-                    <div className="member-portal-social-channel-meta">
-                      <span>{ch.channel_type === "playlist" ? "Playlist" : "Canal"}</span>
-                      {videos.length > 0 ? <span>{videos.length} videos</span> : null}
-                    </div>
-                  </div>
-                  {ch.description ? (
-                    <p className="member-portal-social-description">{ch.description}</p>
-                  ) : null}
-                  {isLoading ? (
-                    <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>Carregando vídeos…</p>
-                  ) : videos.length === 0 ? (
-                    <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>Nenhum vídeo disponível no momento.</p>
-                  ) : (
-                    <div className="member-portal-social-grid">
-                      {videos.map((v) => (
-                        <button
-                          key={v.videoId}
-                          type="button"
-                          onClick={() => setSocialMediaVideoModal({ channelName: ch.name, video: v })}
-                          style={{
-                            background: "none", border: "1px solid var(--color-border)",
-                            borderRadius: 8, padding: 0, cursor: "pointer",
-                            display: "flex", flexDirection: "column", overflow: "hidden",
-                            textAlign: "left",
-                          }}
-                        >
-                          <div style={{ position: "relative", width: "100%", paddingTop: "56.25%" }}>
-                            <img
-                              src={v.thumbnail}
-                              alt={v.title}
-                              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                            />
-                            <div style={{
-                              position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                              background: "rgba(0,0,0,0.25)",
-                            }}>
-                              <Play size={28} style={{ color: "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }} />
+          <AccordionPanel
+            id="media"
+            title="Mídias Sociais"
+            description="Vídeos e transmissões do canal da sua igreja."
+            icon={<Play size={18} />}
+            badge={socialMediaChannels.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-social-section"
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {socialMediaChannels.map((ch) => {
+                const videos = socialMediaVideos[ch.id] ?? [];
+                const isLoading = socialMediaLoadingIds.has(ch.id);
+                const channelLabel = ch.channel_type === "playlist" ? "Playlist" : "Canal";
+                const description = ch.description ? `${channelLabel} · ${ch.description}` : channelLabel;
+                return (
+                  <AccordionPanel
+                    key={ch.id}
+                    id={`media:${ch.id}`}
+                    title={ch.name}
+                    description={description}
+                    icon={<Play size={18} />}
+                    badge={videos.length}
+                    defaultOpen={false}
+                    className="member-portal-accordion-compact"
+                  >
+                    {isLoading ? (
+                      <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", margin: 0 }}>Carregando vídeos…</p>
+                    ) : videos.length === 0 ? (
+                      <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", margin: 0 }}>Nenhum vídeo disponível no momento.</p>
+                    ) : (
+                      <div className="member-portal-social-grid">
+                        {videos.map((v) => (
+                          <button
+                            key={v.videoId}
+                            type="button"
+                            onClick={() => setSocialMediaVideoModal({ channelName: ch.name, video: v })}
+                            style={{
+                              background: "none", border: "1px solid var(--color-border)",
+                              borderRadius: 8, padding: 0, cursor: "pointer",
+                              display: "flex", flexDirection: "column", overflow: "hidden",
+                              textAlign: "left",
+                            }}
+                          >
+                            <div style={{ position: "relative", width: "100%", paddingTop: "56.25%" }}>
+                              <img
+                                src={v.thumbnail}
+                                alt={v.title}
+                                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                              />
+                              <div style={{
+                                position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                                background: "rgba(0,0,0,0.25)",
+                              }}>
+                                <Play size={28} style={{ color: "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }} />
+                              </div>
                             </div>
-                          </div>
-                          <div style={{ padding: "8px 10px 10px" }}>
-                            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, lineHeight: 1.35, color: "var(--color-text-primary)", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", display: "-webkit-box", overflow: "hidden" }}>
-                              {v.title}
-                            </p>
-                            {v.published ? (
-                              <small style={{ color: "var(--color-text-secondary)", fontSize: "0.7rem" }}>
-                                {new Date(v.published).toLocaleDateString("pt-BR")}
-                              </small>
-                            ) : null}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </section>
+                            <div style={{ padding: "8px 10px 10px" }}>
+                              <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, lineHeight: 1.35, color: "var(--color-text-primary)", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", display: "-webkit-box", overflow: "hidden" }}>
+                                {v.title}
+                              </p>
+                              {v.published ? (
+                                <small style={{ color: "var(--color-text-secondary)", fontSize: "0.7rem" }}>
+                                  {new Date(v.published).toLocaleDateString("pt-BR")}
+                                </small>
+                              ) : null}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionPanel>
+                );
+              })}
+            </div>
+          </AccordionPanel>
         ) : null}
 
         {socialMediaVideoModal ? (
@@ -2553,262 +2557,276 @@ export function MemberPortal() {
           </div>
         ) : null}
 
-        {activePortalTab === "agenda" && hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
-          <section className="member-portal-section member-portal-feed-section member-portal-schedule-section">
-            <div className="member-portal-empty state-card">
-              <CalendarCheck size={34} />
-              <strong>Nenhuma escala ministerial encontrada</strong>
-              <span>Quando você for escalado em algum evento, a confirmação aparecerá aqui.</span>
-            </div>
-          </section>
-        ) : null}
-
-        {activePortalTab === "agenda" && hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
-          <section className="member-portal-section member-portal-feed-section member-portal-schedule-section">
-            <h2>Próximas escalas</h2>
-            <div className="member-portal-cards">
-              {upcomingAssignments.map((assignment) => {
-                const evt = assignment.worship_events;
-                if (!evt) return null;
-                const role = assignment.worship_roles?.name ?? assignment.role_name ?? "Função não definida";
-                const isLoading = actionStatus[assignment.id] === "loading";
-                const isDeclining = decliningId === assignment.id;
-                return (
-                  <article key={assignment.id} className={`member-portal-card ${assignment.status}`}>
-                    <div className="member-portal-card-head">
-                      <div>
-                        <span className="member-portal-event-type">{eventTypeLabel(evt.event_type)}</span>
-                        <strong>{evt.title}</strong>
-                      </div>
-                      <em className={`member-portal-status ${assignment.status}`}>
-                        {statusLabel(assignment.status)}
-                      </em>
-                    </div>
-
-                    <div className="member-portal-card-meta">
-                      <div>
-                        <CalendarCheck size={14} />
-                        <span>
-                          {new Date(evt.starts_at).toLocaleString("pt-BR", {
-                            weekday: "long",
-                            day: "2-digit",
-                            month: "long",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      {evt.location ? (
+        {activePortalTab === "agenda" && hasSchedulePortalAccess ? (
+          <AccordionPanel
+            id="schedule-upcoming"
+            title="Próximas escalas"
+            description="Confirme presença e acompanhe seus compromissos."
+            icon={<Music size={18} />}
+            badge={upcomingAssignments.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-schedule-section"
+          >
+            {upcomingAssignments.length === 0 ? (
+              <div className="member-portal-empty state-card">
+                <CalendarCheck size={34} />
+                <strong>Nenhuma escala ministerial encontrada</strong>
+                <span>Quando você for escalado em algum evento, a confirmação aparecerá aqui.</span>
+              </div>
+            ) : (
+              <div className="member-portal-cards">
+                {upcomingAssignments.map((assignment) => {
+                  const evt = assignment.worship_events;
+                  if (!evt) return null;
+                  const role = assignment.worship_roles?.name ?? assignment.role_name ?? "Função não definida";
+                  const isLoading = actionStatus[assignment.id] === "loading";
+                  const isDeclining = decliningId === assignment.id;
+                  return (
+                    <article key={assignment.id} className={`member-portal-card ${assignment.status}`}>
+                      <div className="member-portal-card-head">
                         <div>
-                          <MapPin size={14} />
-                          <span>{evt.location}</span>
+                          <span className="member-portal-event-type">{eventTypeLabel(evt.event_type)}</span>
+                          <strong>{evt.title}</strong>
                         </div>
-                      ) : null}
-                      {assignment.arrival_at ? (
+                        <em className={`member-portal-status ${assignment.status}`}>
+                          {statusLabel(assignment.status)}
+                        </em>
+                      </div>
+
+                      <div className="member-portal-card-meta">
                         <div>
-                          <Clock3 size={14} />
+                          <CalendarCheck size={14} />
                           <span>
-                            Chegar às{" "}
-                            {new Date(assignment.arrival_at).toLocaleTimeString("pt-BR", {
+                            {new Date(evt.starts_at).toLocaleString("pt-BR", {
+                              weekday: "long",
+                              day: "2-digit",
+                              month: "long",
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
                           </span>
                         </div>
+                        {evt.location ? (
+                          <div>
+                            <MapPin size={14} />
+                            <span>{evt.location}</span>
+                          </div>
+                        ) : null}
+                        {assignment.arrival_at ? (
+                          <div>
+                            <Clock3 size={14} />
+                            <span>
+                              Chegar às{" "}
+                              {new Date(assignment.arrival_at).toLocaleTimeString("pt-BR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="member-portal-card-role">
+                        <Music size={14} />
+                        <strong>{role}</strong>
+                      </div>
+
+                      {assignment.notes ? (
+                        <p className="member-portal-card-notes">{assignment.notes}</p>
                       ) : null}
-                    </div>
 
-                    <div className="member-portal-card-role">
-                      <Music size={14} />
-                      <strong>{role}</strong>
-                    </div>
+                      {assignment.decline_reason ? (
+                        <p className="member-portal-card-notes muted">Motivo: {assignment.decline_reason}</p>
+                      ) : null}
 
-                    {assignment.notes ? (
-                      <p className="member-portal-card-notes">{assignment.notes}</p>
-                    ) : null}
-
-                    {assignment.decline_reason ? (
-                      <p className="member-portal-card-notes muted">Motivo: {assignment.decline_reason}</p>
-                    ) : null}
-
-                    {isDeclining ? (
-                      <div className="member-portal-decline-form">
-                        <textarea
-                          className="catalog-input catalog-textarea"
-                          placeholder="Motivo da recusa (opcional)"
-                          value={declineReason}
-                          onChange={(e) => setDeclineReason(e.target.value)}
-                          rows={2}
-                        />
-                        <div className="member-portal-decline-actions">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => { setDecliningId(null); setDeclineReason(""); }}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => void declineAssignment(assignment.id)}
-                            disabled={isLoading}
-                          >
-                            Confirmar recusa
-                          </Button>
+                      {isDeclining ? (
+                        <div className="member-portal-decline-form">
+                          <textarea
+                            className="catalog-input catalog-textarea"
+                            placeholder="Motivo da recusa (opcional)"
+                            value={declineReason}
+                            onChange={(e) => setDeclineReason(e.target.value)}
+                            rows={2}
+                          />
+                          <div className="member-portal-decline-actions">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => { setDecliningId(null); setDeclineReason(""); }}
+                            >
+                              Cancelar
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={() => void declineAssignment(assignment.id)}
+                              disabled={isLoading}
+                            >
+                              Confirmar recusa
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="member-portal-card-actions">
-                        {assignment.status !== "confirmed" ? (
-                          <Button
-                            type="button"
-                            icon={<Check size={15} />}
-                            onClick={() => void confirmAssignment(assignment.id)}
-                            disabled={isLoading}
-                          >
-                            Confirmar presença
-                          </Button>
-                        ) : null}
-                        {assignment.status !== "declined" ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            icon={<X size={15} />}
-                            onClick={() => setDecliningId(assignment.id)}
-                            disabled={isLoading}
-                          >
-                            Recusar
-                          </Button>
-                        ) : null}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          </section>
+                      ) : (
+                        <div className="member-portal-card-actions">
+                          {assignment.status !== "confirmed" ? (
+                            <Button
+                              type="button"
+                              icon={<Check size={15} />}
+                              onClick={() => void confirmAssignment(assignment.id)}
+                              disabled={isLoading}
+                            >
+                              Confirmar presença
+                            </Button>
+                          ) : null}
+                          {assignment.status !== "declined" ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              icon={<X size={15} />}
+                              onClick={() => setDecliningId(assignment.id)}
+                              disabled={isLoading}
+                            >
+                              Recusar
+                            </Button>
+                          ) : null}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </AccordionPanel>
         ) : null}
 
         {activePortalTab === "kids" && !isKidsModuleAdmin ? (
-        <section className="member-portal-section member-portal-feed-section member-portal-kids-section">
-          <div className="member-portal-section-head">
-            <div>
-              <h2>Kids</h2>
-              <p>Cadastre crianças e gere o QR Code para check-in na salinha.</p>
+          <AccordionPanel
+            id="kids"
+            title="Kids"
+            description="Cadastre crianças e gere o QR Code para check-in na salinha."
+            icon={<Baby size={18} />}
+            badge={kidsChildren.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-kids-section"
+          >
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button
+                type="button"
+                icon={<Plus size={14} />}
+                onClick={() => {
+                  setKidsForm(emptyKidsChildForm);
+                  setIsKidsFormOpen(true);
+                }}
+              >
+                Cadastrar criança
+              </Button>
             </div>
-            <Button
-              type="button"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                setKidsForm(emptyKidsChildForm);
-                setIsKidsFormOpen(true);
-              }}
-            >
-              Cadastrar criança
-            </Button>
-          </div>
 
-          {kidsMessage ? <p className={`login-feedback ${kidsStatus}`}>{kidsMessage}</p> : null}
+            {kidsMessage ? <p className={`login-feedback ${kidsStatus}`}>{kidsMessage}</p> : null}
 
-          {kidsChildren.length === 0 ? (
-            <div className="member-portal-empty-inline">
-              <Baby size={18} />
-              <span>Nenhuma criança cadastrada ainda.</span>
-            </div>
-          ) : (
-            <div className="member-portal-cards">
-              {kidsChildren.map((child) => {
-                const guardians = kidsGuardiansByChildId[child.id] ?? [];
-                const activePass = (kidsPassesByChildId[child.id] ?? []).find((pass) => !pass.used_at && new Date(pass.valid_until) >= new Date()) ?? null;
-                const showQr = selectedPassChildId === child.id && activePass;
-                return (
-                  <article key={child.id} className="member-portal-card">
-                    <div className="member-portal-card-head">
-                      <div>
-                        <span className="member-portal-event-type">Criança</span>
-                        <strong>{child.name}</strong>
-                      </div>
-                      <em className="member-portal-status pending">{child.kids_groups?.name ?? "Sem turma"}</em>
-                    </div>
-
-                    <div className="member-portal-card-meta">
-                      {child.date_of_birth ? (
+            {kidsChildren.length === 0 ? (
+              <div className="member-portal-empty-inline">
+                <Baby size={18} />
+                <span>Nenhuma criança cadastrada ainda.</span>
+              </div>
+            ) : (
+              <div className="member-portal-cards">
+                {kidsChildren.map((child) => {
+                  const guardians = kidsGuardiansByChildId[child.id] ?? [];
+                  const activePass = (kidsPassesByChildId[child.id] ?? []).find((pass) => !pass.used_at && new Date(pass.valid_until) >= new Date()) ?? null;
+                  const showQr = selectedPassChildId === child.id && activePass;
+                  return (
+                    <article key={child.id} className="member-portal-card">
+                      <div className="member-portal-card-head">
                         <div>
-                          <CalendarCheck size={14} />
-                          <span>Nascimento: {new Date(`${child.date_of_birth}T12:00:00`).toLocaleDateString("pt-BR")}</span>
+                          <span className="member-portal-event-type">Criança</span>
+                          <strong>{child.name}</strong>
+                        </div>
+                        <em className="member-portal-status pending">{child.kids_groups?.name ?? "Sem turma"}</em>
+                      </div>
+
+                      <div className="member-portal-card-meta">
+                        {child.date_of_birth ? (
+                          <div>
+                            <CalendarCheck size={14} />
+                            <span>Nascimento: {new Date(`${child.date_of_birth}T12:00:00`).toLocaleDateString("pt-BR")}</span>
+                          </div>
+                        ) : null}
+                        {child.allergies ? (
+                          <div>
+                            <X size={14} />
+                            <span>Alergias: {child.allergies}</span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {guardians.length > 0 ? (
+                        <div className="member-portal-guardians">
+                          {guardians.map((guardian) => (
+                            <small key={guardian.id}>
+                              {formatRelationship(guardian.relationship)}: {guardian.name}
+                            </small>
+                          ))}
                         </div>
                       ) : null}
-                      {child.allergies ? (
-                        <div>
-                          <X size={14} />
-                          <span>Alergias: {child.allergies}</span>
+
+                      <div className="member-portal-card-actions">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          icon={<QrCode size={14} />}
+                          onClick={() => void generateKidsPass(child)}
+                          disabled={kidsStatus === "loading"}
+                        >
+                          Gerar QR
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            setKidsForm({
+                              id: child.id,
+                              name: child.name,
+                              date_of_birth: child.date_of_birth ?? "",
+                              group_id: child.group_id ?? "",
+                              allergies: child.allergies ?? "",
+                              special_needs: child.special_needs ?? "",
+                              notes: child.notes ?? "",
+                            });
+                            setIsKidsFormOpen(true);
+                          }}
+                        >
+                          Editar
+                        </Button>
+                      </div>
+
+                      {showQr ? (
+                        <div className="member-portal-kids-qr">
+                          <img src={qrImageUrl(activePass.pass_token)} alt={`QR de check-in de ${child.name}`} />
+                          <small>Válido até {new Date(activePass.valid_until).toLocaleString("pt-BR")}</small>
+                          <small>Código fallback: {activePass.pass_token.slice(0, 12)}</small>
                         </div>
                       ) : null}
-                    </div>
-
-                    {guardians.length > 0 ? (
-                      <div className="member-portal-guardians">
-                        {guardians.map((guardian) => (
-                          <small key={guardian.id}>
-                            {formatRelationship(guardian.relationship)}: {guardian.name}
-                          </small>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <div className="member-portal-card-actions">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        icon={<QrCode size={14} />}
-                        onClick={() => void generateKidsPass(child)}
-                        disabled={kidsStatus === "loading"}
-                      >
-                        Gerar QR
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          setKidsForm({
-                            id: child.id,
-                            name: child.name,
-                            date_of_birth: child.date_of_birth ?? "",
-                            group_id: child.group_id ?? "",
-                            allergies: child.allergies ?? "",
-                            special_needs: child.special_needs ?? "",
-                            notes: child.notes ?? "",
-                          });
-                          setIsKidsFormOpen(true);
-                        }}
-                      >
-                        Editar
-                      </Button>
-                    </div>
-
-                    {showQr ? (
-                      <div className="member-portal-kids-qr">
-                        <img src={qrImageUrl(activePass.pass_token)} alt={`QR de check-in de ${child.name}`} />
-                        <small>Válido até {new Date(activePass.valid_until).toLocaleString("pt-BR")}</small>
-                        <small>Código fallback: {activePass.pass_token.slice(0, 12)}</small>
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </AccordionPanel>
         ) : null}
 
         {activePortalTab === "escola" && bibleSchoolEnabled && (bibleSchoolCanManage || bibleSchoolClasses.length > 0) ? (
-          <section className="member-portal-section">
-            <div className="member-portal-section-head">
-              <h2>Escola Bíblica</h2>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--color-neutral-500)", fontSize: "0.9rem" }}>
-                <BookOpen size={16} />
-                {bibleSchoolCanManage ? "Acesso de gestão" : bibleSchoolIsTeacher ? "Professor" : "Minhas turmas"}
-              </span>
+          <AccordionPanel
+            id="bible-school"
+            title="Escola Bíblica"
+            description={bibleSchoolCanManage ? "Acesso de gestão liberado." : bibleSchoolIsTeacher ? "Acesso de professor." : "Acompanhe suas turmas e materiais."}
+            icon={<BookOpen size={18} />}
+            badge={bibleSchoolClasses.length}
+            defaultOpen={true}
+            className="member-portal-section"
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--color-neutral-500)", fontSize: "0.9rem", fontWeight: 800, marginBottom: 10 }}>
+              <BookOpen size={16} />
+              {bibleSchoolCanManage ? "Acesso de gestão" : bibleSchoolIsTeacher ? "Professor" : "Minhas turmas"}
             </div>
 
             {bibleSchoolActionMessage ? (
@@ -3035,177 +3053,59 @@ export function MemberPortal() {
                 ) : null}
               </>
             )}
-          </section>
+          </AccordionPanel>
         ) : null}
 
-        {activePortalTab === "agenda" && showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length === 0 && pastAssignments.length === 0 ? (
-          <div className="member-portal-empty">
-            <CalendarCheck size={40} />
-            <strong>Nenhuma escala encontrada</strong>
-            <span>Você ainda não foi escalado em nenhum evento ministerial.</span>
-          </div>
-        ) : null}
-
-        {activePortalTab === "agenda" && showLegacyAssignmentSections && hasSchedulePortalAccess && upcomingAssignments.length > 0 ? (
-          <section className="member-portal-section">
-            <h2>Próximas escalas</h2>
-            <div className="member-portal-cards">
-              {upcomingAssignments.map((assignment) => {
-                const evt = assignment.worship_events;
-                if (!evt) return null;
-                const role = assignment.worship_roles?.name ?? assignment.role_name ?? "Função não definida";
-                const isLoading = actionStatus[assignment.id] === "loading";
-                const isDeclining = decliningId === assignment.id;
-                return (
-                  <article key={assignment.id} className={`member-portal-card ${assignment.status}`}>
-                    <div className="member-portal-card-head">
+        {activePortalTab === "agenda" && hasSchedulePortalAccess ? (
+          <AccordionPanel
+            id="schedule-history"
+            title="Histórico"
+            description="Veja suas escalas anteriores."
+            icon={<CalendarCheck size={18} />}
+            badge={pastAssignments.length}
+            defaultOpen={false}
+            className="member-portal-section"
+          >
+            {pastAssignments.length === 0 ? (
+              <div className="member-portal-empty-inline">
+                <CalendarCheck size={18} />
+                <span>Nenhuma escala anterior encontrada.</span>
+              </div>
+            ) : (
+              <div className="member-portal-history">
+                {pastAssignments.map((assignment) => {
+                  const evt = assignment.worship_events;
+                  if (!evt) return null;
+                  const role = assignment.worship_roles?.name ?? assignment.role_name ?? "Função";
+                  return (
+                    <div key={assignment.id} className="member-portal-history-row">
                       <div>
-                        <span className="member-portal-event-type">{eventTypeLabel(evt.event_type)}</span>
                         <strong>{evt.title}</strong>
+                        <small>
+                          {new Date(evt.starts_at).toLocaleDateString("pt-BR")} · {role}
+                        </small>
                       </div>
                       <em className={`member-portal-status ${assignment.status}`}>
                         {statusLabel(assignment.status)}
                       </em>
                     </div>
-
-                    <div className="member-portal-card-meta">
-                      <div>
-                        <CalendarCheck size={14} />
-                        <span>
-                          {new Date(evt.starts_at).toLocaleString("pt-BR", {
-                            weekday: "long",
-                            day: "2-digit",
-                            month: "long",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      {evt.location ? (
-                        <div>
-                          <MapPin size={14} />
-                          <span>{evt.location}</span>
-                        </div>
-                      ) : null}
-                      {assignment.arrival_at ? (
-                        <div>
-                          <Clock3 size={14} />
-                          <span>
-                            Chegar às{" "}
-                            {new Date(assignment.arrival_at).toLocaleTimeString("pt-BR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="member-portal-card-role">
-                      <Music size={14} />
-                      <strong>{role}</strong>
-                    </div>
-
-                    {assignment.notes ? (
-                      <p className="member-portal-card-notes">{assignment.notes}</p>
-                    ) : null}
-
-                    {assignment.decline_reason ? (
-                      <p className="member-portal-card-notes muted">Motivo: {assignment.decline_reason}</p>
-                    ) : null}
-
-                    {isDeclining ? (
-                      <div className="member-portal-decline-form">
-                        <textarea
-                          className="catalog-input catalog-textarea"
-                          placeholder="Motivo da recusa (opcional)"
-                          value={declineReason}
-                          onChange={(e) => setDeclineReason(e.target.value)}
-                          rows={2}
-                        />
-                        <div className="member-portal-decline-actions">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => { setDecliningId(null); setDeclineReason(""); }}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => void declineAssignment(assignment.id)}
-                            disabled={isLoading}
-                          >
-                            Confirmar recusa
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="member-portal-card-actions">
-                        {assignment.status !== "confirmed" ? (
-                          <Button
-                            type="button"
-                            icon={<Check size={15} />}
-                            onClick={() => void confirmAssignment(assignment.id)}
-                            disabled={isLoading}
-                          >
-                            Confirmar presença
-                          </Button>
-                        ) : null}
-                        {assignment.status !== "declined" ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            icon={<X size={15} />}
-                            onClick={() => setDecliningId(assignment.id)}
-                            disabled={isLoading}
-                          >
-                            Recusar
-                          </Button>
-                        ) : null}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-
-        {activePortalTab === "agenda" && hasSchedulePortalAccess && pastAssignments.length > 0 ? (
-          <section className="member-portal-section">
-            <h2>Histórico</h2>
-            <div className="member-portal-history">
-              {pastAssignments.map((assignment) => {
-                const evt = assignment.worship_events;
-                if (!evt) return null;
-                const role = assignment.worship_roles?.name ?? assignment.role_name ?? "Função";
-                return (
-                  <div key={assignment.id} className="member-portal-history-row">
-                    <div>
-                      <strong>{evt.title}</strong>
-                      <small>
-                        {new Date(evt.starts_at).toLocaleDateString("pt-BR")} · {role}
-                      </small>
-                    </div>
-                    <em className={`member-portal-status ${assignment.status}`}>
-                      {statusLabel(assignment.status)}
-                    </em>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                  );
+                })}
+              </div>
+            )}
+          </AccordionPanel>
         ) : null}
 
         {/* ── Seção Pedido de Oração (todos os membros) ─────────────── */}
         {activePortalTab === "oracao" ? (
-          <section className="member-portal-section">
-            <div className="member-portal-section-head">
-              <Heart size={18} />
-              <strong>Pedido de Oração</strong>
-            </div>
-
+          <AccordionPanel
+            id="prayer"
+            title="Pedido de Oração"
+            description="Envie um pedido e acompanhe o andamento."
+            icon={<Heart size={18} />}
+            defaultOpen={true}
+            className="member-portal-section"
+          >
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <AccordionPanel
                 id="prayer-new"
@@ -3323,24 +3223,20 @@ export function MemberPortal() {
                 )}
               </AccordionPanel>
             </div>
-          </section>
+          </AccordionPanel>
         ) : null}
 
         {/* ── Seção Minha Intercessão ── */}
         {activePortalTab === "intercessao" && (isInIntercessionMinistry || myAssignments.length > 0) ? (
-          <section className="member-portal-section">
-            <div className="member-portal-section-head">
-              <Heart size={18} style={{ color: "var(--color-accent)" }} />
-              <strong>
-                Minha Intercessão
-                {myAssignments.length > 0 ? (
-                  <em style={{ marginLeft: 8, fontSize: "0.72rem", fontStyle: "normal", fontWeight: 700, background: "rgba(var(--color-accent-rgb),0.12)", color: "var(--color-accent)", padding: "1px 7px", borderRadius: 10 }}>
-                    {myAssignments.length}
-                  </em>
-                ) : null}
-              </strong>
-            </div>
-
+          <AccordionPanel
+            id="intercession"
+            title="Minha Intercessão"
+            description="Pedidos atribuídos para você interceder."
+            icon={<Heart size={18} />}
+            badge={myAssignments.length}
+            defaultOpen={true}
+            className="member-portal-section"
+          >
             {myAssignments.length === 0 ? (
               <div className="member-portal-empty state-card">
                 <Heart size={28} />
@@ -3406,66 +3302,75 @@ export function MemberPortal() {
                 })}
               </div>
             )}
-          </section>
+          </AccordionPanel>
         ) : null}
 
         {/* ── Seção LGPD ──────────────────────────────────────────────── */}
         {activePortalTab === "privacidade" && lgpdConsentGranted !== null && (
-          <section className="member-portal-section member-portal-lgpd-section">
-            <div className="member-portal-section-head">
-              <ShieldCheck size={18} />
-              <strong>Privacidade &amp; LGPD</strong>
-            </div>
+          <AccordionPanel
+            id="privacy"
+            title="Privacidade & LGPD"
+            description="Controle suas preferências de privacidade."
+            icon={<ShieldCheck size={18} />}
+            defaultOpen={true}
+            className="member-portal-section member-portal-lgpd-section"
+          >
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ background: "#f9fafb", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <FileCheck2 size={18} style={{ color: lgpdConsentGranted ? "var(--color-success, #22c55e)" : "var(--color-danger, #ef4444)", flexShrink: 0, marginTop: 2 }} />
-                <div>
-                  <strong style={{ fontSize: "0.875rem" }}>Consentimento de tratamento de dados</strong>
-                  <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "4px 0 8px" }}>
-                    {lgpdConsentGranted
-                      ? "Você autorizou o tratamento dos seus dados pessoais conforme a Política de Privacidade."
-                      : "Você revogou o consentimento de tratamento de dados. Alguns recursos podem não funcionar."}
-                  </p>
-                  {lgpdConsentGranted && (
-                    <button
-                      type="button"
-                      style={{ fontSize: "0.8rem", color: "var(--color-danger, #ef4444)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
-                      onClick={() => void handleLgpdRevoke()}
-                      disabled={lgpdActionStatus === "loading"}
-                    >
-                      Revogar consentimento
-                    </button>
-                  )}
-                </div>
-              </div>
+              <AccordionPanel
+                id="privacy-consent"
+                title="Consentimento de tratamento de dados"
+                description={lgpdConsentGranted ? "Consentimento ativo." : "Consentimento revogado."}
+                icon={<FileCheck2 size={18} />}
+                defaultOpen={true}
+                className="member-portal-accordion-compact"
+              >
+                <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 8px" }}>
+                  {lgpdConsentGranted
+                    ? "Você autorizou o tratamento dos seus dados pessoais conforme a Política de Privacidade."
+                    : "Você revogou o consentimento de tratamento de dados. Alguns recursos podem não funcionar."}
+                </p>
+                {lgpdConsentGranted && (
+                  <button
+                    type="button"
+                    style={{ fontSize: "0.8rem", color: "var(--color-danger, #ef4444)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                    onClick={() => void handleLgpdRevoke()}
+                    disabled={lgpdActionStatus === "loading"}
+                  >
+                    Revogar consentimento
+                  </button>
+                )}
+              </AccordionPanel>
 
-              <div style={{ background: "#f9fafb", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <Trash2 size={18} style={{ color: lgpdDeletionRequested ? "var(--color-danger, #ef4444)" : "#9ca3af", flexShrink: 0, marginTop: 2 }} />
-                <div>
-                  <strong style={{ fontSize: "0.875rem" }}>Exclusão dos meus dados</strong>
-                  <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "4px 0 8px" }}>
-                    {lgpdDeletionRequested
-                      ? "Solicitação de exclusão registrada. O administrador foi notificado e entrará em contato."
-                      : "Você pode solicitar a exclusão permanente dos seus dados pessoais da plataforma."}
-                  </p>
-                  {!lgpdDeletionRequested && (
-                    <button
-                      type="button"
-                      style={{ fontSize: "0.8rem", color: "var(--color-danger, #ef4444)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
-                      onClick={() => void handleDeletionRequest()}
-                      disabled={lgpdActionStatus === "loading"}
-                    >
-                      Solicitar exclusão dos meus dados
-                    </button>
-                  )}
-                </div>
-              </div>
+              <AccordionPanel
+                id="privacy-deletion"
+                title="Exclusão dos meus dados"
+                description={lgpdDeletionRequested ? "Solicitação registrada." : "Solicite a exclusão dos seus dados."}
+                icon={<Trash2 size={18} />}
+                defaultOpen={false}
+                className="member-portal-accordion-compact"
+              >
+                <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 8px" }}>
+                  {lgpdDeletionRequested
+                    ? "Solicitação de exclusão registrada. O administrador foi notificado e entrará em contato."
+                    : "Você pode solicitar a exclusão permanente dos seus dados pessoais da plataforma."}
+                </p>
+                {!lgpdDeletionRequested && (
+                  <button
+                    type="button"
+                    style={{ fontSize: "0.8rem", color: "var(--color-danger, #ef4444)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                    onClick={() => void handleDeletionRequest()}
+                    disabled={lgpdActionStatus === "loading"}
+                  >
+                    Solicitar exclusão dos meus dados
+                  </button>
+                )}
+              </AccordionPanel>
 
               {lgpdActionMessage && (
                 <p className={`login-feedback ${lgpdActionStatus}`} style={{ margin: 0 }}>{lgpdActionMessage}</p>
               )}
             </div>
-          </section>
+          </AccordionPanel>
         )}
           </div>
         </div>
