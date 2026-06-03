@@ -13,6 +13,7 @@ import {
   DollarSign,
   Edit3,
   Eye,
+  Heart,
   FileCheck2,
   FileText,
   ImagePlus,
@@ -138,6 +139,39 @@ type SocialMediaChannelRecord = {
   description: string | null;
   is_active: boolean;
   created_at: string;
+};
+
+type PrayerRequestRecord = {
+  id: string;
+  tenant_id: string;
+  member_id: string | null;
+  profile_id: string | null;
+  is_anonymous: boolean;
+  content: string;
+  status: "new" | "assigned" | "interceding" | "done";
+  source: "portal" | "app";
+  created_at: string;
+  members?: { name: string } | null;
+};
+
+type PrayerAssignmentRecord = {
+  id: string;
+  tenant_id: string;
+  prayer_request_id: string;
+  assigned_member_id: string;
+  assigned_profile_id: string | null;
+  assigned_by_profile_id: string | null;
+  assigned_at: string;
+  status: "pending" | "interceding" | "done" | "cancelled";
+  started_at: string | null;
+  completed_at: string | null;
+  members?: { name: string } | null;
+};
+
+type IntercessorMember = {
+  id: string;
+  name: string;
+  profile_id: string | null;
 };
 
 type WorshipRoleRecord = {
@@ -1113,6 +1147,13 @@ const sampleClientDashboardData: ClientDashboardData = {
       description: "Gestão do ministério infantil: crianças, turmas, presença e comunicados.",
       status: "active",
     },
+    {
+      id: "module-7",
+      code: "intercession",
+      name: "Intercessão",
+      description: "Pedidos de oração, distribuição e acompanhamento de intercessores.",
+      status: "active",
+    },
   ],
   moduleAdminModuleIdsByProfileId: {
     "user-1": ["module-1", "module-2"],
@@ -1137,6 +1178,7 @@ const sampleClientDashboardData: ClientDashboardData = {
     { id: "module-4", code: "worship",       name: "Louvor",             description: "Escalas e confirmação de presença.",            status: "active" },
     { id: "module-5", code: "financial",     name: "Financeiro",         description: "Dízimos, ofertas e relatórios.",                status: "active" },
     { id: "module-6", code: "kids",          name: "Kids / Infantil",    description: "Gestão do ministério infantil.",                status: "active" },
+    { id: "module-7", code: "intercession", name: "Intercessão",        description: "Pedidos de oração e gestão de intercessores.",  status: "active" },
   ],
   financialCategories: [
     { id: "fin-cat-1", tenant_id: null, name: "Dízimos", type: "income", color: "#2f8a5f", is_system: true, sort_order: 10 },
@@ -1268,6 +1310,7 @@ const clientTabs = [
   { key: "bible-school", label: "Escola Bíblica", icon: BookOpen },
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "social-media", label: "Mídias Sociais", icon: Play },
+  { key: "intercession", label: "Intercessão", icon: Heart },
   { key: "lists", label: "Cargos/Ministérios", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
   { key: "users", label: "Usuários", icon: ShieldCheck },
@@ -1288,6 +1331,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   "bible-school": "bible-school",
   notices: "announcements",
   "social-media": "social_media",
+  intercession: "intercession",
 };
 
 const tenantAdminOnlyTabs = new Set<ClientTab>(["lists", "theme", "users", "policies"]);
@@ -1889,6 +1933,20 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [socialMediaFormDescription, setSocialMediaFormDescription] = useState("");
   const [socialMediaSaveStatus, setSocialMediaSaveStatus] = useState<LoginStatus>("idle");
   const [socialMediaSaveMessage, setSocialMediaSaveMessage] = useState("");
+
+  // Intercession state
+  const [prayerRequests, setPrayerRequests] = useState<PrayerRequestRecord[]>([]);
+  const [prayerAssignments, setPrayerAssignments] = useState<PrayerAssignmentRecord[]>([]);
+  const [intercessionLoadStatus, setIntercessionLoadStatus] = useState<LoadStatus>("idle");
+  const [intercessionMembers, setIntercessionMembers] = useState<IntercessorMember[]>([]);
+  const [assignModalTarget, setAssignModalTarget] = useState<PrayerRequestRecord | null>(null);
+  const [assignSelectedMemberId, setAssignSelectedMemberId] = useState("");
+  const [assignStatus, setAssignStatus] = useState<LoginStatus>("idle");
+  const [assignMessage, setAssignMessage] = useState("");
+  const [distributeStatus, setDistributeStatus] = useState<LoginStatus>("idle");
+  const [distributeMessage, setDistributeMessage] = useState("");
+  const [intercessionFilter, setIntercessionFilter] = useState<"all" | "new" | "assigned" | "interceding" | "done">("all");
+
   const [themeForm, setThemeForm] = useState<ThemeFormState>(emptyThemeForm);
   const [themeSaveStatus, setThemeSaveStatus] = useState<LoginStatus>("idle");
   const [themeSaveMessage, setThemeSaveMessage] = useState("");
@@ -2051,6 +2109,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const canManageBibleSchool = canManageModuleCode("bible-school");
   const canManageAnnouncements = canManageModuleCode("announcements");
   const canManageSocialMedia = canManageModuleCode("social_media");
+  const canManageIntercession = canManageModuleCode("intercession");
 
   const pushRouteDefaults: Record<"worship" | "kids" | "bible-school", string> = {
     worship: "/(app)/modulos/louvor",
@@ -2816,6 +2875,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     void loadPolicies(profile.tenant_id);
   }, [activeTab, demoMode, profile?.tenant_id]);
 
+  // ── useEffect: carrega dados de intercessão ao abrir a tab ───────────────
+  useEffect(() => {
+    if (activeTab !== "intercession" || demoMode || !profile?.tenant_id) return;
+    void loadIntercessionData(profile.tenant_id);
+  }, [activeTab, demoMode, profile?.tenant_id]);
+
   async function loadPolicies(tenantId: string) {
     const [policyResult, consentsResult, acceptancesResult] = await Promise.all([
       supabase
@@ -2845,6 +2910,197 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     setLgpdConsents((consentsResult.data ?? []) as unknown as LgpdConsentRecord[]);
     setPolicyAcceptances((acceptancesResult.data ?? []) as unknown as PolicyAcceptanceRecord[]);
+  }
+
+  async function loadIntercessionData(tenantId: string) {
+    setIntercessionLoadStatus("loading");
+
+    // Resolve ministry id for "Intercessão" (system or tenant-level)
+    const { data: ministryRow } = await supabase
+      .from("catalog_ministries")
+      .select("id")
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+      .ilike("name", "Intercessão")
+      .order("tenant_id", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    const [requestsResult, assignmentsResult] = await Promise.all([
+      supabase
+        .from("prayer_requests")
+        .select("id, tenant_id, member_id, profile_id, is_anonymous, content, status, source, created_at, members(name)")
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
+        .limit(200)
+        .returns<PrayerRequestRecord[]>(),
+      supabase
+        .from("prayer_assignments")
+        .select("id, tenant_id, prayer_request_id, assigned_member_id, assigned_profile_id, assigned_by_profile_id, assigned_at, status, started_at, completed_at, members!prayer_assignments_assigned_member_id_fkey(name)")
+        .eq("tenant_id", tenantId)
+        .in("status", ["pending", "interceding"])
+        .returns<PrayerAssignmentRecord[]>(),
+    ]);
+
+    if (requestsResult.error || assignmentsResult.error) {
+      setIntercessionLoadStatus("error");
+      return;
+    }
+
+    setPrayerRequests(requestsResult.data ?? []);
+    setPrayerAssignments(assignmentsResult.data ?? []);
+
+    // Load intercessors (members of the Intercessão ministry)
+    if (ministryRow?.id) {
+      const { data: memberMinistries } = await supabase
+        .from("member_ministries")
+        .select("member_id, members(id, name, profiles(id))")
+        .eq("tenant_id", tenantId)
+        .eq("ministry_id", ministryRow.id)
+        .returns<Array<{ member_id: string; members: { id: string; name: string; profiles: { id: string }[] } | null }>>();
+
+      const intercessors: IntercessorMember[] = (memberMinistries ?? [])
+        .filter((mm) => mm.members)
+        .map((mm) => ({
+          id: mm.members!.id,
+          name: mm.members!.name,
+          profile_id: Array.isArray(mm.members!.profiles) && mm.members!.profiles.length > 0
+            ? mm.members!.profiles[0].id
+            : null,
+        }));
+      setIntercessionMembers(intercessors);
+    } else {
+      setIntercessionMembers([]);
+    }
+
+    setIntercessionLoadStatus("loaded");
+  }
+
+  // Fisher-Yates shuffle
+  function shuffleArray<T>(arr: T[]): T[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  async function handleDistributeAll() {
+    if (!profile?.tenant_id || intercessionMembers.length === 0) return;
+    const newRequests = prayerRequests.filter((r) => r.status === "new");
+    if (newRequests.length === 0) return;
+
+    setDistributeStatus("loading");
+    setDistributeMessage("");
+
+    const shuffled = shuffleArray(intercessionMembers);
+    const assignments = newRequests.map((req, i) => {
+      const intercessor = shuffled[i % shuffled.length];
+      return {
+        tenant_id: profile.tenant_id!,
+        prayer_request_id: req.id,
+        assigned_member_id: intercessor.id,
+        assigned_profile_id: intercessor.profile_id ?? null,
+        assigned_by_profile_id: profile.id,
+        status: "pending" as const,
+      };
+    });
+
+    const { error: insertError } = await supabase.from("prayer_assignments").insert(assignments);
+    if (insertError) {
+      setDistributeStatus("error");
+      setDistributeMessage("Erro ao distribuir pedidos. Tente novamente.");
+      return;
+    }
+
+    const requestIds = newRequests.map((r) => r.id);
+    const { error: updateError } = await supabase
+      .from("prayer_requests")
+      .update({ status: "assigned" })
+      .in("id", requestIds)
+      .eq("tenant_id", profile.tenant_id);
+
+    if (updateError) {
+      setDistributeStatus("error");
+      setDistributeMessage("Pedidos atribuídos mas erro ao atualizar status.");
+      return;
+    }
+
+    // Send push to each intercessor
+    const profileIdsPush = assignments
+      .map((a) => a.assigned_profile_id)
+      .filter((id): id is string => Boolean(id));
+    const uniquePushIds = Array.from(new Set(profileIdsPush));
+    if (uniquePushIds.length > 0) {
+      await supabase.functions.invoke("send-push", {
+        body: {
+          profile_ids: uniquePushIds,
+          title: "Pedido de oração recebido",
+          body: "Você recebeu um novo pedido de oração para interceder.",
+          module_code: "intercession",
+          data: { tab: "intercession" },
+        },
+      });
+    }
+
+    setDistributeStatus("success");
+    setDistributeMessage(`${newRequests.length} pedido(s) distribuído(s) com sucesso.`);
+    await loadIntercessionData(profile.tenant_id);
+  }
+
+  async function handleDirectAssign() {
+    if (!profile?.tenant_id || !assignModalTarget || !assignSelectedMemberId) return;
+    setAssignStatus("loading");
+    setAssignMessage("");
+
+    const intercessor = intercessionMembers.find((m) => m.id === assignSelectedMemberId);
+    if (!intercessor) {
+      setAssignStatus("error");
+      setAssignMessage("Intercessor não encontrado.");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("prayer_assignments").insert({
+      tenant_id: profile.tenant_id,
+      prayer_request_id: assignModalTarget.id,
+      assigned_member_id: intercessor.id,
+      assigned_profile_id: intercessor.profile_id ?? null,
+      assigned_by_profile_id: profile.id,
+      status: "pending",
+    });
+
+    if (insertError) {
+      setAssignStatus("error");
+      setAssignMessage("Erro ao atribuir pedido. Tente novamente.");
+      return;
+    }
+
+    await supabase
+      .from("prayer_requests")
+      .update({ status: "assigned" })
+      .eq("id", assignModalTarget.id);
+
+    if (intercessor.profile_id) {
+      await supabase.functions.invoke("send-push", {
+        body: {
+          profile_ids: [intercessor.profile_id],
+          title: "Pedido de oração recebido",
+          body: "Você recebeu um novo pedido de oração para interceder.",
+          module_code: "intercession",
+          data: { tab: "intercession" },
+        },
+      });
+    }
+
+    setAssignStatus("success");
+    setAssignMessage("Pedido atribuído com sucesso.");
+    await loadIntercessionData(profile.tenant_id);
+    setTimeout(() => {
+      setAssignModalTarget(null);
+      setAssignSelectedMemberId("");
+      setAssignStatus("idle");
+      setAssignMessage("");
+    }, 1200);
   }
 
   async function handleSavePolicy() {
@@ -7333,6 +7589,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Comunicados gerais"
                   : activeTab === "social-media"
                   ? "Mídias Sociais"
+                  : activeTab === "intercession"
+                  ? "Módulo de Intercessão"
                   : activeTab === "lists"
                   ? "Cargos e ministérios"
                   : activeTab === "theme"
@@ -7361,6 +7619,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ? "Publique comunicados gerais para a comunidade."
                   : activeTab === "social-media"
                   ? "Vincule canais e playlists do YouTube para os membros assistirem dentro do sistema."
+                  : activeTab === "intercession"
+                  ? "Gerencie pedidos de oração, distribua para intercessores e acompanhe cada pedido até a conclusão."
                   : activeTab === "lists"
                   ? "Gerencie cargos e ministérios visíveis neste ambiente."
                   : activeTab === "theme"
@@ -11590,6 +11850,238 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 </div>
               </div>
             </div>
+          ) : null}
+
+          {activeTab === "intercession" ? (
+            <>
+              {/* Stats row */}
+              <div className="client-stats" style={{ marginBottom: 0 }}>
+                <article>
+                  <span>Novos</span>
+                  <strong style={{ color: "var(--color-accent)" }}>
+                    {prayerRequests.filter((r) => r.status === "new").length}
+                  </strong>
+                  <small>Aguardando atribuição</small>
+                </article>
+                <article>
+                  <span>Atribuídos</span>
+                  <strong style={{ color: "#e08b00" }}>
+                    {prayerRequests.filter((r) => r.status === "assigned").length}
+                  </strong>
+                  <small>Aguardando intercessão</small>
+                </article>
+                <article>
+                  <span>Em Intercessão</span>
+                  <strong style={{ color: "#c07000" }}>
+                    {prayerRequests.filter((r) => r.status === "interceding").length}
+                  </strong>
+                  <small>Sendo intercedidos agora</small>
+                </article>
+                <article>
+                  <span>Concluídos</span>
+                  <strong style={{ color: "var(--color-success)" }}>
+                    {prayerRequests.filter((r) => r.status === "done").length}
+                  </strong>
+                  <small>Pedidos intercedidos</small>
+                </article>
+              </div>
+
+              <article className="panel full-width">
+                <div className="panel-heading">
+                  <div>
+                    <span>Intercessão</span>
+                    <h4>Pedidos de oração</h4>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    {/* Filter */}
+                    <select
+                      value={intercessionFilter}
+                      onChange={(e) => setIntercessionFilter(e.target.value as typeof intercessionFilter)}
+                      style={{ fontSize: "0.82rem", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--color-border)" }}
+                    >
+                      <option value="all">Todos</option>
+                      <option value="new">Novos</option>
+                      <option value="assigned">Atribuídos</option>
+                      <option value="interceding">Em Intercessão</option>
+                      <option value="done">Concluídos</option>
+                    </select>
+                    {canManageIntercession && prayerRequests.filter((r) => r.status === "new").length > 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={distributeStatus === "loading" || intercessionMembers.length === 0}
+                        onClick={handleDistributeAll}
+                      >
+                        <Heart size={14} />
+                        {distributeStatus === "loading" ? "Distribuindo..." : `Distribuir ${prayerRequests.filter((r) => r.status === "new").length} aleator.`}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {distributeMessage ? (
+                  <p className={`login-feedback ${distributeStatus}`} style={{ margin: "8px 0" }}>{distributeMessage}</p>
+                ) : null}
+
+                {intercessionMembers.length === 0 && canManageIntercession ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "12px 0" }}>
+                    <Heart size={22} />
+                    <strong>Nenhum intercessor cadastrado</strong>
+                    <span>Adicione membros ao ministério "Intercessão" para poder distribuir pedidos.</span>
+                  </div>
+                ) : null}
+
+                {intercessionLoadStatus === "loading" ? (
+                  <div style={{ padding: "32px", textAlign: "center", color: "var(--color-text-secondary)" }}>Carregando pedidos...</div>
+                ) : (() => {
+                  const statusOrder: Record<string, number> = { new: 0, assigned: 1, interceding: 2, done: 3 };
+                  const filtered = prayerRequests
+                    .filter((r) => intercessionFilter === "all" || r.status === intercessionFilter)
+                    .sort((a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9));
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                        <Heart size={32} />
+                        <strong>Nenhum pedido encontrado</strong>
+                        <span>Os pedidos feitos pelos membros aparecerão aqui.</span>
+                      </div>
+                    );
+                  }
+
+                  const activeAssignmentByRequestId = Object.fromEntries(
+                    prayerAssignments.map((a) => [a.prayer_request_id, a])
+                  );
+
+                  const statusBadge = (status: PrayerRequestRecord["status"]) => {
+                    const map: Record<string, { label: string; color: string; bg: string }> = {
+                      new:        { label: "Novo",           color: "var(--color-accent)",   bg: "rgba(var(--color-accent-rgb),0.1)" },
+                      assigned:   { label: "Atribuído",      color: "#e08b00",               bg: "rgba(224,139,0,0.1)" },
+                      interceding:{ label: "Em Intercessão", color: "#c07000",               bg: "rgba(192,112,0,0.1)" },
+                      done:       { label: "Intercedido",    color: "var(--color-success)",  bg: "rgba(var(--color-success-rgb),0.1)" },
+                    };
+                    const s = map[status] ?? map.new;
+                    return (
+                      <em style={{
+                        fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700,
+                        color: s.color, background: s.bg,
+                        padding: "2px 8px", borderRadius: 4, whiteSpace: "nowrap",
+                      }}>{s.label}</em>
+                    );
+                  };
+
+                  return (
+                    <div className="notification-list">
+                      {filtered.map((req) => {
+                        const assignment = activeAssignmentByRequestId[req.id];
+                        const requesterName = req.is_anonymous ? "Anônimo" : ((req.members as { name: string } | null)?.name ?? "Membro");
+                        return (
+                          <div key={req.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <Heart size={14} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+                                <strong style={{ fontSize: "0.85rem" }}>{requesterName}</strong>
+                                {statusBadge(req.status)}
+                                {req.source === "app" ? (
+                                  <em style={{ fontSize: "0.68rem", fontStyle: "normal", color: "var(--color-text-secondary)", background: "var(--color-bg-subtle)", padding: "1px 6px", borderRadius: 4 }}>App</em>
+                                ) : null}
+                                <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>
+                                  {new Date(req.created_at).toLocaleDateString("pt-BR")}
+                                </small>
+                              </div>
+                              {canManageIntercession && req.status === "new" ? (
+                                <button
+                                  type="button"
+                                  style={{ fontSize: "0.78rem", padding: "3px 10px", borderRadius: 6, border: "1px solid var(--color-accent)", color: "var(--color-accent)", background: "transparent", cursor: "pointer" }}
+                                  onClick={() => {
+                                    setAssignModalTarget(req);
+                                    setAssignSelectedMemberId("");
+                                    setAssignStatus("idle");
+                                    setAssignMessage("");
+                                  }}
+                                >
+                                  Atribuir
+                                </button>
+                              ) : null}
+                            </div>
+                            <p style={{ margin: 0, fontSize: "0.85rem", lineHeight: 1.5, color: "var(--color-text)", paddingLeft: 22 }}>
+                              {req.content.length > 180 ? req.content.slice(0, 180) + "…" : req.content}
+                            </p>
+                            {assignment ? (
+                              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-text-secondary)", paddingLeft: 22 }}>
+                                Intercessor: <strong>{(assignment.members as { name: string } | null)?.name ?? "—"}</strong>
+                                {assignment.status === "interceding" ? " · orando agora" : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </article>
+
+              {/* Modal de atribuição direta */}
+              {assignModalTarget ? (
+                <div className="modal-overlay" onClick={() => setAssignModalTarget(null)}>
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Atribuição direta</span>
+                        <h2 style={{ fontSize: "1.1rem", margin: 0 }}>Escolher intercessor</h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setAssignModalTarget(null)}>
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div style={{ padding: "16px 0 4px" }}>
+                      <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--color-text-secondary)", fontStyle: "italic", lineHeight: 1.5 }}>
+                        "{assignModalTarget.content.length > 120 ? assignModalTarget.content.slice(0, 120) + "…" : assignModalTarget.content}"
+                      </p>
+
+                      {intercessionMembers.length === 0 ? (
+                        <p style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
+                          Nenhum membro no ministério de Intercessão.
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <label style={{ fontSize: "0.82rem", fontWeight: 600 }}>Intercessor</label>
+                          <select
+                            value={assignSelectedMemberId}
+                            onChange={(e) => setAssignSelectedMemberId(e.target.value)}
+                            style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          >
+                            <option value="">Selecione um intercessor...</option>
+                            {intercessionMembers.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {assignMessage ? (
+                        <p className={`login-feedback ${assignStatus}`} style={{ marginTop: 10 }}>{assignMessage}</p>
+                      ) : null}
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 12 }}>
+                      <button type="button" className="btn btn-secondary" onClick={() => setAssignModalTarget(null)}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={!assignSelectedMemberId || assignStatus === "loading" || assignStatus === "success"}
+                        onClick={handleDirectAssign}
+                      >
+                        {assignStatus === "loading" ? "Atribuindo..." : assignStatus === "success" ? "Atribuído!" : "Atribuir"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : null}
 
           {activeTab === "lists" ? (

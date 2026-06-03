@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock3,
   FileCheck2,
+  Heart,
   LockKeyhole,
   LogOut,
   Mail,
@@ -101,6 +102,27 @@ type PortalAnnouncementRecord = {
   message_html: string | null;
   published_at: string;
   expires_at: string | null;
+};
+
+type PortalPrayerRequest = {
+  id: string;
+  content: string;
+  is_anonymous: boolean;
+  status: "new" | "assigned" | "interceding" | "done";
+  created_at: string;
+};
+
+type PortalPrayerAssignment = {
+  id: string;
+  prayer_request_id: string;
+  status: "pending" | "interceding" | "done" | "cancelled";
+  prayer_requests: {
+    id: string;
+    content: string;
+    is_anonymous: boolean;
+    member_id: string | null;
+    profile_id: string | null;
+  } | null;
 };
 
 type SocialMediaChannelPortalRecord = {
@@ -402,6 +424,17 @@ export function MemberPortal() {
   const [lgpdDeletionRequested, setLgpdDeletionRequested] = useState(false);
   const [lgpdActionStatus, setLgpdActionStatus] = useState<LoginStatus>("idle");
   const [lgpdActionMessage, setLgpdActionMessage] = useState("");
+  // Intercession state
+  const [isIntercessionModule, setIsIntercessionModule] = useState(false);
+  const [isInIntercessionMinistry, setIsInIntercessionMinistry] = useState(false);
+  const [ownPrayerRequests, setOwnPrayerRequests] = useState<PortalPrayerRequest[]>([]);
+  const [myAssignments, setMyAssignments] = useState<PortalPrayerAssignment[]>([]);
+  const [prayerForm, setPrayerForm] = useState("");
+  const [prayerAnonymous, setPrayerAnonymous] = useState(false);
+  const [prayerSubmitStatus, setPrayerSubmitStatus] = useState<LoginStatus>("idle");
+  const [prayerSubmitMessage, setPrayerSubmitMessage] = useState("");
+  const [assignActionStatus, setAssignActionStatus] = useState<Record<string, LoginStatus>>({});
+
   const [socialMediaChannels, setSocialMediaChannels] = useState<SocialMediaChannelPortalRecord[]>([]);
   const [socialMediaVideos, setSocialMediaVideos] = useState<Record<string, YouTubeVideoRecord[]>>({});
   const [socialMediaLoadingIds, setSocialMediaLoadingIds] = useState<Set<string>>(new Set());
@@ -535,6 +568,120 @@ export function MemberPortal() {
     setPendingPolicy(null);
     setPolicyChecked(false);
     setPolicyAcceptStatus("idle");
+  }
+
+  async function handlePrayerSubmit() {
+    if (!profile?.tenant_id || !prayerForm.trim()) return;
+    setPrayerSubmitStatus("loading");
+    setPrayerSubmitMessage("");
+
+    const payload: Record<string, unknown> = {
+      tenant_id: profile.tenant_id,
+      content: prayerForm.trim(),
+      is_anonymous: prayerAnonymous,
+      source: "portal",
+    };
+    if (!prayerAnonymous) {
+      payload.member_id = profile.member_id ?? null;
+      payload.profile_id = profile.id;
+    }
+
+    const { error } = await supabase.from("prayer_requests").insert(payload);
+    if (error) {
+      setPrayerSubmitStatus("error");
+      setPrayerSubmitMessage("Erro ao enviar pedido. Tente novamente.");
+      return;
+    }
+
+    setPrayerSubmitStatus("success");
+    setPrayerSubmitMessage("Pedido de oração enviado com sucesso!");
+    setPrayerForm("");
+    setPrayerAnonymous(false);
+
+    // Refresh own requests (only if not anonymous — no profile_id stored)
+    if (!prayerAnonymous) {
+      const { data } = await supabase
+        .from("prayer_requests")
+        .select("id, content, is_anonymous, status, created_at")
+        .eq("tenant_id", profile.tenant_id)
+        .eq("profile_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .returns<PortalPrayerRequest[]>();
+      setOwnPrayerRequests(data ?? []);
+    }
+
+    setTimeout(() => {
+      setPrayerSubmitStatus("idle");
+      setPrayerSubmitMessage("");
+    }, 3000);
+  }
+
+  async function handleAssignmentAction(
+    assignment: PortalPrayerAssignment,
+    action: "interceding" | "done",
+  ) {
+    if (!profile?.tenant_id) return;
+    setAssignActionStatus((prev) => ({ ...prev, [assignment.id]: "loading" }));
+
+    const updates: Record<string, unknown> = { status: action };
+    if (action === "interceding") updates.started_at = new Date().toISOString();
+    if (action === "done") updates.completed_at = new Date().toISOString();
+
+    const { error: assignErr } = await supabase
+      .from("prayer_assignments")
+      .update(updates)
+      .eq("id", assignment.id);
+
+    if (assignErr) {
+      setAssignActionStatus((prev) => ({ ...prev, [assignment.id]: "error" }));
+      return;
+    }
+
+    // Update prayer_request status accordingly
+    if (action === "done") {
+      await supabase
+        .from("prayer_requests")
+        .update({ status: "done" })
+        .eq("id", assignment.prayer_request_id);
+    } else if (action === "interceding") {
+      await supabase
+        .from("prayer_requests")
+        .update({ status: "interceding" })
+        .eq("id", assignment.prayer_request_id);
+    }
+
+    // Notify the requester via push if not anonymous and has profile_id
+    const req = assignment.prayer_requests;
+    if (req && !req.is_anonymous && req.profile_id) {
+      await supabase.functions.invoke("send-push", {
+        body: {
+          profile_ids: [req.profile_id],
+          title: action === "interceding" ? "Pedido de oração" : "Pedido de oração",
+          body: action === "interceding"
+            ? "Estão orando pelo seu pedido neste momento."
+            : "Oramos pelo seu pedido. Deus seja glorificado!",
+          module_code: "intercession",
+          data: { tab: "intercession" },
+        },
+      });
+    }
+
+    setAssignActionStatus((prev) => ({ ...prev, [assignment.id]: "success" }));
+
+    // Refresh assignments
+    if (profile.member_id) {
+      const { data } = await supabase
+        .from("prayer_assignments")
+        .select("id, prayer_request_id, status, prayer_requests(id, content, is_anonymous, member_id, profile_id)")
+        .eq("tenant_id", profile.tenant_id)
+        .eq("assigned_member_id", profile.member_id)
+        .in("status", ["pending", "interceding"])
+        .order("assigned_at", { ascending: false })
+        .limit(50)
+        .returns<PortalPrayerAssignment[]>();
+      setMyAssignments(data ?? []);
+    }
   }
 
   async function handleLgpdRevoke() {
@@ -758,6 +905,63 @@ export function MemberPortal() {
     setMemberMinistries(portalMinistries);
     setModuleAdminAccesses(moduleAccessResult.data ?? []);
     setCanManageMembers(Boolean(canManageMembersResult.data));
+
+    // ── Intercessão ────────────────────────────────────────────
+    const moduleAccesses = moduleAccessResult.data ?? [];
+    const intercessionModuleActive = moduleAccesses.some(
+      (ma) => (ma.platform_modules as { code: string } | null)?.code === "intercession",
+    );
+    // Also check via tenant_modules (for non-admin members the module must be active)
+    // Check if intercession module is active for tenant via platform_modules join
+    const { data: intercessionModuleRow } = await supabase
+      .from("platform_modules")
+      .select("id")
+      .eq("code", "intercession")
+      .maybeSingle<{ id: string }>();
+
+    let intercessionEnabled = intercessionModuleActive;
+    if (!intercessionEnabled && intercessionModuleRow?.id) {
+      const { data: tmRow } = await supabase
+        .from("tenant_modules")
+        .select("id")
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("module_id", intercessionModuleRow.id)
+        .eq("status", "active")
+        .maybeSingle<{ id: string }>();
+      intercessionEnabled = Boolean(tmRow?.id);
+    }
+    setIsIntercessionModule(intercessionEnabled);
+
+    const inIntercessionMinistry = portalMinistries.some((row) =>
+      row.catalog_ministries?.name?.toLowerCase().includes("intercess"),
+    );
+    setIsInIntercessionMinistry(inIntercessionMinistry);
+
+    if (intercessionEnabled) {
+      const [ownRequestsResult, myAssignmentsResult] = await Promise.all([
+        supabase
+          .from("prayer_requests")
+          .select("id, content, is_anonymous, status, created_at")
+          .eq("tenant_id", profileData.tenant_id)
+          .eq("profile_id", profileData.id)
+          .order("created_at", { ascending: false })
+          .limit(20)
+          .returns<PortalPrayerRequest[]>(),
+        inIntercessionMinistry
+          ? supabase
+              .from("prayer_assignments")
+              .select("id, prayer_request_id, status, prayer_requests(id, content, is_anonymous, member_id, profile_id)")
+              .eq("tenant_id", profileData.tenant_id)
+              .eq("assigned_member_id", profileData.member_id)
+              .in("status", ["pending", "interceding"])
+              .order("assigned_at", { ascending: false })
+              .limit(50)
+              .returns<PortalPrayerAssignment[]>()
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      setOwnPrayerRequests(ownRequestsResult.data ?? []);
+      setMyAssignments(myAssignmentsResult.data ?? []);
+    }
 
     if (hasSchedulePortalAccess) {
       const { data: assignmentsData } = await supabase
@@ -2904,6 +3108,190 @@ export function MemberPortal() {
                 );
               })}
             </div>
+          </section>
+        ) : null}
+
+        {/* ── Seção Pedido de Oração (todos os membros) ─────────────── */}
+        {isIntercessionModule ? (
+          <section className="member-portal-section">
+            <div className="member-portal-section-head">
+              <Heart size={18} />
+              <strong>Pedido de Oração</strong>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Formulário de envio */}
+              <div style={{ background: "var(--color-bg-subtle, #f9fafb)", borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text)" }}>
+                  Compartilhe seu pedido de oração
+                </label>
+                <textarea
+                  value={prayerForm}
+                  onChange={(e) => setPrayerForm(e.target.value)}
+                  placeholder="Escreva seu pedido de oração aqui..."
+                  maxLength={1000}
+                  rows={4}
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: 8,
+                    border: "1px solid var(--color-border)", resize: "vertical",
+                    fontSize: "0.88rem", lineHeight: 1.5, fontFamily: "inherit",
+                    background: "#fff", boxSizing: "border-box",
+                  }}
+                />
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", fontSize: "0.83rem", color: "var(--color-text-secondary)" }}>
+                  <input
+                    type="checkbox"
+                    checked={prayerAnonymous}
+                    onChange={(e) => setPrayerAnonymous(e.target.checked)}
+                    style={{ marginTop: 2, flexShrink: 0 }}
+                  />
+                  Enviar anonimamente
+                </label>
+                {prayerAnonymous ? (
+                  <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-secondary)", background: "rgba(0,0,0,0.04)", borderRadius: 6, padding: "8px 10px", lineHeight: 1.5 }}>
+                    Seu pedido será recebido pelo ministério de Intercessão, mas seu nome não será associado a ele. Por isso, você não receberá atualizações de status.
+                  </p>
+                ) : null}
+                {prayerSubmitMessage ? (
+                  <p className={`login-feedback ${prayerSubmitStatus}`} style={{ margin: 0 }}>{prayerSubmitMessage}</p>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ alignSelf: "flex-end" }}
+                  disabled={prayerSubmitStatus === "loading" || prayerForm.trim().length < 5}
+                  onClick={handlePrayerSubmit}
+                >
+                  <Heart size={14} />
+                  {prayerSubmitStatus === "loading" ? "Enviando..." : "Enviar pedido"}
+                </button>
+              </div>
+
+              {/* Histórico dos próprios pedidos */}
+              {ownPrayerRequests.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Meus pedidos
+                  </p>
+                  {ownPrayerRequests.map((req) => {
+                    const statusMap: Record<string, { label: string; color: string }> = {
+                      new:        { label: "Aguardando", color: "var(--color-accent)" },
+                      assigned:   { label: "Atribuído",  color: "#e08b00" },
+                      interceding:{ label: "Sendo intercedido", color: "#c07000" },
+                      done:       { label: "Intercedido", color: "var(--color-success)" },
+                    };
+                    const s = statusMap[req.status] ?? statusMap.new;
+                    return (
+                      <div key={req.id} style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <small style={{ color: "var(--color-text-secondary)", fontSize: "0.75rem" }}>
+                            {new Date(req.created_at).toLocaleDateString("pt-BR")}
+                          </small>
+                          <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, color: s.color, background: `${s.color}18`, padding: "2px 8px", borderRadius: 4 }}>
+                            {s.label}
+                          </em>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.5, color: "var(--color-text)" }}>
+                          {req.content.length > 140 ? req.content.slice(0, 140) + "…" : req.content}
+                        </p>
+                        {req.status === "interceding" ? (
+                          <p style={{ margin: 0, fontSize: "0.76rem", color: "#c07000", fontWeight: 600 }}>
+                            Alguém está orando pelo seu pedido agora.
+                          </p>
+                        ) : req.status === "done" ? (
+                          <p style={{ margin: 0, fontSize: "0.76rem", color: "var(--color-success)", fontWeight: 600 }}>
+                            Seu pedido foi intercedido. Deus ouça!
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── Seção Minha Intercessão (apenas membros do ministério) ── */}
+        {isInIntercessionMinistry ? (
+          <section className="member-portal-section">
+            <div className="member-portal-section-head">
+              <Heart size={18} style={{ color: "var(--color-accent)" }} />
+              <strong>
+                Minha Intercessão
+                {myAssignments.length > 0 ? (
+                  <em style={{ marginLeft: 8, fontSize: "0.72rem", fontStyle: "normal", fontWeight: 700, background: "rgba(var(--color-accent-rgb),0.12)", color: "var(--color-accent)", padding: "1px 7px", borderRadius: 10 }}>
+                    {myAssignments.length}
+                  </em>
+                ) : null}
+              </strong>
+            </div>
+
+            {myAssignments.length === 0 ? (
+              <div className="member-portal-empty state-card">
+                <Heart size={28} />
+                <strong>Nenhum pedido atribuído</strong>
+                <span>Quando o admin distribuir pedidos de oração para você, eles aparecerão aqui.</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {myAssignments.map((assignment) => {
+                  const req = assignment.prayer_requests;
+                  const actionStatus = assignActionStatus[assignment.id] ?? "idle";
+                  return (
+                    <div key={assignment.id} style={{ background: "var(--color-bg-subtle, #f9fafb)", border: "1px solid var(--color-border)", borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <strong style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                          {req?.is_anonymous ? "Pedido anônimo" : "Pedido de oração"}
+                        </strong>
+                        {assignment.status === "interceding" ? (
+                          <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, color: "#c07000", background: "rgba(192,112,0,0.1)", padding: "2px 8px", borderRadius: 4 }}>
+                            Intercedendo
+                          </em>
+                        ) : (
+                          <em style={{ fontSize: "0.7rem", fontStyle: "normal", fontWeight: 700, color: "var(--color-accent)", background: "rgba(var(--color-accent-rgb),0.1)", padding: "2px 8px", borderRadius: 4 }}>
+                            Pendente
+                          </em>
+                        )}
+                      </div>
+                      {req ? (
+                        <p style={{ margin: 0, fontSize: "0.88rem", lineHeight: 1.6, color: "var(--color-text)" }}>
+                          {req.content}
+                        </p>
+                      ) : null}
+                      {actionStatus === "error" ? (
+                        <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-danger)" }}>Erro ao atualizar. Tente novamente.</p>
+                      ) : null}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {assignment.status === "pending" ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                            disabled={actionStatus === "loading"}
+                            onClick={() => handleAssignmentAction(assignment, "interceding")}
+                          >
+                            <Heart size={13} />
+                            {actionStatus === "loading" ? "Atualizando..." : "Começar a interceder"}
+                          </button>
+                        ) : assignment.status === "interceding" ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ fontSize: "0.82rem", padding: "6px 14px", background: "var(--color-success)", borderColor: "var(--color-success)" }}
+                            disabled={actionStatus === "loading"}
+                            onClick={() => handleAssignmentAction(assignment, "done")}
+                          >
+                            <Heart size={13} />
+                            {actionStatus === "loading" ? "Atualizando..." : "Conclui a intercessão"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         ) : null}
 
