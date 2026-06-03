@@ -6502,3 +6502,70 @@ h1 {
     font-size: 1.15rem;
   }
 }
+
+/* ── App Mobile — Versão ────────────────────────────────────────────────── */
+
+.app-version-current {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.app-version-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.app-version-card-key {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-version-card-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.app-version-info-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  font-size: 0.85rem;
+  color: #166534;
+  line-height: 1.6;
+}
+
+.app-version-info-box strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.app-version-info-box ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.app-version-info-box li {
+  margin-bottom: 0.25rem;
+}
+
+.app-version-info-box code {
+  background: #dcfce7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.8rem;
+}

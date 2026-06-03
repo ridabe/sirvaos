@@ -22,9 +22,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Save,
   Search,
   Settings2,
   ShieldCheck,
+  Smartphone,
   UserCog,
   UserPlus,
   UsersRound,
@@ -183,7 +185,18 @@ type AdminDashboardData = {
   };
 };
 
-type AdminSection = "dashboard" | "clients" | "plans" | "modules" | "admins";
+type AdminSection = "dashboard" | "clients" | "plans" | "modules" | "admins" | "app";
+
+type AppConfigRecord = {
+  key: string;
+  value: string;
+};
+
+type AppConfigFormState = {
+  android_required_version_code: string;
+  android_recommended_version_code: string;
+  android_play_store_url: string;
+};
 
 type GlobalAdminRecord = {
   id: string;
@@ -365,6 +378,16 @@ export function AdminGlobalAccess() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  const [appConfig, setAppConfig] = useState<AppConfigRecord[]>([]);
+  const [appConfigStatus, setAppConfigStatus] = useState<LoadStatus>("idle");
+  const [appConfigForm, setAppConfigForm] = useState<AppConfigFormState>({
+    android_required_version_code: "",
+    android_recommended_version_code: "",
+    android_play_store_url: "",
+  });
+  const [appConfigSaveStatus, setAppConfigSaveStatus] = useState<LoginStatus>("idle");
+  const [appConfigSaveMessage, setAppConfigSaveMessage] = useState("");
+
   const [tenantLogoUploadStatus, setTenantLogoUploadStatus] = useState<LoginStatus>("idle");
   const [tenantLogoUploadMessage, setTenantLogoUploadMessage] = useState("");
 
@@ -469,6 +492,12 @@ export function AdminGlobalAccess() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (activeSection === "app" && appConfigStatus === "idle") {
+      void loadAppConfig();
+    }
+  }, [activeSection]);
 
   useEffect(() => {
     if (!selectedTenantId) {
@@ -764,6 +793,81 @@ export function AdminGlobalAccess() {
       },
     });
     setDataStatus("ready");
+  }
+
+  async function loadAppConfig() {
+    setAppConfigStatus("loading");
+    const { data, error } = await supabase
+      .from("app_config")
+      .select("key, value")
+      .order("key")
+      .returns<AppConfigRecord[]>();
+
+    if (error) {
+      setAppConfigStatus("error");
+      return;
+    }
+
+    const rows = data ?? [];
+    setAppConfig(rows);
+
+    const toForm = (key: string) => rows.find((r) => r.key === key)?.value ?? "";
+    setAppConfigForm({
+      android_required_version_code: toForm("android_required_version_code"),
+      android_recommended_version_code: toForm("android_recommended_version_code"),
+      android_play_store_url: toForm("android_play_store_url"),
+    });
+    setAppConfigStatus("ready");
+  }
+
+  async function handleSaveAppConfig(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAppConfigSaveStatus("loading");
+    setAppConfigSaveMessage("");
+
+    const required = parseInt(appConfigForm.android_required_version_code, 10);
+    const recommended = parseInt(appConfigForm.android_recommended_version_code, 10);
+
+    if (isNaN(required) || required < 1) {
+      setAppConfigSaveStatus("error");
+      setAppConfigSaveMessage("Versão obrigatória deve ser um número inteiro maior que 0.");
+      return;
+    }
+    if (isNaN(recommended) || recommended < 1) {
+      setAppConfigSaveStatus("error");
+      setAppConfigSaveMessage("Versão recomendada deve ser um número inteiro maior que 0.");
+      return;
+    }
+    if (recommended < required) {
+      setAppConfigSaveStatus("error");
+      setAppConfigSaveMessage("A versão recomendada não pode ser menor que a versão obrigatória.");
+      return;
+    }
+    if (!appConfigForm.android_play_store_url.trim()) {
+      setAppConfigSaveStatus("error");
+      setAppConfigSaveMessage("Informe a URL da Play Store.");
+      return;
+    }
+
+    const rows = [
+      { key: "android_required_version_code", value: String(required), updated_at: new Date().toISOString() },
+      { key: "android_recommended_version_code", value: String(recommended), updated_at: new Date().toISOString() },
+      { key: "android_play_store_url", value: appConfigForm.android_play_store_url.trim(), updated_at: new Date().toISOString() },
+    ];
+
+    const { error } = await supabase
+      .from("app_config")
+      .upsert(rows, { onConflict: "key" });
+
+    if (error) {
+      setAppConfigSaveStatus("error");
+      setAppConfigSaveMessage("Não foi possível salvar. Verifique permissões.");
+      return;
+    }
+
+    setAppConfigSaveStatus("success");
+    setAppConfigSaveMessage("Configurações do app atualizadas com sucesso.");
+    await loadAppConfig();
   }
 
   function openCreateTenantForm() {
@@ -1562,6 +1666,17 @@ export function AdminGlobalAccess() {
               <UserCog size={18} />
               <span className="sidebar-label">Admins</span>
             </button>
+            <button
+              className={activeSection === "app" ? "active" : undefined}
+              type="button"
+              onClick={() => {
+                setActiveSection("app");
+                setIsMobileSidebarOpen(false);
+              }}
+            >
+              <Smartphone size={18} />
+              <span className="sidebar-label">App Mobile</span>
+            </button>
           </nav>
 
           <button className="global-admin-logout" type="button" onClick={handleSignOut}>
@@ -1580,6 +1695,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "plans" && "Gestão de planos"}
                 {activeSection === "modules" && "Catálogo global de módulos"}
                 {activeSection === "admins" && "Admins Globais"}
+                {activeSection === "app" && "App Mobile — Versões"}
               </h1>
               <p>
                 {activeSection === "dashboard" && "Acompanhe saúde do SaaS, auditoria e métricas do Admin Global."}
@@ -1587,6 +1703,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "plans" && "Crie e mantenha o catálogo de planos comerciais do SirvaOS."}
                 {activeSection === "modules" && "Configure o catálogo global de módulos e seus metadados."}
                 {activeSection === "admins" && "Gerencie os usuários com acesso ao painel Admin Global do SirvaOS."}
+                {activeSection === "app" && "Controle qual versão mínima do app Android é exigida ou recomendada para os usuários."}
               </p>
             </div>
             <Button
@@ -1602,6 +1719,8 @@ export function AdminGlobalAccess() {
                   setAdminSaveStatus("idle");
                   setAdminSaveMessage("");
                   setIsAdminFormOpen(true);
+                } else if (activeSection === "app") {
+                  void loadAppConfig();
                 } else {
                   setActiveSection("clients");
                 }
@@ -1615,6 +1734,8 @@ export function AdminGlobalAccess() {
                 ? "Novo módulo"
                 : activeSection === "admins"
                 ? "Novo admin global"
+                : activeSection === "app"
+                ? "Recarregar"
                 : "Ver clientes"}
             </Button>
           </header>
@@ -2019,6 +2140,111 @@ export function AdminGlobalAccess() {
                       </Button>
                     </div>
                   </form>
+                </section>
+              ) : null}
+
+              {activeSection === "app" ? (
+                <section className="global-panel" aria-label="Versão do App Mobile">
+                  {appConfigStatus === "loading" ? (
+                    <div className="admin-state-panel">
+                      <CircleDashed size={20} />
+                      <strong>Carregando configurações do app...</strong>
+                    </div>
+                  ) : appConfigStatus === "error" ? (
+                    <div className="admin-state-panel error">
+                      <Bell size={20} />
+                      <strong>Não foi possível carregar as configurações. Verifique as permissões da tabela app_config.</strong>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Cards de status atual */}
+                      <div className="app-version-current">
+                        {appConfig.map((row) => (
+                          <div key={row.key} className="app-version-card">
+                            <span className="app-version-card-key">
+                              {row.key === "android_required_version_code" && "Versão mínima obrigatória"}
+                              {row.key === "android_recommended_version_code" && "Versão recomendada"}
+                              {row.key === "android_play_store_url" && "URL da Play Store"}
+                            </span>
+                            <strong className="app-version-card-value">{row.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="global-panel-heading" style={{ marginTop: "1.5rem" }}>
+                        <div>
+                          <span>Editar configuração</span>
+                          <h2>Atualizar versão do app Android</h2>
+                        </div>
+                      </div>
+
+                      <form className="tenant-form" onSubmit={handleSaveAppConfig} style={{ maxWidth: 520 }}>
+                        <label>
+                          <span>Versão mínima obrigatória (versionCode) *</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={appConfigForm.android_required_version_code}
+                            onChange={(e) => setAppConfigForm((f) => ({ ...f, android_required_version_code: e.target.value }))}
+                            placeholder="Ex.: 2"
+                          />
+                          <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
+                            Usuários com versão inferior verão um alerta obrigatório sem poder dispensar.
+                          </small>
+                        </label>
+
+                        <label>
+                          <span>Versão recomendada (versionCode) *</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={appConfigForm.android_recommended_version_code}
+                            onChange={(e) => setAppConfigForm((f) => ({ ...f, android_recommended_version_code: e.target.value }))}
+                            placeholder="Ex.: 2"
+                          />
+                          <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
+                            Usuários com versão inferior verão um alerta sugerindo atualização, mas poderão dispensar.
+                          </small>
+                        </label>
+
+                        <label>
+                          <span>URL da Play Store *</span>
+                          <input
+                            type="url"
+                            value={appConfigForm.android_play_store_url}
+                            onChange={(e) => setAppConfigForm((f) => ({ ...f, android_play_store_url: e.target.value }))}
+                            placeholder="https://play.google.com/store/apps/details?id=com.sirvaos.app"
+                          />
+                        </label>
+
+                        <div className="app-version-info-box">
+                          <strong>Como usar:</strong>
+                          <ol>
+                            <li>Incremente o <code>versionCode</code> no <code>app.json</code> do projeto mobile.</li>
+                            <li>Gere o build via GitHub Actions e publique na Play Store.</li>
+                            <li>Após aprovação da Play Store, atualize os campos acima.</li>
+                            <li>Na próxima abertura do app, o usuário receberá o alerta automaticamente.</li>
+                          </ol>
+                        </div>
+
+                        {appConfigSaveMessage ? (
+                          <p className={`login-feedback ${appConfigSaveStatus}`}>{appConfigSaveMessage}</p>
+                        ) : null}
+
+                        <div className="tenant-form-actions">
+                          <Button
+                            type="submit"
+                            disabled={appConfigSaveStatus === "loading"}
+                            icon={<Save size={18} />}
+                          >
+                            {appConfigSaveStatus === "loading" ? "Salvando..." : "Salvar configurações"}
+                          </Button>
+                        </div>
+                      </form>
+                    </>
+                  )}
                 </section>
               ) : null}
 
