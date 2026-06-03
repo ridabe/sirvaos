@@ -1473,6 +1473,21 @@ h1 {
   margin-top: 20px;
 }
 
+/* App version form — coluna única, max 560px, sem regras nth-child herdadas */
+.tenant-form.app-version-form {
+  grid-template-columns: 1fr;
+  max-width: 560px;
+}
+
+.tenant-form.app-version-form > * {
+  grid-column: 1 / -1 !important;
+}
+
+.tenant-form.app-version-form label:nth-child(1),
+.tenant-form.app-version-form label:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
 .tenant-form label {
   display: grid;
   gap: 8px;
@@ -6507,19 +6522,39 @@ h1 {
 
 .app-version-current {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
   margin-bottom: 0.5rem;
+  max-width: 860px;
+}
+
+.app-version-subtitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.5rem;
 }
 
 .app-version-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
+}
+
+.app-version-card--wide {
+  grid-column: 1 / -1;
+}
+
+.app-version-card--wide .app-version-card-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  word-break: break-all;
 }
 
 .app-version-card-key {

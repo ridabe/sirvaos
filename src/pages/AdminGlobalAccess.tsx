@@ -2158,27 +2158,33 @@ export function AdminGlobalAccess() {
                   ) : (
                     <>
                       {/* Cards de status atual */}
+                      <p className="app-version-subtitle">Configuração atual no banco de dados</p>
                       <div className="app-version-current">
-                        {appConfig.map((row) => (
-                          <div key={row.key} className="app-version-card">
-                            <span className="app-version-card-key">
-                              {row.key === "android_required_version_code" && "Versão mínima obrigatória"}
-                              {row.key === "android_recommended_version_code" && "Versão recomendada"}
-                              {row.key === "android_play_store_url" && "URL da Play Store"}
-                            </span>
-                            <strong className="app-version-card-value">{row.value}</strong>
-                          </div>
-                        ))}
+                        {[
+                          { key: "android_required_version_code", label: "Versão mínima obrigatória", icon: "🔴" },
+                          { key: "android_recommended_version_code", label: "Versão recomendada", icon: "🟡" },
+                          { key: "android_play_store_url", label: "URL da Play Store", icon: "🔗" },
+                        ].map(({ key, label, icon }) => {
+                          const row = appConfig.find((r) => r.key === key);
+                          return (
+                            <div key={key} className={`app-version-card ${key === "android_play_store_url" ? "app-version-card--wide" : ""}`}>
+                              <span className="app-version-card-key">{icon} {label}</span>
+                              <strong className="app-version-card-value">
+                                {row?.value ?? <em style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>não configurado</em>}
+                              </strong>
+                            </div>
+                          );
+                        })}
                       </div>
 
-                      <div className="global-panel-heading" style={{ marginTop: "1.5rem" }}>
+                      <div className="global-panel-heading" style={{ marginTop: "2rem", marginBottom: 0 }}>
                         <div>
                           <span>Editar configuração</span>
                           <h2>Atualizar versão do app Android</h2>
                         </div>
                       </div>
 
-                      <form className="tenant-form" onSubmit={handleSaveAppConfig} style={{ maxWidth: 520 }}>
+                      <form className="tenant-form app-version-form" onSubmit={handleSaveAppConfig}>
                         <label>
                           <span>Versão mínima obrigatória (versionCode) *</span>
                           <input
