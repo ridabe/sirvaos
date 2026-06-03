@@ -2311,7 +2311,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   async function openPushComposer(moduleCode: "worship" | "kids" | "bible-school") {
-    const defaultMode =
+    const defaultMode: typeof pushComposerMode =
       moduleCode === "worship"
         ? "worship_ministry"
         : moduleCode === "kids"
@@ -2333,11 +2333,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setPushKidsDate(kidsAttendanceDate);
     setPushComposerOpen(true);
 
-    const needsList =
-      defaultMode === "worship_selected" || defaultMode === "kids_selected" || defaultMode === "bible_selected";
-    if (needsList) {
-      await loadPushCandidates(defaultMode, moduleCode);
-    } else if (defaultMode === "kids_checked_in") {
+    if (defaultMode === "kids_checked_in") {
       await loadPushCandidates(defaultMode, moduleCode);
     }
   }
