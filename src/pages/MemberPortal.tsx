@@ -937,30 +937,32 @@ export function MemberPortal() {
     );
     setIsInIntercessionMinistry(inIntercessionMinistry);
 
+    // Carrega pedidos próprios quando módulo ativo
     if (intercessionEnabled) {
-      const [ownRequestsResult, myAssignmentsResult] = await Promise.all([
-        supabase
-          .from("prayer_requests")
-          .select("id, content, is_anonymous, status, created_at")
-          .eq("tenant_id", profileData.tenant_id)
-          .eq("profile_id", profileData.id)
-          .order("created_at", { ascending: false })
-          .limit(20)
-          .returns<PortalPrayerRequest[]>(),
-        inIntercessionMinistry
-          ? supabase
-              .from("prayer_assignments")
-              .select("id, prayer_request_id, status, prayer_requests(id, content, is_anonymous, member_id, profile_id)")
-              .eq("tenant_id", profileData.tenant_id)
-              .eq("assigned_member_id", profileData.member_id)
-              .in("status", ["pending", "interceding"])
-              .order("assigned_at", { ascending: false })
-              .limit(50)
-              .returns<PortalPrayerAssignment[]>()
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      setOwnPrayerRequests(ownRequestsResult.data ?? []);
-      setMyAssignments(myAssignmentsResult.data ?? []);
+      const { data: ownRequestsData } = await supabase
+        .from("prayer_requests")
+        .select("id, content, is_anonymous, status, created_at")
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("profile_id", profileData.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .returns<PortalPrayerRequest[]>();
+      setOwnPrayerRequests(ownRequestsData ?? []);
+    }
+
+    // Carrega assignments do intercessor independente do intercessionEnabled
+    // (membro pode estar no ministério mesmo sem admin access ao módulo)
+    if (profileData.member_id) {
+      const { data: assignmentsData } = await supabase
+        .from("prayer_assignments")
+        .select("id, prayer_request_id, status, prayer_requests(id, content, is_anonymous, member_id, profile_id)")
+        .eq("tenant_id", profileData.tenant_id)
+        .eq("assigned_member_id", profileData.member_id)
+        .in("status", ["pending", "interceding"])
+        .order("assigned_at", { ascending: false })
+        .limit(50)
+        .returns<PortalPrayerAssignment[]>();
+      setMyAssignments(assignmentsData ?? []);
     }
 
     if (hasSchedulePortalAccess) {
@@ -3212,8 +3214,8 @@ export function MemberPortal() {
           </section>
         ) : null}
 
-        {/* ── Seção Minha Intercessão (apenas membros do ministério) ── */}
-        {isInIntercessionMinistry ? (
+        {/* ── Seção Minha Intercessão ── */}
+        {(isInIntercessionMinistry || myAssignments.length > 0) ? (
           <section className="member-portal-section">
             <div className="member-portal-section-head">
               <Heart size={18} style={{ color: "var(--color-accent)" }} />
