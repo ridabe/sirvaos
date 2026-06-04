@@ -104,6 +104,7 @@ type PortalEventRecord = {
 type PortalTenantInfo = {
   name: string;
   contact_phone: string | null;
+  logo_url: string | null;
 };
 
 type PortalAnnouncementRecord = {
@@ -166,6 +167,56 @@ function isSchedulableMinistryName(value: string | null | undefined) {
   const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
   const schedulableTokens = new Set(["louvor", "worship", "danca", "midia", "multimidia", "som", "audio", "audiovisual", "sound"]);
   return tokens.some((token) => schedulableTokens.has(token));
+}
+
+function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
+  if (!storedLogoUrl) {
+    return null;
+  }
+
+  const trimmed = storedLogoUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("/") || trimmed.startsWith("data:")) {
+    return null;
+  }
+
+  if (!trimmed.startsWith("http")) {
+    return trimmed.startsWith("tenant-logos/") ? trimmed.slice("tenant-logos/".length) : trimmed;
+  }
+
+  const match = trimmed.match(/\/storage\/v1\/object\/(?:public|sign)\/tenant-logos\/([^?]+)(?:\?.*)?$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+function getTenantLogoPublicUrl(storedLogoUrl: string | null | undefined, tenantId: string) {
+  const rawLogo = storedLogoUrl?.trim() ?? "";
+  if (!rawLogo) {
+    return null;
+  }
+
+  if (rawLogo.startsWith("/") || rawLogo.startsWith("data:")) {
+    return rawLogo;
+  }
+
+  const objectKey = getTenantLogoObjectKey(rawLogo);
+  if (!objectKey && rawLogo.startsWith("http")) {
+    return rawLogo;
+  }
+
+  const resolvedObjectKey = objectKey ?? `${tenantId}/logo`;
+  const { data } = supabase.storage.from("tenant-logos").getPublicUrl(resolvedObjectKey);
+  return data.publicUrl ? `${data.publicUrl}?v=${encodeURIComponent(rawLogo)}` : null;
 }
 
 type KidsGroupRecord = {
@@ -387,6 +438,7 @@ export function MemberPortal() {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(null);
+  const [resolvedTenantLogoUrl, setResolvedTenantLogoUrl] = useState<string | null>(null);
   const [portalTenantInfo, setPortalTenantInfo] = useState<PortalTenantInfo | null>(null);
   const [eventPreviewOpen, setEventPreviewOpen] = useState(false);
   const [eventPreviewTarget, setEventPreviewTarget] = useState<PortalEventRecord | null>(null);
@@ -467,8 +519,11 @@ export function MemberPortal() {
     return accordionState[id] ?? defaultOpen;
   }
 
-  function toggleAccordion(id: string) {
-    setAccordionState((prev) => ({ ...prev, [id]: !(prev[id] ?? false) }));
+  function toggleAccordion(id: string, defaultOpen = false) {
+    setAccordionState((prev) => {
+      const current = prev[id] ?? defaultOpen;
+      return { ...prev, [id]: !current };
+    });
   }
 
   function AccordionPanel(props: {
@@ -489,7 +544,7 @@ export function MemberPortal() {
           type="button"
           className="member-portal-accordion-head"
           aria-expanded={open}
-          onClick={() => toggleAccordion(props.id)}
+          onClick={() => toggleAccordion(props.id, Boolean(props.defaultOpen))}
         >
           <span className="member-portal-accordion-title">
             {props.icon ? <span className="member-portal-accordion-icon">{props.icon}</span> : null}
@@ -845,7 +900,7 @@ export function MemberPortal() {
       const [tenantInfoRes, eventsRes, announcementsRes, socialMediaRes] = await Promise.all([
         supabase
           .from("tenants")
-          .select("name, contact_phone")
+          .select("name, contact_phone, logo_url")
           .eq("id", profileData.tenant_id)
           .single<PortalTenantInfo>(),
         supabase
@@ -874,6 +929,11 @@ export function MemberPortal() {
           .returns<SocialMediaChannelPortalRecord[]>(),
       ]);
       setPortalTenantInfo(tenantInfoRes.data ?? null);
+      setResolvedTenantLogoUrl(
+        tenantInfoRes.data?.logo_url
+          ? getTenantLogoPublicUrl(tenantInfoRes.data.logo_url, profileData.tenant_id)
+          : null,
+      );
       setPortalEvents(eventsRes.data ?? []);
       setPortalAnnouncements(announcementsRes.data ?? []);
       const channels = socialMediaRes.data ?? [];
@@ -2112,10 +2172,19 @@ export function MemberPortal() {
     <div className="member-portal-shell">
       <header className="member-portal-header">
         <div className="member-portal-brand">
-          <Check size={22} />
+          {resolvedTenantLogoUrl ? (
+            <img
+              className="member-portal-tenant-logo"
+              src={resolvedTenantLogoUrl}
+              alt={portalTenantInfo?.name ? `Logo ${portalTenantInfo.name}` : "Logo"}
+              onError={() => setResolvedTenantLogoUrl(null)}
+            />
+          ) : (
+            <Check size={22} />
+          )}
           <div>
-            <strong>Portal do Membro</strong>
-            <span>{profile.full_name ?? profile.email}</span>
+            <strong>{portalTenantInfo?.name ?? "Portal do Membro"}</strong>
+            <span>Portal do Membro</span>
           </div>
         </div>
         <div className="member-portal-header-actions">

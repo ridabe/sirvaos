@@ -4248,6 +4248,16 @@ h1 {
   color: var(--color-brand-primary);
 }
 
+.member-portal-tenant-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--color-neutral-200);
+  background: var(--color-white);
+  padding: 4px;
+}
+
 .member-portal-brand strong {
   display: block;
   font-size: 0.95rem;
@@ -4661,6 +4671,21 @@ h1 {
     var(--color-brand-primary);
   color: var(--color-white);
   box-shadow: 0 22px 50px rgba(10, 37, 64, 0.14);
+}
+
+.member-portal-feed-layout .member-portal-hero::before {
+  position: absolute;
+  right: -120px;
+  bottom: -180px;
+  width: 620px;
+  height: 420px;
+  content: "";
+  opacity: 0.24;
+  pointer-events: none;
+  background-image: url("/img/banner-sirvaos.svg");
+  background-repeat: no-repeat;
+  background-position: right bottom;
+  background-size: contain;
 }
 
 .member-portal-feed-layout .member-portal-hero::after {
