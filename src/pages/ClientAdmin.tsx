@@ -252,6 +252,17 @@ type TenantEventSongRecord = {
   catalog_songs: CatalogSongRecord | null;
 };
 
+type WorshipEventSongRecord = {
+  id: string;
+  tenant_id: string;
+  event_id: string;
+  song_id: string;
+  position: number;
+  key: string | null;
+  notes: string | null;
+  catalog_songs: CatalogSongRecord | null;
+};
+
 type MemberRoleRecord = {
   tenant_id: string;
   member_id: string;
@@ -1940,6 +1951,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [eventBannerUploadMessage, setEventBannerUploadMessage] = useState("");
   const [eventRepertoire, setEventRepertoire] = useState<EventRepertoireItem[]>([]);
   const [catalogSongSearchTerm, setCatalogSongSearchTerm] = useState("");
+  const [catalogSongScope, setCatalogSongScope] = useState<"all" | "global" | "mine">("all");
+  const [catalogSongPickerOpen, setCatalogSongPickerOpen] = useState(false);
+  const [catalogSongSelectedIds, setCatalogSongSelectedIds] = useState<string[]>([]);
   const [newCatalogSongTitle, setNewCatalogSongTitle] = useState("");
   const [newCatalogSongArtist, setNewCatalogSongArtist] = useState("");
   const [songCatalogStatus, setSongCatalogStatus] = useState<LoginStatus>("idle");
@@ -1950,6 +1964,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [cifraClubMessage, setCifraClubMessage] = useState("");
   const [cifraClubResult, setCifraClubResult] = useState<CifraClubSongResponse | null>(null);
   const eventDescriptionEditorRef = useRef<HTMLDivElement | null>(null);
+  const catalogSongPickerRef = useRef<HTMLDivElement | null>(null);
   const [eventViewMode, setEventViewMode] = useState<"list" | "calendar">("list");
   const [eventCalendarMonth, setEventCalendarMonth] = useState(() => {
     const now = new Date();
@@ -1995,7 +2010,34 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [worshipEmailFeedbackType, setWorshipEmailFeedbackType] = useState<"success" | "error">("success");
   const [worshipEmailCampaignsByEventId, setWorshipEmailCampaignsByEventId] = useState<Record<string, WorshipEmailCampaign[]>>({});
   const [editingWorshipEventId, setEditingWorshipEventId] = useState<string | null>(null);
-  const [worshipFlowStep, setWorshipFlowStep] = useState<1 | 2>(1);
+  const [worshipFlowStep, setWorshipFlowStep] = useState<1 | 2 | 3>(1);
+  const [worshipInsightsAccordionOpen, setWorshipInsightsAccordionOpen] = useState(true);
+  const [worshipFlowAccordionOpen, setWorshipFlowAccordionOpen] = useState(true);
+  const [worshipEventsViewMode, setWorshipEventsViewMode] = useState<"list" | "calendar">("calendar");
+  const [worshipCalendarMonth, setWorshipCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [worshipCalendarSelectedEventId, setWorshipCalendarSelectedEventId] = useState<string | null>(null);
+  const [worshipRepertoireEventId, setWorshipRepertoireEventId] = useState<string>("");
+  const [worshipRepertoire, setWorshipRepertoire] = useState<EventRepertoireItem[]>([]);
+  const [worshipSongSearchTerm, setWorshipSongSearchTerm] = useState("");
+  const [worshipSongScope, setWorshipSongScope] = useState<"all" | "global" | "mine">("all");
+  const [worshipSongPickerOpen, setWorshipSongPickerOpen] = useState(false);
+  const [worshipSongSelectedIds, setWorshipSongSelectedIds] = useState<string[]>([]);
+  const [worshipNewSongTitle, setWorshipNewSongTitle] = useState("");
+  const [worshipNewSongArtist, setWorshipNewSongArtist] = useState("");
+  const [worshipSongCatalogStatus, setWorshipSongCatalogStatus] = useState<LoginStatus>("idle");
+  const [worshipSongCatalogMessage, setWorshipSongCatalogMessage] = useState("");
+  const [worshipCifraClubArtistInput, setWorshipCifraClubArtistInput] = useState("");
+  const [worshipCifraClubSongInput, setWorshipCifraClubSongInput] = useState("");
+  const [worshipCifraClubStatus, setWorshipCifraClubStatus] = useState<LoadStatus>("idle");
+  const [worshipCifraClubMessage, setWorshipCifraClubMessage] = useState("");
+  const [worshipCifraClubResult, setWorshipCifraClubResult] = useState<CifraClubSongResponse | null>(null);
+  const [worshipRepertoireSaveStatus, setWorshipRepertoireSaveStatus] = useState<LoginStatus>("idle");
+  const [worshipRepertoireSaveMessage, setWorshipRepertoireSaveMessage] = useState("");
+  const [worshipRepertoireCompleted, setWorshipRepertoireCompleted] = useState(false);
+  const worshipSongPickerRef = useRef<HTMLDivElement | null>(null);
   const [worshipEligibleSearch, setWorshipEligibleSearch] = useState("");
   const [worshipMembersModalOpen, setWorshipMembersModalOpen] = useState(false);
   const [worshipEventsModalOpen, setWorshipEventsModalOpen] = useState(false);
@@ -3982,6 +4024,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .returns<SocialMediaChannelRecord[]>(),
       ]);
 
+    const failures = [
+      { label: "tenants", error: tenantResult.error },
+      { label: "members", error: membersResult.error },
+      { label: "member_roles", error: memberRolesResult.error },
+      { label: "member_ministries", error: memberMinistriesResult.error },
+      { label: "families", error: familiesResult.error },
+      { label: "family_members", error: familyMembersResult.error },
+      { label: "tenant_events", error: eventsResult.error },
+      { label: "tenant_announcements", error: announcementsResult.error },
+      { label: "worship_roles", error: worshipRolesResult.error },
+      { label: "worship_events", error: worshipEventsResult.error },
+      { label: "worship_assignments", error: worshipAssignmentsResult.error },
+      { label: "profiles", error: usersResult.error },
+      { label: "tenant_modules", error: modulesResult.error },
+      { label: "tenant_module_admins", error: moduleAdminsResult.error },
+      { label: "catalog_roles", error: catalogRolesResult.error },
+      { label: "catalog_ministries", error: catalogMinistriesResult.error },
+      { label: "catalog_songs", error: catalogSongsResult.error },
+      { label: "financial_categories", error: financialCategoriesResult.error },
+      { label: "financial_transactions", error: financialTransactionsResult.error },
+      { label: "kids_groups", error: kidsGroupsResult.error },
+      { label: "kids_children", error: kidsChildrenResult.error },
+      { label: "kids_guardians", error: kidsGuardiansResult.error },
+      { label: "kids_teacher_schedule", error: kidsTeacherScheduleResult.error },
+      { label: "kids_attendance", error: kidsAttendanceResult.error },
+      { label: "kids_activities", error: kidsActivitiesResult.error },
+      { label: "kids_communications", error: kidsCommunicationsResult.error },
+      { label: "platform_modules", error: allPlatformModulesResult.error },
+      { label: "social_media_channels", error: socialMediaChannelsResult.error },
+    ].filter((item) => Boolean(item.error));
+
     if (
       tenantResult.error ||
       membersResult.error ||
@@ -4012,7 +4085,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       socialMediaChannelsResult.error
     ) {
       setDataStatus("error");
-      setLoginMessage("Erro ao carregar dados do tenant.");
+      const first = failures[0];
+      const rawError = (first?.error ?? null) as null | { code?: string; message?: string };
+      const errCode = rawError?.code ? String(rawError.code) : "";
+      const errMessage = rawError?.message ? String(rawError.message) : "erro desconhecido";
+      const migrationHint = errCode === "42P01" || /does not exist/i.test(errMessage) ? " (provável migration pendente)" : "";
+      setLoginMessage(`Erro ao carregar dados do tenant: ${first?.label ?? "desconhecido"} — ${errMessage}${migrationHint}`);
       return null;
     }
 
@@ -5941,6 +6019,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventBannerUploadMessage("");
     setEventRepertoire([]);
     setCatalogSongSearchTerm("");
+    setCatalogSongScope("all");
+    setCatalogSongPickerOpen(false);
+    setCatalogSongSelectedIds([]);
     setNewCatalogSongTitle("");
     setNewCatalogSongArtist("");
     setSongCatalogStatus("idle");
@@ -5967,6 +6048,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventBannerUploadMessage("");
     setEventRepertoire([]);
     setCatalogSongSearchTerm("");
+    setCatalogSongScope("all");
+    setCatalogSongPickerOpen(false);
+    setCatalogSongSelectedIds([]);
     setNewCatalogSongTitle("");
     setNewCatalogSongArtist("");
     setSongCatalogStatus("idle");
@@ -5990,6 +6074,30 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const nextPosition = Number.isFinite(max) && max > 0 ? max + 10 : 10;
       return [...current, { id: null, song, position: nextPosition, key: "", notes: "" }].sort((a, b) => a.position - b.position);
     });
+  }
+
+  function toggleCatalogSongSelection(songId: string) {
+    setCatalogSongSelectedIds((current) => (current.includes(songId) ? current.filter((id) => id !== songId) : [...current, songId]));
+  }
+
+  function addSelectedCatalogSongsToRepertoire() {
+    if (!clientData) return;
+    const selected = new Set(catalogSongSelectedIds);
+    const already = new Set(eventRepertoire.map((it) => it.song.id));
+    const byId = clientData.catalogSongs.reduce<Record<string, CatalogSongRecord>>((acc, song) => {
+      acc[song.id] = song;
+      return acc;
+    }, {});
+
+    for (const id of selected) {
+      if (already.has(id)) continue;
+      const song = byId[id];
+      if (!song) continue;
+      addSongToRepertoire(song);
+    }
+
+    setCatalogSongSelectedIds([]);
+    setCatalogSongPickerOpen(false);
   }
 
   function removeSongFromRepertoire(songId: string) {
@@ -6143,42 +6251,80 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   }
 
   async function handleCifraClubSearch() {
-    const artist = cifraClubArtistInput.trim();
-    const song = cifraClubSongInput.trim();
-    const artistSlug = createSlug(artist);
-    const songSlug = createSlug(song);
-
     setCifraClubStatus("loading");
     setCifraClubMessage("");
     setCifraClubResult(null);
 
-    if (!artistSlug || !songSlug) {
-      setCifraClubStatus("error");
-      setCifraClubMessage("Informe artista e música.");
-      return;
-    }
-
-    const base = resolveCifraClubApiBaseUrl();
-    const url = `${base}/api/cifraclub/artists/${encodeURIComponent(artistSlug)}/songs/${encodeURIComponent(songSlug)}`;
-
-    let response: Response;
     try {
-      response = await fetch(url);
-    } catch {
-      setCifraClubStatus("error");
-      setCifraClubMessage("Não foi possível consultar o Cifra Club.");
-      return;
-    }
+      const artist = cifraClubArtistInput.trim();
+      const song = cifraClubSongInput.trim();
+      const artistSlug = createSlug(artist);
+      const songSlug = createSlug(song);
 
-    if (!response.ok) {
-      setCifraClubStatus("error");
-      setCifraClubMessage("Música não encontrada no Cifra Club.");
-      return;
-    }
+      if (!artistSlug || !songSlug) {
+        setCifraClubStatus("error");
+        setCifraClubMessage("Informe artista e música.");
+        return;
+      }
 
-    const json = (await response.json()) as CifraClubSongResponse;
-    setCifraClubResult(json);
-    setCifraClubStatus("ready");
+      const base = resolveCifraClubApiBaseUrl();
+      const url = `${base}/api/cifraclub/artists/${encodeURIComponent(artistSlug)}/songs/${encodeURIComponent(songSlug)}`;
+
+      if (import.meta.env.DEV && !base) {
+        setCifraClubStatus("error");
+        setCifraClubMessage('Consulta ao Cifra Club indisponível no modo local. Configure VITE_CIFRACLUB_API_BASE_URL (URL do seu deploy na Vercel).');
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+      let response: Response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } catch (err) {
+        const isAbort = (err as { name?: string } | null)?.name === "AbortError";
+        setCifraClubStatus("error");
+        setCifraClubMessage(isAbort ? "Tempo esgotado ao consultar o Cifra Club." : "Não foi possível consultar o Cifra Club.");
+        return;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      if (!response.ok) {
+        const status = response.status;
+        let details = "";
+        try {
+          const body = (await response.json()) as { error?: string; message?: string };
+          details = body?.error || body?.message || "";
+        } catch {
+          try {
+            details = (await response.text()).slice(0, 160);
+          } catch {
+            details = "";
+          }
+        }
+
+        setCifraClubStatus("error");
+        setCifraClubMessage(`Falha ao buscar no Cifra Club (${status}). ${details || "Verifique o artista/música e tente novamente."}`.trim());
+        return;
+      }
+
+      let json: CifraClubSongResponse;
+      try {
+        json = (await response.json()) as CifraClubSongResponse;
+      } catch {
+        setCifraClubStatus("error");
+        setCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
+        return;
+      }
+
+      setCifraClubResult(json);
+      setCifraClubStatus("ready");
+    } catch (err) {
+      setCifraClubStatus("error");
+      setCifraClubMessage((err as { message?: string } | null)?.message ? String((err as { message?: string }).message) : "Erro inesperado ao consultar o Cifra Club.");
+    }
   }
 
   async function handleImportCifraClubToCatalog() {
@@ -6255,6 +6401,33 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
     void loadEventRepertoire(eventForm.id);
   }, [isEventFormOpen, eventForm.id]);
+
+  useEffect(() => {
+    setCatalogSongSelectedIds([]);
+  }, [catalogSongSearchTerm, catalogSongScope, isEventFormOpen]);
+
+  useEffect(() => {
+    if (!catalogSongPickerOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      const root = catalogSongPickerRef.current;
+      if (!target || !root) return;
+      if (root.contains(target)) return;
+      setCatalogSongPickerOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCatalogSongPickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [catalogSongPickerOpen]);
 
   async function handleEventSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6358,6 +6531,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventBannerUploadMessage("");
     setEventRepertoire([]);
     setCatalogSongSearchTerm("");
+    setCatalogSongScope("all");
+    setCatalogSongPickerOpen(false);
+    setCatalogSongSelectedIds([]);
     setNewCatalogSongTitle("");
     setNewCatalogSongArtist("");
     setSongCatalogStatus("idle");
@@ -6456,6 +6632,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       status: worshipEvent.status,
     });
     setWorshipFlowStep(1);
+    setWorshipRepertoireEventId(worshipEvent.id);
+    setWorshipRepertoire([]);
+    setWorshipSongSearchTerm("");
+    setWorshipSongScope("all");
+    setWorshipSongPickerOpen(false);
+    setWorshipSongSelectedIds([]);
+    setWorshipNewSongTitle("");
+    setWorshipNewSongArtist("");
+    setWorshipSongCatalogStatus("idle");
+    setWorshipSongCatalogMessage("");
+    setWorshipCifraClubArtistInput("");
+    setWorshipCifraClubSongInput("");
+    setWorshipCifraClubStatus("idle");
+    setWorshipCifraClubMessage("");
+    setWorshipCifraClubResult(null);
+    setWorshipRepertoireSaveStatus("idle");
+    setWorshipRepertoireSaveMessage("");
+    setWorshipRepertoireCompleted(false);
     setWorshipSaveStatus("idle");
     setWorshipSaveMessage("");
   }
@@ -6464,9 +6658,417 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEditingWorshipEventId(null);
     setWorshipEventForm(emptyWorshipEventForm);
     setWorshipFlowStep(1);
+    setWorshipRepertoireEventId("");
+    setWorshipRepertoire([]);
+    setWorshipSongSearchTerm("");
+    setWorshipSongScope("all");
+    setWorshipSongPickerOpen(false);
+    setWorshipSongSelectedIds([]);
+    setWorshipNewSongTitle("");
+    setWorshipNewSongArtist("");
+    setWorshipSongCatalogStatus("idle");
+    setWorshipSongCatalogMessage("");
+    setWorshipCifraClubArtistInput("");
+    setWorshipCifraClubSongInput("");
+    setWorshipCifraClubStatus("idle");
+    setWorshipCifraClubMessage("");
+    setWorshipCifraClubResult(null);
+    setWorshipRepertoireSaveStatus("idle");
+    setWorshipRepertoireSaveMessage("");
+    setWorshipRepertoireCompleted(false);
     setWorshipSaveStatus("idle");
     setWorshipSaveMessage("");
   }
+
+  function addSongToWorshipRepertoire(song: CatalogSongRecord) {
+    setWorshipRepertoire((current) => {
+      if (current.some((item) => item.song.id === song.id)) return current;
+      const max = current.reduce((acc, item) => Math.max(acc, item.position), 0);
+      const nextPosition = Number.isFinite(max) && max > 0 ? max + 10 : 10;
+      return [...current, { id: null, song, position: nextPosition, key: "", notes: "" }].sort((a, b) => a.position - b.position);
+    });
+  }
+
+  function toggleWorshipSongSelection(songId: string) {
+    setWorshipSongSelectedIds((current) => (current.includes(songId) ? current.filter((id) => id !== songId) : [...current, songId]));
+  }
+
+  function addSelectedWorshipSongsToRepertoire() {
+    if (!clientData) return;
+    const selected = new Set(worshipSongSelectedIds);
+    const already = new Set(worshipRepertoire.map((it) => it.song.id));
+    const byId = clientData.catalogSongs.reduce<Record<string, CatalogSongRecord>>((acc, song) => {
+      acc[song.id] = song;
+      return acc;
+    }, {});
+
+    for (const id of selected) {
+      if (already.has(id)) continue;
+      const song = byId[id];
+      if (!song) continue;
+      addSongToWorshipRepertoire(song);
+    }
+
+    setWorshipSongSelectedIds([]);
+    setWorshipSongPickerOpen(false);
+  }
+
+  function removeSongFromWorshipRepertoire(songId: string) {
+    setWorshipRepertoire((current) => current.filter((item) => item.song.id !== songId));
+  }
+
+  function moveSongInWorshipRepertoire(songId: string, direction: -1 | 1) {
+    setWorshipRepertoire((current) => {
+      const sorted = [...current].sort((a, b) => a.position - b.position);
+      const index = sorted.findIndex((item) => item.song.id === songId);
+      if (index < 0) return current;
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= sorted.length) return current;
+      const next = [...sorted];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return next.map((it, idx) => ({ ...it, position: (idx + 1) * 10 }));
+    });
+  }
+
+  function updateWorshipRepertoireField(songId: string, field: "key" | "notes", value: string) {
+    setWorshipRepertoire((current) =>
+      current.map((item) => (item.song.id === songId ? { ...item, [field]: value } : item)),
+    );
+  }
+
+  async function loadWorshipRepertoire(eventId: string) {
+    if (!clientData?.tenant?.id || !eventId) return;
+
+    if (demoMode) {
+      setWorshipRepertoire([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("worship_event_songs")
+      .select("id, tenant_id, event_id, song_id, position, key, notes, catalog_songs (id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url)")
+      .eq("event_id", eventId)
+      .order("position", { ascending: true })
+      .returns<WorshipEventSongRecord[]>();
+
+    if (error) {
+      setWorshipRepertoire([]);
+      return;
+    }
+
+    const next = (data ?? [])
+      .filter((row) => Boolean(row.catalog_songs))
+      .map((row) => ({
+        id: row.id,
+        song: row.catalog_songs!,
+        position: row.position,
+        key: row.key ?? "",
+        notes: row.notes ?? "",
+      }));
+
+    setWorshipRepertoire(next);
+  }
+
+  async function persistWorshipRepertoire(eventId: string) {
+    if (!clientData?.tenant?.id || !eventId) return { ok: false as const };
+    if (demoMode) return { ok: true as const };
+
+    const tenantId = clientData.tenant.id;
+    const deleteResult = await supabase.from("worship_event_songs").delete().eq("event_id", eventId);
+    if (deleteResult.error) return { ok: false as const };
+
+    const rows = [...worshipRepertoire]
+      .sort((a, b) => a.position - b.position)
+      .map((item, index) => ({
+        tenant_id: tenantId,
+        event_id: eventId,
+        song_id: item.song.id,
+        position: (index + 1) * 10,
+        key: item.key.trim() || null,
+        notes: item.notes.trim() || null,
+      }));
+
+    if (!rows.length) return { ok: true as const };
+
+    const insertResult = await supabase.from("worship_event_songs").insert(rows);
+    if (insertResult.error) return { ok: false as const };
+
+    return { ok: true as const };
+  }
+
+  async function handleCreateTenantCatalogSongForWorship() {
+    if (!clientData?.tenant?.id) return;
+    const title = worshipNewSongTitle.trim();
+    const artist = worshipNewSongArtist.trim();
+    if (!title || !artist) {
+      setWorshipSongCatalogStatus("error");
+      setWorshipSongCatalogMessage("Informe música e autor/banda.");
+      return;
+    }
+
+    setWorshipSongCatalogStatus("loading");
+    setWorshipSongCatalogMessage("");
+
+    if (demoMode) {
+      const record: CatalogSongRecord = {
+        id: `song-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "manual",
+        cifraclub_url: null,
+        youtube_url: null,
+      };
+      setClientData((current) =>
+        current ? { ...current, catalogSongs: [...current.catalogSongs, record].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+      );
+      addSongToWorshipRepertoire(record);
+      setWorshipNewSongTitle("");
+      setWorshipNewSongArtist("");
+      setWorshipSongCatalogStatus("success");
+      setWorshipSongCatalogMessage("Música adicionada ao seu catálogo.");
+      return;
+    }
+
+    const result = await supabase
+      .from("catalog_songs")
+      .insert({
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "manual",
+        cifraclub_url: null,
+        youtube_url: null,
+        created_by: profile?.id ?? null,
+      })
+      .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
+      .single<CatalogSongRecord>();
+
+    if (result.error || !result.data) {
+      setWorshipSongCatalogStatus("error");
+      setWorshipSongCatalogMessage("Não foi possível criar a música no seu catálogo.");
+      return;
+    }
+
+    setClientData((current) =>
+      current ? { ...current, catalogSongs: [...current.catalogSongs, result.data].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+    );
+    addSongToWorshipRepertoire(result.data);
+    setWorshipNewSongTitle("");
+    setWorshipNewSongArtist("");
+    setWorshipSongCatalogStatus("success");
+    setWorshipSongCatalogMessage("Música adicionada ao seu catálogo.");
+  }
+
+  async function handleWorshipCifraClubSearch() {
+    setWorshipCifraClubStatus("loading");
+    setWorshipCifraClubMessage("");
+    setWorshipCifraClubResult(null);
+
+    try {
+      const artist = worshipCifraClubArtistInput.trim();
+      const song = worshipCifraClubSongInput.trim();
+      const artistSlug = createSlug(artist);
+      const songSlug = createSlug(song);
+
+      if (!artistSlug || !songSlug) {
+        setWorshipCifraClubStatus("error");
+        setWorshipCifraClubMessage("Informe artista e música.");
+        return;
+      }
+
+      const base = resolveCifraClubApiBaseUrl();
+      const url = `${base}/api/cifraclub/artists/${encodeURIComponent(artistSlug)}/songs/${encodeURIComponent(songSlug)}`;
+
+      if (import.meta.env.DEV && !base) {
+        setWorshipCifraClubStatus("error");
+        setWorshipCifraClubMessage('Consulta ao Cifra Club indisponível no modo local. Configure VITE_CIFRACLUB_API_BASE_URL (URL do seu deploy na Vercel).');
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+      let response: Response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } catch (err) {
+        const isAbort = (err as { name?: string } | null)?.name === "AbortError";
+        setWorshipCifraClubStatus("error");
+        setWorshipCifraClubMessage(isAbort ? "Tempo esgotado ao consultar o Cifra Club." : "Não foi possível consultar o Cifra Club.");
+        return;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      if (!response.ok) {
+        const status = response.status;
+        let details = "";
+        try {
+          const body = (await response.json()) as { error?: string; message?: string };
+          details = body?.error || body?.message || "";
+        } catch {
+          try {
+            details = (await response.text()).slice(0, 160);
+          } catch {
+            details = "";
+          }
+        }
+
+        setWorshipCifraClubStatus("error");
+        setWorshipCifraClubMessage(`Falha ao buscar no Cifra Club (${status}). ${details || "Verifique o artista/música e tente novamente."}`.trim());
+        return;
+      }
+
+      let json: CifraClubSongResponse;
+      try {
+        json = (await response.json()) as CifraClubSongResponse;
+      } catch {
+        setWorshipCifraClubStatus("error");
+        setWorshipCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
+        return;
+      }
+
+      setWorshipCifraClubResult(json);
+      setWorshipCifraClubStatus("ready");
+    } catch (err) {
+      setWorshipCifraClubStatus("error");
+      setWorshipCifraClubMessage((err as { message?: string } | null)?.message ? String((err as { message?: string }).message) : "Erro inesperado ao consultar o Cifra Club.");
+    }
+  }
+
+  async function handleWorshipImportCifraClubToCatalog() {
+    if (!clientData?.tenant?.id || !worshipCifraClubResult?.name) return;
+    const title = worshipCifraClubResult.name.trim();
+    const artist = (worshipCifraClubResult.artist ?? "").trim();
+    if (!title || !artist) return;
+
+    setWorshipSongCatalogStatus("loading");
+    setWorshipSongCatalogMessage("");
+
+    if (demoMode) {
+      const record: CatalogSongRecord = {
+        id: `song-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "cifraclub",
+        cifraclub_url: worshipCifraClubResult.cifraclub_url ?? null,
+        youtube_url: worshipCifraClubResult.youtube_url ?? null,
+      };
+      setClientData((current) =>
+        current ? { ...current, catalogSongs: [...current.catalogSongs, record].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+      );
+      addSongToWorshipRepertoire(record);
+      setWorshipSongCatalogStatus("success");
+      setWorshipSongCatalogMessage("Música importada para o seu catálogo.");
+      return;
+    }
+
+    const result = await supabase
+      .from("catalog_songs")
+      .insert({
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "cifraclub",
+        cifraclub_url: worshipCifraClubResult.cifraclub_url ?? null,
+        youtube_url: worshipCifraClubResult.youtube_url ?? null,
+        created_by: profile?.id ?? null,
+      })
+      .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
+      .single<CatalogSongRecord>();
+
+    if (result.error || !result.data) {
+      setWorshipSongCatalogStatus("error");
+      setWorshipSongCatalogMessage("Não foi possível importar a música para o seu catálogo.");
+      return;
+    }
+
+    setClientData((current) =>
+      current ? { ...current, catalogSongs: [...current.catalogSongs, result.data].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+    );
+    addSongToWorshipRepertoire(result.data);
+    setWorshipSongCatalogStatus("success");
+    setWorshipSongCatalogMessage("Música importada para o seu catálogo.");
+  }
+
+  async function handleSaveWorshipRepertoireAndAdvance() {
+    if (!clientData?.tenant?.id || !worshipRepertoireEventId) return;
+    setWorshipRepertoireSaveStatus("loading");
+    setWorshipRepertoireSaveMessage("");
+    const result = await persistWorshipRepertoire(worshipRepertoireEventId);
+    if (!result.ok) {
+      setWorshipRepertoireSaveStatus("error");
+      setWorshipRepertoireSaveMessage("Não foi possível salvar o repertório.");
+      return;
+    }
+    setWorshipRepertoireSaveStatus("success");
+    setWorshipRepertoireSaveMessage("Repertório salvo.");
+    setWorshipRepertoireCompleted(true);
+    setWorshipAssignmentForm((current) => ({ ...current, event_id: worshipRepertoireEventId }));
+    setWorshipFlowStep(3);
+  }
+
+  useEffect(() => {
+    setWorshipSongSelectedIds([]);
+    if (worshipFlowStep !== 2) setWorshipSongPickerOpen(false);
+  }, [worshipSongSearchTerm, worshipSongScope, worshipFlowStep]);
+
+  useEffect(() => {
+    if (!worshipSongPickerOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      const root = worshipSongPickerRef.current;
+      if (!target || !root) return;
+      if (root.contains(target)) return;
+      setWorshipSongPickerOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setWorshipSongPickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [worshipSongPickerOpen]);
+
+  useEffect(() => {
+    if (worshipFlowStep !== 2) return;
+    if (!worshipRepertoireEventId) return;
+    void loadWorshipRepertoire(worshipRepertoireEventId);
+  }, [worshipFlowStep, worshipRepertoireEventId]);
+
+  useEffect(() => {
+    if (!clientData) return;
+    const year = worshipCalendarMonth.getFullYear();
+    const month = worshipCalendarMonth.getMonth();
+    const monthEvents = clientData.worshipEvents
+      .filter((evt) => {
+        const d = new Date(evt.starts_at);
+        return d.getFullYear() === year && d.getMonth() === month;
+      })
+      .slice()
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+    if (monthEvents.length === 0) {
+      if (worshipCalendarSelectedEventId !== null) setWorshipCalendarSelectedEventId(null);
+      return;
+    }
+
+    if (worshipCalendarSelectedEventId && monthEvents.some((evt) => evt.id === worshipCalendarSelectedEventId)) return;
+    setWorshipCalendarSelectedEventId(monthEvents[0].id);
+  }, [clientData, worshipCalendarMonth, worshipCalendarSelectedEventId]);
 
   async function handleWorshipEventSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6521,9 +7123,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           current ? { ...current, worshipEvents: [...current.worshipEvents, row] } : current,
         );
         setWorshipAssignmentForm((current) => ({ ...current, event_id: row.id }));
+        setWorshipRepertoireEventId(row.id);
+        setWorshipRepertoire([]);
+        setWorshipRepertoireCompleted(false);
         setWorshipFlowStep(2);
         setWorshipSaveStatus("success");
-        setWorshipSaveMessage("Evento criado! Agora adicione os escalados.");
+        setWorshipSaveMessage("Evento criado! Agora selecione o repertório.");
       }
       setWorshipEventForm(emptyWorshipEventForm);
       return;
@@ -6564,11 +7169,14 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     if (newEventRow) {
       setWorshipAssignmentForm((current) => ({ ...current, event_id: newEventRow.id }));
+      setWorshipRepertoireEventId(newEventRow.id);
+      setWorshipRepertoire([]);
+      setWorshipRepertoireCompleted(false);
     }
     setWorshipFlowStep(2);
     setWorshipEventForm(emptyWorshipEventForm);
     setWorshipSaveStatus("success");
-    setWorshipSaveMessage("Evento criado! Agora adicione os escalados.");
+    setWorshipSaveMessage("Evento criado! Agora selecione o repertório.");
     await loadClientData(profile.id);
   }
 
@@ -9255,270 +9863,338 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <p className={`login-feedback ${worshipEmailFeedbackType}`}>{worshipEmailFeedback}</p>
               ) : null}
 
-              <div className="worship-summary">
-                <article>
-                  <span>Eventos</span>
-                  <strong>{worshipEventCount}</strong>
-                  <small>Cultos, ensaios e encontros do louvor</small>
-                </article>
-                <article>
-                  <span>Escalados</span>
-                  <strong>{worshipAssignmentCount}</strong>
-                  <small>Participações planejadas</small>
-                </article>
-                <article>
-                  <span>Funções</span>
-                  <strong>{clientData.worshipRoles.length}</strong>
-                  <small>Instrumentos e responsabilidades ativas</small>
-                </article>
-              </div>
-
-              {(() => {
-                const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
-                if (allAssignments.length === 0) return null;
-                const statsByMember: Record<string, { member_id: string; name: string; total: number; confirmed: number; declined: number; pending: number; event_ids: Set<string> }> = {};
-                for (const a of allAssignments) {
-                  const name = a.members?.name ?? "Desconhecido";
-                  if (!statsByMember[a.member_id]) {
-                    statsByMember[a.member_id] = { member_id: a.member_id, name, total: 0, confirmed: 0, declined: 0, pending: 0, event_ids: new Set() };
-                  }
-                  statsByMember[a.member_id].event_ids.add(a.event_id);
-                  statsByMember[a.member_id].total++;
-                  if (a.status === "confirmed") statsByMember[a.member_id].confirmed++;
-                  else if (a.status === "declined") statsByMember[a.member_id].declined++;
-                  else statsByMember[a.member_id].pending++;
-                }
-                const sorted = Object.values(statsByMember).sort((a, b) => b.total - a.total);
-                const declinedTotal = sorted.reduce((s, item) => s + item.declined, 0);
-                const declinedTotalByEvent = worshipEventStats.reduce((s, evt) => s + evt.declined, 0);
-                return (
-                  <div className="worship-member-stats">
-                    <div className="worship-member-stats-header">
-                      <div>
-                        <strong>{worshipIndicatorsView === "event" ? "Indicadores por evento" : "Indicadores por integrante"}</strong>
-                        <small>
-                          {worshipIndicatorsView === "event"
-                            ? `${worshipEventStats.length} evento${worshipEventStats.length === 1 ? "" : "s"}`
-                            : `${sorted.length} integrante${sorted.length === 1 ? "" : "s"} escalado${sorted.length === 1 ? "" : "s"}`}
-                        </small>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <div className="worship-view-toggle">
-                          <button
-                            type="button"
-                            className={worshipIndicatorsView === "member" ? "active" : ""}
-                            onClick={() => setWorshipIndicatorsView("member")}
-                          >
-                            Por integrante
-                          </button>
-                          <button
-                            type="button"
-                            className={worshipIndicatorsView === "event" ? "active" : ""}
-                            onClick={() => setWorshipIndicatorsView("event")}
-                          >
-                            Por evento
-                          </button>
-                        </div>
-                        {canManageWorship && (worshipIndicatorsView === "event" ? declinedTotalByEvent : declinedTotal) > 0 ? (
-                          <button
-                            type="button"
-                            className="worship-email-btn"
-                            style={{ padding: "6px 10px" }}
-                            onClick={() => {
-                              setWorshipDeclinesMemberId(null);
-                              setWorshipDeclinesEventId(null);
-                              setWorshipDeclinesModalOpen(true);
-                            }}
-                            title="Ver motivos de recusa"
-                          >
-                            <X size={15} />
-                            <span>Ver recusas ({worshipIndicatorsView === "event" ? declinedTotalByEvent : declinedTotal})</span>
-                          </button>
-                        ) : null}
-                      </div>
+              <section className="member-portal-feed-section member-portal-accordion member-portal-accordion-compact" style={{ marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="member-portal-accordion-head"
+                  onClick={() => setWorshipInsightsAccordionOpen((v) => !v)}
+                >
+                  <span className="member-portal-accordion-title">
+                    <span className="member-portal-accordion-icon">
+                      <TrendingUp size={18} />
+                    </span>
+                    <span>
+                      <strong>Insights & indicadores</strong>
+                      <small>Resumo do ministério e confirmações/recusas</small>
+                    </span>
+                  </span>
+                  <span className="member-portal-accordion-right">
+                    <span className="member-portal-accordion-chevron" style={{ display: "inline-flex" }}>
+                      <ChevronDown size={18} className={worshipInsightsAccordionOpen ? "member-portal-accordion-chevron open" : "member-portal-accordion-chevron"} />
+                    </span>
+                  </span>
+                </button>
+                {worshipInsightsAccordionOpen ? (
+                  <div className="member-portal-accordion-body">
+                    <div className="worship-summary">
+                      <article>
+                        <span>Eventos</span>
+                        <strong>{worshipEventCount}</strong>
+                        <small>Cultos, ensaios e encontros do louvor</small>
+                      </article>
+                      <article>
+                        <span>Escalados</span>
+                        <strong>{worshipAssignmentCount}</strong>
+                        <small>Participações planejadas</small>
+                      </article>
+                      <article>
+                        <span>Funções</span>
+                        <strong>{clientData.worshipRoles.length}</strong>
+                        <small>Instrumentos e responsabilidades ativas</small>
+                      </article>
                     </div>
-                    {worshipIndicatorsView === "event" ? (
-                      <div className="worship-member-stats-grid">
-                        {worshipEventStats.map((evt) => (
-                          <div key={evt.event_id} className="worship-member-stat-row">
-                            <div className="worship-member-stat-name">
-                              <span className="worship-member-avatar">{evt.title.trim().charAt(0).toUpperCase() || "E"}</span>
-                              <div style={{ display: "flex", flexDirection: "column" }}>
-                                <strong>{evt.title}</strong>
-                                <small style={{ marginTop: 2 }}>
-                                  {evt.starts_at ? new Date(evt.starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
-                                  {evt.location ? ` · ${evt.location}` : ""}
-                                </small>
-                              </div>
+
+                    {(() => {
+                      const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
+                      if (allAssignments.length === 0) return null;
+                      const statsByMember: Record<string, { member_id: string; name: string; total: number; confirmed: number; declined: number; pending: number; event_ids: Set<string> }> = {};
+                      for (const a of allAssignments) {
+                        const name = a.members?.name ?? "Desconhecido";
+                        if (!statsByMember[a.member_id]) {
+                          statsByMember[a.member_id] = { member_id: a.member_id, name, total: 0, confirmed: 0, declined: 0, pending: 0, event_ids: new Set() };
+                        }
+                        statsByMember[a.member_id].event_ids.add(a.event_id);
+                        statsByMember[a.member_id].total++;
+                        if (a.status === "confirmed") statsByMember[a.member_id].confirmed++;
+                        else if (a.status === "declined") statsByMember[a.member_id].declined++;
+                        else statsByMember[a.member_id].pending++;
+                      }
+                      const sorted = Object.values(statsByMember).sort((a, b) => b.total - a.total);
+                      const declinedTotal = sorted.reduce((s, item) => s + item.declined, 0);
+                      const declinedTotalByEvent = worshipEventStats.reduce((s, evt) => s + evt.declined, 0);
+                      return (
+                        <div className="worship-member-stats">
+                          <div className="worship-member-stats-header">
+                            <div>
+                              <strong>{worshipIndicatorsView === "event" ? "Indicadores por evento" : "Indicadores por integrante"}</strong>
+                              <small>
+                                {worshipIndicatorsView === "event"
+                                  ? `${worshipEventStats.length} evento${worshipEventStats.length === 1 ? "" : "s"}`
+                                  : `${sorted.length} integrante${sorted.length === 1 ? "" : "s"} escalado${sorted.length === 1 ? "" : "s"}`}
+                              </small>
                             </div>
-                            <div className="worship-member-stat-counts">
-                              <span title="Confirmações" className="success">{evt.confirmed}</span>
-                              {canManageWorship && evt.declined > 0 ? (
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  title="Recusas (clique para ver motivos)"
-                                  className="danger"
-                                  style={{ cursor: "pointer" }}
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                              <div className="worship-view-toggle">
+                                <button
+                                  type="button"
+                                  className={worshipIndicatorsView === "member" ? "active" : ""}
+                                  onClick={() => setWorshipIndicatorsView("member")}
+                                >
+                                  Por integrante
+                                </button>
+                                <button
+                                  type="button"
+                                  className={worshipIndicatorsView === "event" ? "active" : ""}
+                                  onClick={() => setWorshipIndicatorsView("event")}
+                                >
+                                  Por evento
+                                </button>
+                              </div>
+                              {canManageWorship && (worshipIndicatorsView === "event" ? declinedTotalByEvent : declinedTotal) > 0 ? (
+                                <button
+                                  type="button"
+                                  className="worship-email-btn"
+                                  style={{ padding: "6px 10px" }}
                                   onClick={() => {
-                                    setWorshipDeclinesEventId(evt.event_id);
                                     setWorshipDeclinesMemberId(null);
+                                    setWorshipDeclinesEventId(null);
                                     setWorshipDeclinesModalOpen(true);
                                   }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      setWorshipDeclinesEventId(evt.event_id);
-                                      setWorshipDeclinesMemberId(null);
-                                      setWorshipDeclinesModalOpen(true);
-                                    }
-                                  }}
+                                  title="Ver motivos de recusa"
                                 >
-                                  {evt.declined}
-                                </span>
-                              ) : (
-                                <span title="Recusas" className="danger">{evt.declined}</span>
-                              )}
-                              <span title="Pendentes" className="warning">{evt.pending}</span>
+                                  <X size={15} />
+                                  <span>Ver recusas ({worshipIndicatorsView === "event" ? declinedTotalByEvent : declinedTotal})</span>
+                                </button>
+                              ) : null}
                             </div>
-                            <div className="worship-member-stat-bar">
-                              <div style={{ width: `${evt.rate}%` }} />
-                            </div>
-                            <small>{evt.rate}%</small>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="worship-member-stats-grid">
-                        {sorted.map((s) => {
-                          const rate = s.total > 0 ? Math.round((s.confirmed / s.total) * 100) : 0;
-                          const eventCount = s.event_ids.size;
-                          return (
-                            <div key={s.member_id} className="worship-member-stat-row">
-                              <div className="worship-member-stat-name">
-                                <span className="worship-member-avatar">{s.name.charAt(0).toUpperCase()}</span>
-                                <div style={{ display: "flex", flexDirection: "column" }}>
-                                  <strong>{s.name}</strong>
-                                  <span
-                                    style={{
-                                      marginTop: 2,
-                                      fontSize: "0.72rem",
-                                      fontWeight: 700,
-                                      padding: "2px 8px",
-                                      borderRadius: 999,
-                                      background: "var(--color-neutral-100)",
-                                      color: "var(--color-neutral-600)",
-                                      width: "fit-content",
-                                    }}
-                                    title="Quantidade de eventos distintos em que este integrante está escalado"
-                                  >
-                                    {eventCount} evento{eventCount === 1 ? "" : "s"}
-                                  </span>
+                          {worshipIndicatorsView === "event" ? (
+                            <div className="worship-member-stats-grid">
+                              {worshipEventStats.map((evt) => (
+                                <div key={evt.event_id} className="worship-member-stat-row">
+                                  <div className="worship-member-stat-name">
+                                    <span className="worship-member-avatar">{evt.title.trim().charAt(0).toUpperCase() || "E"}</span>
+                                    <div style={{ display: "flex", flexDirection: "column" }}>
+                                      <strong>{evt.title}</strong>
+                                      <small style={{ marginTop: 2 }}>
+                                        {evt.starts_at ? new Date(evt.starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                        {evt.location ? ` · ${evt.location}` : ""}
+                                      </small>
+                                    </div>
+                                  </div>
+                                  <div className="worship-member-stat-counts">
+                                    <span title="Confirmações" className="success">{evt.confirmed}</span>
+                                    {canManageWorship && evt.declined > 0 ? (
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        title="Recusas (clique para ver motivos)"
+                                        className="danger"
+                                        style={{ cursor: "pointer" }}
+                                        onClick={() => {
+                                          setWorshipDeclinesEventId(evt.event_id);
+                                          setWorshipDeclinesMemberId(null);
+                                          setWorshipDeclinesModalOpen(true);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            setWorshipDeclinesEventId(evt.event_id);
+                                            setWorshipDeclinesMemberId(null);
+                                            setWorshipDeclinesModalOpen(true);
+                                          }
+                                        }}
+                                      >
+                                        {evt.declined}
+                                      </span>
+                                    ) : (
+                                      <span title="Recusas" className="danger">{evt.declined}</span>
+                                    )}
+                                    <span title="Pendentes" className="warning">{evt.pending}</span>
+                                  </div>
+                                  <div className="worship-member-stat-bar">
+                                    <div style={{ width: `${evt.rate}%` }} />
+                                  </div>
+                                  <small>{evt.rate}%</small>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="worship-member-stats-grid">
+                              {sorted.map((s) => {
+                                const rate = s.total > 0 ? Math.round((s.confirmed / s.total) * 100) : 0;
+                                const eventCount = s.event_ids.size;
+                                return (
+                                  <div key={s.member_id} className="worship-member-stat-row">
+                                    <div className="worship-member-stat-name">
+                                      <span className="worship-member-avatar">{s.name.charAt(0).toUpperCase()}</span>
+                                      <div style={{ display: "flex", flexDirection: "column" }}>
+                                        <strong>{s.name}</strong>
+                                        <span
+                                          style={{
+                                            marginTop: 2,
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            padding: "2px 8px",
+                                            borderRadius: 999,
+                                            background: "var(--color-neutral-100)",
+                                            color: "var(--color-neutral-600)",
+                                            width: "fit-content",
+                                          }}
+                                          title="Quantidade de eventos distintos em que este integrante está escalado"
+                                        >
+                                          {eventCount} evento{eventCount === 1 ? "" : "s"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="worship-member-stat-counts">
+                                      <span title="Confirmações" className="success">{s.confirmed}</span>
+                                      {canManageWorship && s.declined > 0 ? (
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          title="Recusas (clique para ver motivos)"
+                                          className="danger"
+                                          style={{ cursor: "pointer" }}
+                                          onClick={() => {
+                                            setWorshipDeclinesMemberId(s.member_id);
+                                            setWorshipDeclinesEventId(null);
+                                            setWorshipDeclinesModalOpen(true);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setWorshipDeclinesMemberId(s.member_id);
+                                              setWorshipDeclinesEventId(null);
+                                              setWorshipDeclinesModalOpen(true);
+                                            }
+                                          }}
+                                        >
+                                          {s.declined}
+                                        </span>
+                                      ) : (
+                                        <span title="Recusas" className="danger">{s.declined}</span>
+                                      )}
+                                      <span title="Pendentes" className="warning">{s.pending}</span>
+                                    </div>
+                                    <div className="worship-member-stat-bar">
+                                      <div style={{ width: `${rate}%` }} />
+                                    </div>
+                                    <small>{rate}%</small>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="member-portal-feed-section member-portal-accordion member-portal-accordion-compact" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="member-portal-accordion-head"
+                  onClick={() => setWorshipFlowAccordionOpen((v) => !v)}
+                >
+                  <span className="member-portal-accordion-title">
+                    <span className="member-portal-accordion-icon">
+                      <Music size={18} />
+                    </span>
+                    <span>
+                      <strong>Fluxo de criação</strong>
+                      <small>Crie o evento, selecione repertório e escale membros</small>
+                    </span>
+                  </span>
+                  <span className="member-portal-accordion-right">
+                    <span className="member-portal-accordion-chevron" style={{ display: "inline-flex" }}>
+                      <ChevronDown size={18} className={worshipFlowAccordionOpen ? "member-portal-accordion-chevron open" : "member-portal-accordion-chevron"} />
+                    </span>
+                  </span>
+                </button>
+                {worshipFlowAccordionOpen ? (
+                  <div className="member-portal-accordion-body">
+                    <div className="worship-flow-layout">
+                      {canManageWorship ? (
+                        <div className="worship-flow-form-col" style={{ gridColumn: "1 / -1" }}>
+                          <div className="worship-steps">
+                            <button
+                              type="button"
+                              className={`worship-step-btn${worshipFlowStep === 1 ? " active" : ""}`}
+                              onClick={() => setWorshipFlowStep(1)}
+                            >
+                              <span className="worship-step-num">1</span>
+                              <div>
+                                <strong>Criar evento</strong>
+                                <small>Culto, ensaio ou reunião</small>
+                              </div>
+                            </button>
+                            <div className="worship-step-connector" />
+                            <button
+                              type="button"
+                              className={`worship-step-btn${worshipFlowStep === 2 ? " active" : ""}${clientData.worshipEvents.length === 0 ? " locked" : ""}`}
+                              onClick={() => {
+                                if (clientData.worshipEvents.length === 0) return;
+                                if (!worshipRepertoireEventId) {
+                                  const fallback = worshipAssignmentForm.event_id || clientData.worshipEvents[0]?.id || "";
+                                  if (fallback) setWorshipRepertoireEventId(fallback);
+                                }
+                                setWorshipFlowStep(2);
+                              }}
+                            >
+                              <span className="worship-step-num">2</span>
+                              <div>
+                                <strong>Selecionar repertório</strong>
+                                <small>Músicas do evento</small>
+                              </div>
+                            </button>
+                            <div className="worship-step-connector" />
+                            <button
+                              type="button"
+                              className={`worship-step-btn${worshipFlowStep === 3 ? " active" : ""}${!worshipRepertoireCompleted ? " locked" : ""}`}
+                              onClick={() => { if (worshipRepertoireCompleted) setWorshipFlowStep(3); }}
+                            >
+                              <span className="worship-step-num">3</span>
+                              <div>
+                                <strong>Adicionar escalados</strong>
+                                <small>Funções e horários</small>
+                              </div>
+                            </button>
+                          </div>
+
+                          {worshipFlowStep === 1 ? (
+                            <form className="worship-form" onSubmit={handleWorshipEventSubmit}>
+                              <div className="worship-form-header">
+                                <span className="worship-form-icon"><Music size={16} /></span>
+                                <div>
+                                  <strong>{editingWorshipEventId ? "Editar evento" : "Novo evento de louvor"}</strong>
+                                  <small>{editingWorshipEventId ? "Atualize os dados do evento." : "Preencha e avance para selecionar o repertório."}</small>
                                 </div>
                               </div>
-                              <div className="worship-member-stat-counts">
-                                <span title="Confirmações" className="success">{s.confirmed}</span>
-                                {canManageWorship && s.declined > 0 ? (
-                                  <span
-                                    role="button"
-                                    tabIndex={0}
-                                    title="Recusas (clique para ver motivos)"
-                                    className="danger"
-                                    style={{ cursor: "pointer" }}
-                                    onClick={() => {
-                                      setWorshipDeclinesMemberId(s.member_id);
-                                      setWorshipDeclinesEventId(null);
-                                      setWorshipDeclinesModalOpen(true);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault();
-                                        setWorshipDeclinesMemberId(s.member_id);
-                                        setWorshipDeclinesEventId(null);
-                                        setWorshipDeclinesModalOpen(true);
-                                      }
-                                    }}
+                              <div className="worship-field">
+                                <label>Nome do evento</label>
+                                <input
+                                  className="catalog-input"
+                                  placeholder="Ex: Culto domingo manhã"
+                                  value={worshipEventForm.title}
+                                  onChange={(event) => setWorshipEventForm((current) => ({ ...current, title: event.target.value }))}
+                                />
+                              </div>
+                              <div className="modal-grid">
+                                <div className="worship-field">
+                                  <label>Tipo</label>
+                                  <select
+                                    className="catalog-input"
+                                    value={worshipEventForm.event_type}
+                                    onChange={(event) =>
+                                      setWorshipEventForm((current) => ({
+                                        ...current,
+                                        event_type: event.target.value as WorshipEventFormState["event_type"],
+                                      }))
+                                    }
                                   >
-                                    {s.declined}
-                                  </span>
-                                ) : (
-                                  <span title="Recusas" className="danger">{s.declined}</span>
-                                )}
-                                <span title="Pendentes" className="warning">{s.pending}</span>
-                              </div>
-                              <div className="worship-member-stat-bar">
-                                <div style={{ width: `${rate}%` }} />
-                              </div>
-                              <small>{rate}%</small>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              <div className="worship-flow-layout">
-                {canManageWorship ? (
-                  <div className="worship-flow-form-col" style={{ gridColumn: "1 / -1" }}>
-                    <div className="worship-steps">
-                      <button
-                        type="button"
-                        className={`worship-step-btn${worshipFlowStep === 1 ? " active" : ""}`}
-                        onClick={() => setWorshipFlowStep(1)}
-                      >
-                        <span className="worship-step-num">1</span>
-                        <div>
-                          <strong>Criar evento</strong>
-                          <small>Culto, ensaio ou reunião</small>
-                        </div>
-                      </button>
-                      <div className="worship-step-connector" />
-                      <button
-                        type="button"
-                        className={`worship-step-btn${worshipFlowStep === 2 ? " active" : ""}${clientData.worshipEvents.length === 0 ? " locked" : ""}`}
-                        onClick={() => { if (clientData.worshipEvents.length > 0) setWorshipFlowStep(2); }}
-                      >
-                        <span className="worship-step-num">2</span>
-                        <div>
-                          <strong>Adicionar escalados</strong>
-                          <small>Funções e horários</small>
-                        </div>
-                      </button>
-                    </div>
-
-                    {worshipFlowStep === 1 ? (
-                      <form className="worship-form" onSubmit={handleWorshipEventSubmit}>
-                        <div className="worship-form-header">
-                          <span className="worship-form-icon"><Music size={16} /></span>
-                          <div>
-                            <strong>{editingWorshipEventId ? "Editar evento" : "Novo evento de louvor"}</strong>
-                            <small>{editingWorshipEventId ? "Atualize os dados do evento." : "Preencha e avance para escalar membros."}</small>
-                          </div>
-                        </div>
-                        <div className="worship-field">
-                          <label>Nome do evento</label>
-                          <input
-                            className="catalog-input"
-                            placeholder="Ex: Culto domingo manhã"
-                            value={worshipEventForm.title}
-                            onChange={(event) => setWorshipEventForm((current) => ({ ...current, title: event.target.value }))}
-                          />
-                        </div>
-                        <div className="modal-grid">
-                          <div className="worship-field">
-                            <label>Tipo</label>
-                            <select
-                              className="catalog-input"
-                              value={worshipEventForm.event_type}
-                              onChange={(event) =>
-                                setWorshipEventForm((current) => ({
-                                  ...current,
-                                  event_type: event.target.value as WorshipEventFormState["event_type"],
-                                }))
-                              }
-                            >
                               <option value="service">Culto</option>
                               <option value="rehearsal">Ensaio</option>
                               <option value="meeting">Reuniao</option>
@@ -9585,7 +10261,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </div>
                         <div className="worship-form-actions">
                           <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<Plus size={18} />}>
-                            {editingWorshipEventId ? "Salvar alterações" : "Criar e escalar membros →"}
+                            {editingWorshipEventId ? "Salvar alterações" : "Criar e escolher repertório →"}
                           </Button>
                           {editingWorshipEventId ? (
                             <Button type="button" variant="secondary" onClick={cancelEditWorshipEvent}>
@@ -9594,6 +10270,415 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           ) : null}
                         </div>
                       </form>
+                    ) : worshipFlowStep === 2 ? (
+                      <div className="worship-form">
+                        <div className="worship-form-header">
+                          <span className="worship-form-icon"><Music size={16} /></span>
+                          <div>
+                            <strong>Repertório</strong>
+                            <small>Selecione músicas do catálogo ou importe do Cifra Club.</small>
+                          </div>
+                        </div>
+
+                        <div className="worship-field">
+                          <label>Evento</label>
+                          <select
+                            className="catalog-input"
+                            value={worshipRepertoireEventId}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              setWorshipRepertoireEventId(next);
+                              setWorshipRepertoireCompleted(false);
+                              setWorshipRepertoireSaveStatus("idle");
+                              setWorshipRepertoireSaveMessage("");
+                            }}
+                          >
+                            <option value="">Selecionar evento</option>
+                            {clientData.worshipEvents.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="catalog-list">
+                          {!worshipRepertoireEventId ? (
+                            <div className="catalog-empty">Selecione um evento para montar o repertório.</div>
+                          ) : worshipRepertoire.length === 0 ? (
+                            <div className="catalog-empty">Nenhuma música adicionada ainda.</div>
+                          ) : (
+                            [...worshipRepertoire]
+                              .sort((a, b) => a.position - b.position)
+                              .map((item, index) => (
+                                <details
+                                  key={item.song.id}
+                                  style={{
+                                    border: "1px solid var(--color-border)",
+                                    borderRadius: 12,
+                                    background: "rgba(255, 255, 255, 0.92)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <summary
+                                    style={{
+                                      listStyle: "none",
+                                      cursor: "pointer",
+                                      padding: "10px 12px",
+                                      display: "grid",
+                                      gridTemplateColumns: "minmax(0, 1fr) auto",
+                                      gap: 10,
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    <span style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
+                                      <span style={{ width: 22, height: 22, borderRadius: 999, background: "rgba(0, 126, 124, 0.12)", color: "var(--color-brand-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.75rem", flex: "0 0 auto" }}>
+                                        {index + 1}
+                                      </span>
+                                      <span style={{ minWidth: 0 }}>
+                                        <strong style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.song.title}</strong>
+                                        <small style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                          {item.song.artist} · {item.song.tenant_id ? "Minha música" : "Global"}
+                                        </small>
+                                      </span>
+                                    </span>
+                                    <span style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); moveSongInWorshipRepertoire(item.song.id, -1); }}
+                                        aria-label="Subir"
+                                        className="worship-action-btn"
+                                      >
+                                        <ChevronUp size={14} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); moveSongInWorshipRepertoire(item.song.id, 1); }}
+                                        aria-label="Descer"
+                                        className="worship-action-btn"
+                                      >
+                                        <ChevronDown size={14} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); removeSongFromWorshipRepertoire(item.song.id); }}
+                                        aria-label="Remover"
+                                        className="worship-action-btn danger"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </span>
+                                  </summary>
+                                  <div style={{ padding: "0 12px 12px" }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, marginTop: 10 }}>
+                                      <input
+                                        className="catalog-input"
+                                        placeholder="Tom (ex.: G)"
+                                        value={item.key}
+                                        onChange={(e) => updateWorshipRepertoireField(item.song.id, "key", e.target.value)}
+                                      />
+                                      <input
+                                        className="catalog-input"
+                                        placeholder="Notas (opcional)"
+                                        value={item.notes}
+                                        onChange={(e) => updateWorshipRepertoireField(item.song.id, "notes", e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+                                </details>
+                              ))
+                          )}
+                        </div>
+
+                        {worshipRepertoireEventId ? (
+                          <div className="modal-grid" style={{ marginTop: 12 }}>
+                            <div>
+                              <div ref={worshipSongPickerRef} style={{ position: "relative" }}>
+                                <label>
+                                  <span>Buscar música (nome ou artista)</span>
+                                  <input
+                                    className="catalog-input"
+                                    placeholder="Digite para localizar e selecionar"
+                                    value={worshipSongSearchTerm}
+                                    onChange={(e) => setWorshipSongSearchTerm(e.target.value)}
+                                    onFocus={() => setWorshipSongPickerOpen(true)}
+                                    onClick={() => setWorshipSongPickerOpen(true)}
+                                  />
+                                </label>
+
+                                <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 10, flexWrap: "wrap" }}>
+                                  <label style={{ flex: 1, minWidth: 220 }}>
+                                    <span>Filtro</span>
+                                    <select
+                                      className="catalog-input"
+                                      value={worshipSongScope}
+                                      onChange={(e) => {
+                                        setWorshipSongScope(e.target.value as "all" | "global" | "mine");
+                                      }}
+                                    >
+                                      <option value="all">Global + Minhas</option>
+                                      <option value="global">Músicas padrão</option>
+                                      <option value="mine">Apenas Minhas</option>
+                                    </select>
+                                    <small style={{ display: "block", marginTop: 6, color: "var(--color-text-secondary)" }}>
+                                      Globais: {(clientData?.catalogSongs ?? []).filter((s) => s.tenant_id === null).length} · Minhas: {(clientData?.catalogSongs ?? []).filter((s) => s.tenant_id !== null).length}
+                                    </small>
+                                  </label>
+                                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      icon={<Plus size={16} />}
+                                      disabled={worshipSongSelectedIds.length === 0}
+                                      onClick={addSelectedWorshipSongsToRepertoire}
+                                    >
+                                      Adicionar ({worshipSongSelectedIds.length})
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      disabled={worshipSongSelectedIds.length === 0}
+                                      onClick={() => setWorshipSongSelectedIds([])}
+                                    >
+                                      Limpar
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {worshipSongPickerOpen ? (
+                                  (() => {
+                                    const songs = clientData?.catalogSongs ?? [];
+                                    const q = worshipSongSearchTerm.trim().toLowerCase();
+                                    const scoped =
+                                      worshipSongScope === "global"
+                                        ? songs.filter((s) => s.tenant_id === null)
+                                        : worshipSongScope === "mine"
+                                        ? songs.filter((s) => s.tenant_id !== null)
+                                        : songs;
+                                    const filtered = q
+                                      ? scoped.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(q))
+                                      : scoped;
+
+                                    const alreadyAdded = new Set(worshipRepertoire.map((it) => it.song.id));
+                                    const selected = new Set(worshipSongSelectedIds);
+                                    const shown = filtered.slice(0, 40);
+
+                                    return (
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          top: "calc(100% + 8px)",
+                                          left: 0,
+                                          right: 0,
+                                          zIndex: 30,
+                                          background: "var(--color-white)",
+                                          border: "1px solid var(--color-border)",
+                                          borderRadius: 12,
+                                          boxShadow: "0 18px 44px rgba(10, 37, 64, 0.12)",
+                                          overflow: "hidden",
+                                        }}
+                                      >
+                                        <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                          <small style={{ color: "var(--color-text-secondary)" }}>
+                                            {filtered.length} resultado(s){filtered.length > shown.length ? ` · mostrando ${shown.length}` : ""}
+                                          </small>
+                                          <button
+                                            type="button"
+                                            className="worship-action-btn"
+                                            onClick={() => setWorshipSongPickerOpen(false)}
+                                            aria-label="Fechar lista"
+                                          >
+                                            <X size={14} />
+                                          </button>
+                                        </div>
+                                        <div style={{ maxHeight: 320, overflow: "auto" }}>
+                                          {shown.length === 0 ? (
+                                            <div className="catalog-empty" style={{ padding: 12 }}>Nenhuma música encontrada.</div>
+                                          ) : (
+                                            shown.map((song) => {
+                                              const isAlready = alreadyAdded.has(song.id);
+                                              const isSelected = selected.has(song.id);
+                                              return (
+                                                <div
+                                                  key={song.id}
+                                                  className={`catalog-row${song.tenant_id ? "" : " system"}`}
+                                                  style={{
+                                                    cursor: isAlready ? "not-allowed" : "pointer",
+                                                    opacity: isAlready ? 0.55 : 1,
+                                                    alignItems: "center",
+                                                    gap: 10,
+                                                  }}
+                                                  role="button"
+                                                  tabIndex={0}
+                                                  onClick={() => { if (!isAlready) toggleWorshipSongSelection(song.id); }}
+                                                  onKeyDown={(e) => {
+                                                    if (isAlready) return;
+                                                    if (e.key === "Enter" || e.key === " ") {
+                                                      e.preventDefault();
+                                                      toggleWorshipSongSelection(song.id);
+                                                    }
+                                                  }}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    disabled={isAlready}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={() => { if (!isAlready) toggleWorshipSongSelection(song.id); }}
+                                                  />
+                                                  <span style={{ flex: 1 }}>
+                                                    <strong>{song.title}</strong>
+                                                    <small>
+                                                      {song.artist}
+                                                      {song.tenant_id ? " · Minha música" : " · Global"}
+                                                      {isAlready ? " · Já no repertório" : ""}
+                                                    </small>
+                                                  </span>
+                                                </div>
+                                              );
+                                            })
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                <label>
+                                  <span>Adicionar música de fora do catalogo</span>
+                                  <input
+                                    className="catalog-input"
+                                    placeholder="Música (ex.: Minha Canção)"
+                                    value={worshipNewSongTitle}
+                                    onChange={(e) => setWorshipNewSongTitle(e.target.value)}
+                                  />
+                                </label>
+                                <input
+                                  className="catalog-input"
+                                  placeholder="Autor/Banda (ex.: Autoral)"
+                                  value={worshipNewSongArtist}
+                                  onChange={(e) => setWorshipNewSongArtist(e.target.value)}
+                                />
+                                <Button
+                                  type="button"
+                                  icon={<Plus size={18} />}
+                                  onClick={handleCreateTenantCatalogSongForWorship}
+                                  disabled={worshipSongCatalogStatus === "loading" || !worshipNewSongTitle.trim() || !worshipNewSongArtist.trim()}
+                                >
+                                  {worshipSongCatalogStatus === "loading" ? "Adicionando..." : "Criar e adicionar"}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {worshipRepertoireEventId ? (
+                          <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
+                            <div className="modal-section-header">
+                              <strong>Cifra Club</strong>
+                              <small>Busca via endpoint serverless (Vercel) sem Selenium.</small>
+                            </div>
+
+                            <div className="modal-grid">
+                              <label>
+                                <span>Artista</span>
+                                <input
+                                  className="catalog-input"
+                                  placeholder="Ex.: Gabriela Rocha"
+                                  value={worshipCifraClubArtistInput}
+                                  onChange={(e) => setWorshipCifraClubArtistInput(e.target.value)}
+                                />
+                              </label>
+                              <label>
+                                <span>Música</span>
+                                <input
+                                  className="catalog-input"
+                                  placeholder="Ex.: Lugar Secreto"
+                                  value={worshipCifraClubSongInput}
+                                  onChange={(e) => setWorshipCifraClubSongInput(e.target.value)}
+                                />
+                              </label>
+                            </div>
+
+                            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleWorshipCifraClubSearch}
+                                disabled={worshipCifraClubStatus === "loading" || !worshipCifraClubArtistInput.trim() || !worshipCifraClubSongInput.trim()}
+                              >
+                                {worshipCifraClubStatus === "loading" ? "Buscando..." : "Buscar no Cifra Club"}
+                              </Button>
+                              {worshipCifraClubResult?.cifraclub_url ? (
+                                <a href={worshipCifraClubResult.cifraclub_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                                  Abrir no Cifra Club
+                                </a>
+                              ) : null}
+                              {worshipCifraClubResult?.youtube_url ? (
+                                <a href={worshipCifraClubResult.youtube_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                                  YouTube
+                                </a>
+                              ) : null}
+                            </div>
+
+                            {worshipCifraClubMessage ? (
+                              <p className={`login-feedback ${worshipCifraClubStatus === "error" ? "error" : "idle"}`} style={{ marginTop: 10 }}>
+                                {worshipCifraClubMessage}
+                              </p>
+                            ) : null}
+
+                            {worshipCifraClubResult?.name && worshipCifraClubResult.artist ? (
+                              <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 10, padding: 12 }}>
+                                <strong>{worshipCifraClubResult.name}</strong>
+                                <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
+                                  {worshipCifraClubResult.artist}
+                                  {Array.isArray(worshipCifraClubResult.cifra) && worshipCifraClubResult.cifra.length ? ` · ${worshipCifraClubResult.cifra.length} linhas` : ""}
+                                </div>
+                                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                                  <Button
+                                    type="button"
+                                    icon={<Plus size={18} />}
+                                    onClick={handleWorshipImportCifraClubToCatalog}
+                                    disabled={worshipSongCatalogStatus === "loading"}
+                                  >
+                                    {worshipSongCatalogStatus === "loading" ? "Importando..." : "Importar e adicionar"}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {worshipSongCatalogMessage ? (
+                              <p className={`login-feedback ${worshipSongCatalogStatus}`} style={{ marginTop: 10 }}>
+                                {worshipSongCatalogMessage}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {worshipRepertoireSaveMessage ? (
+                          <p className={`login-feedback ${worshipRepertoireSaveStatus}`} style={{ marginTop: 12 }}>
+                            {worshipRepertoireSaveMessage}
+                          </p>
+                        ) : null}
+
+                        <div className="worship-form-actions">
+                          <Button
+                            type="button"
+                            disabled={worshipRepertoireSaveStatus === "loading" || !worshipRepertoireEventId}
+                            onClick={handleSaveWorshipRepertoireAndAdvance}
+                            icon={<ArrowRight size={18} />}
+                          >
+                            {worshipRepertoireSaveStatus === "loading" ? "Salvando..." : "Salvar repertório e avançar →"}
+                          </Button>
+                          <Button type="button" variant="secondary" onClick={() => setWorshipFlowStep(1)}>
+                            ← Dados do evento
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
                       <form className="worship-form" onSubmit={handleWorshipAssignmentSubmit}>
                         <div className="worship-form-header">
@@ -9684,8 +10769,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <Button type="submit" disabled={worshipSaveStatus === "loading"} icon={<UserPlus size={18} />}>
                             Adicionar escalado
                           </Button>
-                          <Button type="button" variant="secondary" onClick={() => setWorshipFlowStep(1)}>
-                            ← Novo evento
+                          <Button type="button" variant="secondary" onClick={() => setWorshipFlowStep(2)}>
+                            ← Repertório
                           </Button>
                         </div>
                       </form>
@@ -9693,6 +10778,352 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   </div>
                 ) : null}
               </div>
+
+              </div>
+            ) : null}
+          </section>
+
+          <div style={{ marginTop: 16 }}>
+            <div className="panel-heading" style={{ padding: 0, marginBottom: 10 }}>
+              <div>
+                <span>Escalas criadas</span>
+                <h4>Calendário do louvor</h4>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div className="worship-view-toggle">
+                  <button
+                    type="button"
+                    className={worshipEventsViewMode === "list" ? "active" : ""}
+                    onClick={() => setWorshipEventsViewMode("list")}
+                  >
+                    Lista
+                  </button>
+                  <button
+                    type="button"
+                    className={worshipEventsViewMode === "calendar" ? "active" : ""}
+                    onClick={() => setWorshipEventsViewMode("calendar")}
+                  >
+                    Calendário
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {worshipEventsViewMode === "calendar" ? (
+              (() => {
+                const year = worshipCalendarMonth.getFullYear();
+                const month = worshipCalendarMonth.getMonth();
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const monthName = worshipCalendarMonth.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+                const eventsByDay: Record<number, WorshipEventRecord[]> = {};
+                for (const evt of clientData.worshipEvents) {
+                  const d = new Date(evt.starts_at);
+                  if (d.getFullYear() === year && d.getMonth() === month) {
+                    const day = d.getDate();
+                    if (!eventsByDay[day]) eventsByDay[day] = [];
+                    eventsByDay[day].push(evt);
+                  }
+                }
+                const cells: (number | null)[] = [
+                  ...Array(firstDay === 0 ? 6 : firstDay - 1).fill(null),
+                  ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+                ];
+                while (cells.length % 7 !== 0) cells.push(null);
+                const today = new Date();
+
+                const statusColor = (status: WorshipEventRecord["status"]) => {
+                  if (status === "published") return "var(--color-brand-primary)";
+                  if (status === "cancelled") return "var(--color-neutral-400)";
+                  if (status === "completed") return "var(--color-neutral-600)";
+                  return "var(--color-neutral-700)";
+                };
+
+                return (
+                  <>
+                    <div className="worship-calendar">
+                      <div className="worship-calendar-nav">
+                        <button type="button" onClick={() => setWorshipCalendarMonth(new Date(year, month - 1, 1))}>‹</button>
+                        <strong style={{ textTransform: "capitalize" }}>{monthName}</strong>
+                        <button type="button" onClick={() => setWorshipCalendarMonth(new Date(year, month + 1, 1))}>›</button>
+                      </div>
+                      <div className="worship-calendar-grid">
+                        {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (
+                          <div key={d} className="worship-calendar-weekday">{d}</div>
+                        ))}
+                        {cells.map((day, i) => {
+                          const isToday =
+                            day !== null &&
+                            today.getFullYear() === year &&
+                            today.getMonth() === month &&
+                            today.getDate() === day;
+                          const dayEvents = day !== null ? (eventsByDay[day] ?? []) : [];
+                          return (
+                            <div key={i} className={`worship-calendar-cell${day === null ? " empty" : ""}${isToday ? " today" : ""}`}>
+                              {day !== null ? (
+                                <>
+                                  <span className="worship-calendar-day">{day}</span>
+                                  {dayEvents
+                                    .slice()
+                                    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+                                    .map((evt) => (
+                                      <div
+                                        key={evt.id}
+                                        className="worship-calendar-event"
+                                        style={{
+                                          backgroundColor: statusColor(evt.status),
+                                          opacity: evt.status === "cancelled" ? 0.45 : 1,
+                                          outline: worshipCalendarSelectedEventId === evt.id ? "2px solid rgba(0, 126, 124, 0.30)" : "none",
+                                          cursor: "pointer",
+                                        }}
+                                        title={evt.title}
+                                        onClick={() => setWorshipCalendarSelectedEventId(evt.id)}
+                                      >
+                                        {evt.title}
+                                      </div>
+                                    ))}
+                                </>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {worshipCalendarSelectedEventId ? (() => {
+                      const evt = clientData.worshipEvents.find((e) => e.id === worshipCalendarSelectedEventId) ?? null;
+                      if (!evt) return null;
+                      const assignments = clientData.worshipAssignmentsByEventId[evt.id] ?? [];
+                      const dateLabel = new Date(evt.starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                      return (
+                        <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 12, padding: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <strong style={{ fontSize: "1rem" }}>{evt.title}</strong>
+                              <small style={{ color: "var(--color-text-secondary)" }}>
+                                {dateLabel}{evt.location ? ` · ${evt.location}` : ""} · {assignments.length} escalado(s)
+                              </small>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+                              <em className={evt.status === "published" ? "success" : evt.status === "cancelled" ? "danger" : "warning"}>
+                                {worshipStatusLabel(evt.status)}
+                              </em>
+                              {canManageWorship && assignments.length > 0 ? (
+                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail">
+                                  <Mail size={15} />
+                                  <span>E-mails</span>
+                                </button>
+                              ) : null}
+                              {canManageWorship ? (
+                                <>
+                                  <button type="button" className="worship-action-btn" onClick={() => openEditWorshipEvent(evt)} title="Editar evento">
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="worship-action-btn danger"
+                                    onClick={() => {
+                                      if (window.confirm(`Excluir "${evt.title}" e todos os escalados?`)) {
+                                        void handleDeleteWorshipEvent(evt.id);
+                                      }
+                                    }}
+                                    title="Excluir evento"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {assignments.length === 0 ? (
+                            <div className="catalog-empty compact" style={{ marginTop: 10 }}>Nenhum escalado neste evento.</div>
+                          ) : (
+                            <div style={{ marginTop: 10, border: "1px solid var(--color-border)", borderRadius: 10, overflow: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Membro</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Função</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Status</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Obs.</th>
+                                    {canManageWorship ? (
+                                      <th style={{ textAlign: "right", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }} />
+                                    ) : null}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {assignments.map((a) => (
+                                    <tr key={a.id}>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                        <strong style={{ fontSize: "0.9rem" }}>{a.members?.name ?? "Membro"}</strong>
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                                        {a.worship_roles?.name ?? a.role_name ?? "—"}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                        <em className={a.status === "confirmed" ? "success" : a.status === "declined" ? "danger" : "warning"}>
+                                          {worshipAssignmentStatusLabel(a.status)}
+                                        </em>
+                                        {a.decline_reason ? (
+                                          <div style={{ marginTop: 4, color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                                            Motivo: {a.decline_reason}
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                                        {a.notes ?? "—"}
+                                      </td>
+                                      {canManageWorship ? (
+                                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", textAlign: "right" }}>
+                                          <button
+                                            type="button"
+                                            className="worship-action-btn danger small"
+                                            onClick={() => {
+                                              if (window.confirm(`Remover ${a.members?.name ?? "escalado"} da escala?`)) {
+                                                void handleDeleteWorshipAssignment(a.id, evt.id);
+                                              }
+                                            }}
+                                            title="Remover escalado"
+                                          >
+                                            <X size={13} />
+                                          </button>
+                                        </td>
+                                      ) : null}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })() : null}
+                  </>
+                );
+              })()
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {clientData?.worshipEvents.length === 0 ? (
+                  <div className="catalog-empty">Nenhum evento de louvor cadastrado.</div>
+                ) : (
+                  clientData.worshipEvents
+                    .slice()
+                    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+                    .map((evt) => {
+                      const assignments = clientData.worshipAssignmentsByEventId[evt.id] ?? [];
+                      const dateLabel = new Date(evt.starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                      return (
+                        <details key={evt.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}>
+                          <summary
+                            style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+                            onClick={() => setWorshipCalendarSelectedEventId(evt.id)}
+                          >
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <strong style={{ fontSize: "0.95rem" }}>{evt.title}</strong>
+                              <small style={{ color: "var(--color-text-secondary)" }}>
+                                {dateLabel}{evt.location ? ` · ${evt.location}` : ""} · {assignments.length} escalado(s)
+                              </small>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                              <em className={evt.status === "published" ? "success" : evt.status === "cancelled" ? "danger" : "warning"}>
+                                {worshipStatusLabel(evt.status)}
+                              </em>
+                              {canManageWorship && assignments.length > 0 ? (
+                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail">
+                                  <Mail size={15} />
+                                  <span>E-mails</span>
+                                </button>
+                              ) : null}
+                              {canManageWorship ? (
+                                <>
+                                  <button type="button" className="worship-action-btn" onClick={() => openEditWorshipEvent(evt)} title="Editar evento">
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="worship-action-btn danger"
+                                    onClick={() => {
+                                      if (window.confirm(`Excluir "${evt.title}" e todos os escalados?`)) {
+                                        void handleDeleteWorshipEvent(evt.id);
+                                      }
+                                    }}
+                                    title="Excluir evento"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </summary>
+
+                          {assignments.length === 0 ? (
+                            <div className="catalog-empty compact" style={{ marginTop: 10 }}>Nenhum escalado neste evento.</div>
+                          ) : (
+                            <div style={{ marginTop: 10, border: "1px solid var(--color-border)", borderRadius: 10, overflow: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Membro</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Função</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Status</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Obs.</th>
+                                    {canManageWorship ? (
+                                      <th style={{ textAlign: "right", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }} />
+                                    ) : null}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {assignments.map((a) => (
+                                    <tr key={a.id}>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                        <strong style={{ fontSize: "0.9rem" }}>{a.members?.name ?? "Membro"}</strong>
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                                        {a.worship_roles?.name ?? a.role_name ?? "—"}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                        <em className={a.status === "confirmed" ? "success" : a.status === "declined" ? "danger" : "warning"}>
+                                          {worshipAssignmentStatusLabel(a.status)}
+                                        </em>
+                                        {a.decline_reason ? (
+                                          <div style={{ marginTop: 4, color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                                            Motivo: {a.decline_reason}
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                                        {a.notes ?? "—"}
+                                      </td>
+                                      {canManageWorship ? (
+                                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", textAlign: "right" }}>
+                                          <button
+                                            type="button"
+                                            className="worship-action-btn danger small"
+                                            onClick={() => {
+                                              if (window.confirm(`Remover ${a.members?.name ?? "escalado"} da escala?`)) {
+                                                void handleDeleteWorshipAssignment(a.id, evt.id);
+                                              }
+                                            }}
+                                            title="Remover escalado"
+                                          >
+                                            <X size={13} />
+                                          </button>
+                                        </td>
+                                      ) : null}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </details>
+                      );
+                    })
+                )}
+              </div>
+            )}
+          </div>
             </article>
           ) : null}
 
@@ -14348,100 +15779,245 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ) : (
                     [...eventRepertoire]
                       .sort((a, b) => a.position - b.position)
-                      .map((item) => (
-                        <div key={item.song.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
-                          <div className={`catalog-row${item.song.tenant_id ? "" : " system"}`} style={{ border: 0, padding: 0 }}>
-                            <span>
-                              <strong>{item.song.title}</strong>
-                              <small>
-                                {item.song.artist}
-                                {item.song.tenant_id ? " · Minha música" : " · Global"}
-                              </small>
+                      .map((item, index) => (
+                        <details
+                          key={item.song.id}
+                          style={{
+                            border: "1px solid var(--color-border)",
+                            borderRadius: 12,
+                            background: "rgba(255, 255, 255, 0.92)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <summary
+                            style={{
+                              listStyle: "none",
+                              cursor: "pointer",
+                              padding: "10px 12px",
+                              display: "grid",
+                              gridTemplateColumns: "minmax(0, 1fr) auto",
+                              gap: 10,
+                              alignItems: "center",
+                            }}
+                          >
+                            <span style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
+                              <span style={{ width: 22, height: 22, borderRadius: 999, background: "rgba(0, 126, 124, 0.12)", color: "var(--color-brand-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.75rem", flex: "0 0 auto" }}>
+                                {index + 1}
+                              </span>
+                              <span style={{ minWidth: 0 }}>
+                                <strong style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.song.title}</strong>
+                                <small style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {item.song.artist} · {item.song.tenant_id ? "Minha música" : "Global"}
+                                </small>
+                              </span>
                             </span>
-                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              <button type="button" onClick={() => moveSongInRepertoire(item.song.id, -1)} aria-label="Subir">
-                                <ChevronUp size={16} />
+                            <span style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); moveSongInRepertoire(item.song.id, -1); }}
+                                aria-label="Subir"
+                                className="worship-action-btn"
+                              >
+                                <ChevronUp size={14} />
                               </button>
-                              <button type="button" onClick={() => moveSongInRepertoire(item.song.id, 1)} aria-label="Descer">
-                                <ChevronDown size={16} />
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); moveSongInRepertoire(item.song.id, 1); }}
+                                aria-label="Descer"
+                                className="worship-action-btn"
+                              >
+                                <ChevronDown size={14} />
                               </button>
-                              <button type="button" onClick={() => removeSongFromRepertoire(item.song.id)} aria-label="Remover">
-                                <X size={16} />
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); removeSongFromRepertoire(item.song.id); }}
+                                aria-label="Remover"
+                                className="worship-action-btn danger"
+                              >
+                                <X size={14} />
                               </button>
+                            </span>
+                          </summary>
+                          <div style={{ padding: "0 12px 12px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, marginTop: 10 }}>
+                              <input
+                                className="catalog-input"
+                                placeholder="Tom (ex.: G)"
+                                value={item.key}
+                                onChange={(e) => updateRepertoireField(item.song.id, "key", e.target.value)}
+                              />
+                              <input
+                                className="catalog-input"
+                                placeholder="Notas (opcional)"
+                                value={item.notes}
+                                onChange={(e) => updateRepertoireField(item.song.id, "notes", e.target.value)}
+                              />
                             </div>
                           </div>
-
-                          <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, marginTop: 10 }}>
-                            <input
-                              className="catalog-input"
-                              placeholder="Tom (ex.: G)"
-                              value={item.key}
-                              onChange={(e) => updateRepertoireField(item.song.id, "key", e.target.value)}
-                            />
-                            <input
-                              className="catalog-input"
-                              placeholder="Notas (opcional)"
-                              value={item.notes}
-                              onChange={(e) => updateRepertoireField(item.song.id, "notes", e.target.value)}
-                            />
-                          </div>
-                        </div>
+                        </details>
                       ))
                   )}
                 </div>
 
                 <div className="modal-grid" style={{ marginTop: 12 }}>
                   <div>
-                    <label>
-                      <span>Buscar no catálogo</span>
-                      <input
-                        className="catalog-input"
-                        placeholder="Digite parte do nome ou autor"
-                        value={catalogSongSearchTerm}
-                        onChange={(e) => setCatalogSongSearchTerm(e.target.value)}
-                      />
-                    </label>
+                    <div ref={catalogSongPickerRef} style={{ position: "relative" }}>
+                      <label>
+                        <span>Buscar música (nome ou artista)</span>
+                        <input
+                          className="catalog-input"
+                          placeholder="Digite para localizar e selecionar"
+                          value={catalogSongSearchTerm}
+                          onChange={(e) => setCatalogSongSearchTerm(e.target.value)}
+                          onFocus={() => setCatalogSongPickerOpen(true)}
+                          onClick={() => setCatalogSongPickerOpen(true)}
+                        />
+                      </label>
 
-                    <div className="catalog-list">
-                      {(() => {
-                        const songs = clientData?.catalogSongs ?? [];
-                        const q = catalogSongSearchTerm.trim().toLowerCase();
-                        const filtered = q
-                          ? songs.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(q))
-                          : songs;
-                        const limited = filtered.slice(0, 10);
-                        if (limited.length === 0) return <div className="catalog-empty">Nenhuma música encontrada.</div>;
-                        return limited.map((song) => {
-                          const alreadyAdded = eventRepertoire.some((it) => it.song.id === song.id);
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 10, flexWrap: "wrap" }}>
+                        <label style={{ flex: 1, minWidth: 220 }}>
+                          <span>Filtro</span>
+                          <select
+                            className="catalog-input"
+                            value={catalogSongScope}
+                            onChange={(e) => {
+                              setCatalogSongScope(e.target.value as "all" | "global" | "mine");
+                            }}
+                          >
+                            <option value="all">Padrão + Minhas</option>
+                            <option value="global">Músicas padrão</option>
+                            <option value="mine">Apenas Minhas</option>
+                          </select>
+                          <small style={{ display: "block", marginTop: 6, color: "var(--color-text-secondary)" }}>
+                            Globais: {(clientData?.catalogSongs ?? []).filter((s) => s.tenant_id === null).length} · Minhas: {(clientData?.catalogSongs ?? []).filter((s) => s.tenant_id !== null).length}
+                          </small>
+                        </label>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            icon={<Plus size={16} />}
+                            disabled={catalogSongSelectedIds.length === 0}
+                            onClick={addSelectedCatalogSongsToRepertoire}
+                          >
+                            Adicionar ({catalogSongSelectedIds.length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={catalogSongSelectedIds.length === 0}
+                            onClick={() => setCatalogSongSelectedIds([])}
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                      </div>
+
+                      {catalogSongPickerOpen ? (
+                        (() => {
+                          const songs = clientData?.catalogSongs ?? [];
+                          const q = catalogSongSearchTerm.trim().toLowerCase();
+                          const scoped =
+                            catalogSongScope === "global"
+                              ? songs.filter((s) => s.tenant_id === null)
+                              : catalogSongScope === "mine"
+                              ? songs.filter((s) => s.tenant_id !== null)
+                              : songs;
+                          const filtered = q
+                            ? scoped.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(q))
+                            : scoped;
+
+                          const alreadyAdded = new Set(eventRepertoire.map((it) => it.song.id));
+                          const selected = new Set(catalogSongSelectedIds);
+                          const shown = filtered.slice(0, 40);
+
                           return (
-                            <div key={song.id} className={`catalog-row${song.tenant_id ? "" : " system"}`}>
-                              <span>
-                                <strong>{song.title}</strong>
-                                <small>
-                                  {song.artist}
-                                  {song.tenant_id ? " · Minha música" : " · Global"}
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "calc(100% + 8px)",
+                                left: 0,
+                                right: 0,
+                                zIndex: 30,
+                                background: "var(--color-white)",
+                                border: "1px solid var(--color-border)",
+                                borderRadius: 12,
+                                boxShadow: "0 18px 44px rgba(10, 37, 64, 0.12)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                <small style={{ color: "var(--color-text-secondary)" }}>
+                                  {filtered.length} resultado(s){filtered.length > shown.length ? ` · mostrando ${shown.length}` : ""}
                                 </small>
-                              </span>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                icon={<Plus size={16} />}
-                                disabled={alreadyAdded}
-                                onClick={() => addSongToRepertoire(song)}
-                              >
-                                {alreadyAdded ? "Adicionada" : "Adicionar"}
-                              </Button>
+                                <button
+                                  type="button"
+                                  className="worship-action-btn"
+                                  onClick={() => setCatalogSongPickerOpen(false)}
+                                  aria-label="Fechar lista"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                              <div style={{ maxHeight: 320, overflow: "auto" }}>
+                                {shown.length === 0 ? (
+                                  <div className="catalog-empty" style={{ padding: 12 }}>Nenhuma música encontrada.</div>
+                                ) : (
+                                  shown.map((song) => {
+                                    const isAlready = alreadyAdded.has(song.id);
+                                    const isSelected = selected.has(song.id);
+                                    return (
+                                      <div
+                                        key={song.id}
+                                        className={`catalog-row${song.tenant_id ? "" : " system"}`}
+                                        style={{
+                                          cursor: isAlready ? "not-allowed" : "pointer",
+                                          opacity: isAlready ? 0.55 : 1,
+                                          alignItems: "center",
+                                          gap: 10,
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => { if (!isAlready) toggleCatalogSongSelection(song.id); }}
+                                        onKeyDown={(e) => {
+                                          if (isAlready) return;
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            toggleCatalogSongSelection(song.id);
+                                          }
+                                        }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          disabled={isAlready}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onChange={() => { if (!isAlready) toggleCatalogSongSelection(song.id); }}
+                                        />
+                                        <span style={{ flex: 1 }}>
+                                          <strong>{song.title}</strong>
+                                          <small>
+                                            {song.artist}
+                                            {song.tenant_id ? " · Minha música" : " · Global"}
+                                            {isAlready ? " · Já no repertório" : ""}
+                                          </small>
+                                        </span>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
                             </div>
                           );
-                        });
-                      })()}
+                        })()
+                      ) : null}
                     </div>
                   </div>
 
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <label>
-                        <span>Adicionar música do cliente</span>
+                        <span>Adicionar música de fora do catalogo</span>
                         <input
                           className="catalog-input"
                           placeholder="Música (ex.: Minha Canção)"

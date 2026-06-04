@@ -2068,6 +2068,19 @@ h1 {
   border-radius: 14px;
 }
 
+.catalog-row strong {
+  display: block;
+  line-height: 1.15;
+}
+
+.catalog-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-neutral-600);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .catalog-row.system {
   grid-template-columns: 1fr;
   color: var(--color-neutral-700);
