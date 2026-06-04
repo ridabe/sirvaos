@@ -29,7 +29,7 @@ export async function resolvePostLoginPath(userId: string) {
 
   if (!profileData.tenant_id) {
     await supabase.auth.signOut();
-    throw new Error("Usuário autenticado, mas sem tenant associado.");
+    throw new Error("Usuário autenticado, mas sem Igreja associada.");
   }
 
   if (profileData.tenant_role === "owner" || profileData.tenant_role === "admin") {

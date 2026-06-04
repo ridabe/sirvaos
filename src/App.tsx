@@ -269,7 +269,7 @@ export function App() {
     if (!profileData!.tenant_id) {
       await supabase.auth.signOut();
       setLoginStatus("error");
-      setLoginMessage("Usuário autenticado, mas sem tenant associado.");
+      setLoginMessage("Usuário autenticado, mas sem Igreja associada.");
       return;
     }
 

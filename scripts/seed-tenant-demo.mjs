@@ -130,7 +130,7 @@ async function main() {
     .single();
 
   if (tenantError) {
-    throw new Error(`Falha ao criar tenant de demonstração: ${tenantError.message}`);
+    throw new Error(`Falha ao criar Igreja de demonstração: ${tenantError.message}`);
   }
 
   const tenantId = tenantData.id;
@@ -275,11 +275,11 @@ async function main() {
     throw new Error(`Falha ao criar eventos de demonstração: ${eventsError.message}`);
   }
 
-  console.log("Tenant de demonstração criado com sucesso.");
+  console.log("Igreja de demonstração criado com sucesso.");
   console.log(`Tenant: ${tenantName} (${tenantSlug})`);
   console.log(`Usuário: ${adminEmail}`);
   console.log(`Senha: ${adminPassword}`);
-  console.log("Abra /admin-cliente e faça login com o usuário de tenant para testar o Admin Cliente.");
+  console.log("Abra /admin-cliente e faça login com o usuário da igreja para testar o Admin Cliente.");
 }
 
 await main().catch((error) => {

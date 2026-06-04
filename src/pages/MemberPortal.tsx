@@ -23,7 +23,7 @@ import {
   Users2,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { renderEventCardHtml } from "../lib/eventCardTemplate";
@@ -165,8 +165,47 @@ function normalizeAccessLabel(value: string | null | undefined) {
 function isSchedulableMinistryName(value: string | null | undefined) {
   const normalized = normalizeAccessLabel(value);
   const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
-  const schedulableTokens = new Set(["louvor", "worship", "danca", "midia", "multimidia", "som", "audio", "audiovisual", "sound"]);
-  return tokens.some((token) => schedulableTokens.has(token));
+  const schedulableTokens = new Set([
+    "louvor",
+    "worship",
+    "danca",
+    "midia",
+    "media",
+    "multimidia",
+    "som",
+    "audio",
+    "audiovisual",
+    "sound",
+    "iluminacao",
+    "luz",
+    "lighting",
+    "transmissao",
+    "stream",
+    "streaming",
+    "live",
+    "video",
+    "vivo",
+  ]);
+  if (tokens.some((token) => schedulableTokens.has(token))) return true;
+  const substrings = [
+    "louvor",
+    "worship",
+    "midia",
+    "media",
+    "transmiss",
+    "stream",
+    "ao vivo",
+    "vivo",
+    "som",
+    "audio",
+    "audiovisual",
+    "ilumin",
+    "luz",
+    "danc",
+    "projec",
+    "video",
+  ];
+  return substrings.some((s) => normalized.includes(s));
 }
 
 function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
@@ -488,7 +527,7 @@ export function MemberPortal() {
   const [bibleSchoolGradeForm, setBibleSchoolGradeForm] = useState<BibleSchoolGradeFormState>(emptyBibleSchoolGradeForm);
   const [selectedPassChildId, setSelectedPassChildId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
-  const [declineReason, setDeclineReason] = useState("");
+  const declineReasonDraftByAssignmentIdRef = useRef<Record<string, string>>({});
   const [actionStatus, setActionStatus] = useState<Record<string, "loading" | "done">>({});
   const [showPassword, setShowPassword] = useState(false);
 
@@ -1898,7 +1937,7 @@ export function MemberPortal() {
   async function declineAssignment(assignmentId: string) {
     setActionStatus((prev) => ({ ...prev, [assignmentId]: "loading" }));
 
-    const reason = declineReason.trim() || null;
+    const reason = (declineReasonDraftByAssignmentIdRef.current[assignmentId] ?? "").trim() || null;
     const { error } = await supabase
       .from("worship_assignments")
       .update({ status: "declined", decline_reason: reason, responded_at: new Date().toISOString() })
@@ -1910,7 +1949,7 @@ export function MemberPortal() {
       );
     }
     setDecliningId(null);
-    setDeclineReason("");
+    delete declineReasonDraftByAssignmentIdRef.current[assignmentId];
     setActionStatus((prev) => ({ ...prev, [assignmentId]: "done" }));
   }
 
@@ -2779,15 +2818,22 @@ export function MemberPortal() {
                           <textarea
                             className="catalog-input catalog-textarea"
                             placeholder="Motivo da recusa (opcional)"
-                            value={declineReason}
-                            onChange={(e) => setDeclineReason(e.target.value)}
+                            key={assignment.id}
+                            defaultValue={declineReasonDraftByAssignmentIdRef.current[assignment.id] ?? ""}
+                            onChange={(e) => {
+                              declineReasonDraftByAssignmentIdRef.current[assignment.id] = e.target.value;
+                            }}
                             rows={2}
+                            autoFocus={true}
                           />
                           <div className="member-portal-decline-actions">
                             <Button
                               type="button"
                               variant="secondary"
-                              onClick={() => { setDecliningId(null); setDeclineReason(""); }}
+                              onClick={() => {
+                                setDecliningId(null);
+                                delete declineReasonDraftByAssignmentIdRef.current[assignment.id];
+                              }}
                             >
                               Cancelar
                             </Button>
@@ -2817,7 +2863,12 @@ export function MemberPortal() {
                               type="button"
                               variant="secondary"
                               icon={<X size={15} />}
-                              onClick={() => setDecliningId(assignment.id)}
+                              onClick={() => {
+                                setDecliningId(assignment.id);
+                                if (declineReasonDraftByAssignmentIdRef.current[assignment.id] === undefined) {
+                                  declineReasonDraftByAssignmentIdRef.current[assignment.id] = "";
+                                }
+                              }}
                               disabled={isLoading}
                             >
                               Recusar

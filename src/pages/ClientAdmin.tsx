@@ -16,7 +16,6 @@ import {
   Heart,
   FileCheck2,
   FileText,
-  ImagePlus,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
@@ -32,7 +31,6 @@ import {
   QrCode,
   Receipt,
   ScrollText,
-  Search,
   Send,
   ShieldCheck,
   TrendingDown,
@@ -42,6 +40,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import { MaterialReactTable, type MRT_ColumnDef } from "material-react-table";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
@@ -51,7 +50,6 @@ import { supabase, supabaseUrl } from "../lib/supabase";
 import {
   createWorshipEmailCampaign,
   emailErrorMessage,
-  emailCampaignStatusLabel,
   getWorshipEmailCampaigns,
   triggerWorshipEmailCampaign,
   type WorshipEmailCampaign,
@@ -251,6 +249,7 @@ type TenantUserRecord = {
   id: string;
   full_name: string | null;
   email: string;
+  member_id: string | null;
   tenant_role: TenantRole | null;
   status: "active" | "invited" | "suspended";
 };
@@ -1409,7 +1408,8 @@ function normalizePermissionLabel(value: string) {
 }
 
 function isArtsScheduleAccessLabel(value: string | null | undefined) {
-  const tokens = normalizePermissionLabel(value ?? "").split(/[^a-z0-9]+/).filter(Boolean);
+  const normalized = normalizePermissionLabel(value ?? "");
+  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
   const scheduleTokens = new Set([
     "arte",
     "artes",
@@ -1417,14 +1417,45 @@ function isArtsScheduleAccessLabel(value: string | null | undefined) {
     "worship",
     "danca",
     "midia",
+    "media",
     "multimidia",
     "teatro",
     "som",
     "audio",
     "audiovisual",
     "sound",
+    "iluminacao",
+    "luz",
+    "lighting",
+    "transmissao",
+    "stream",
+    "streaming",
+    "live",
+    "video",
+    "vivo",
   ]);
-  return tokens.some((token) => scheduleTokens.has(token));
+
+  if (tokens.some((token) => scheduleTokens.has(token))) return true;
+
+  const substrings = [
+    "louvor",
+    "worship",
+    "midia",
+    "media",
+    "transmiss",
+    "stream",
+    "ao vivo",
+    "vivo",
+    "som",
+    "audio",
+    "audiovisual",
+    "ilumin",
+    "luz",
+    "danc",
+    "projec",
+    "video",
+  ];
+  return substrings.some((s) => normalized.includes(s));
 }
 
 function getTenantLogoObjectKey(storedLogoUrl: string | null | undefined) {
@@ -1910,11 +1941,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [worshipEmailCampaignsByEventId, setWorshipEmailCampaignsByEventId] = useState<Record<string, WorshipEmailCampaign[]>>({});
   const [editingWorshipEventId, setEditingWorshipEventId] = useState<string | null>(null);
   const [worshipFlowStep, setWorshipFlowStep] = useState<1 | 2>(1);
-  const [worshipViewMode, setWorshipViewMode] = useState<"list" | "calendar">("list");
-  const [worshipCalendarMonth, setWorshipCalendarMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [worshipEligibleSearch, setWorshipEligibleSearch] = useState("");
+  const [worshipMembersModalOpen, setWorshipMembersModalOpen] = useState(false);
+  const [worshipEventsModalOpen, setWorshipEventsModalOpen] = useState(false);
+  const [worshipDeclinesModalOpen, setWorshipDeclinesModalOpen] = useState(false);
+  const [worshipDeclinesMemberId, setWorshipDeclinesMemberId] = useState<string | null>(null);
+  const [worshipDeclinesEventId, setWorshipDeclinesEventId] = useState<string | null>(null);
+  const [worshipIndicatorsView, setWorshipIndicatorsView] = useState<"member" | "event">("member");
   const announcementEditorRef = useRef<HTMLDivElement | null>(null);
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementFormState>(emptyAnnouncementForm);
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
@@ -2142,7 +2175,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setPushCandidatesStatus("loading");
     setPushCandidatesMessage("");
     setPushCandidates([]);
-    setPushSelectedProfileIds([]);
 
     if (moduleCode === "worship" && mode === "worship_selected") {
       const moduleId = activeModuleIdByCode.worship ?? null;
@@ -2164,75 +2196,71 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         }
       }
 
-      const tenantMinistry = await supabase
-        .from("catalog_ministries")
-        .select("id")
-        .eq("tenant_id", clientData.tenant.id)
-        .ilike("name", "%louvor%")
-        .limit(1)
-        .maybeSingle<{ id: string }>();
+      const tenantId = clientData.tenant.id;
+      const artsMemberIds = Array.from(new Set((worshipAssignableMembers ?? []).map((m) => m.id).filter(Boolean)));
 
-      const systemMinistry = !tenantMinistry.data?.id
-        ? await supabase
-            .from("catalog_ministries")
-            .select("id")
-            .is("tenant_id", null)
-            .ilike("name", "%louvor%")
-            .limit(1)
-            .maybeSingle<{ id: string }>()
-        : null;
+      const baseSelect = "id, full_name, email, member_id, tenant_role" as const;
+      const queries = [
+        supabase
+          .from("profiles")
+          .select(baseSelect)
+          .eq("tenant_id", tenantId)
+          .eq("status", "active")
+          .in("tenant_role", ["owner", "admin"]),
+        adminProfileIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select(baseSelect)
+              .eq("tenant_id", tenantId)
+              .eq("status", "active")
+              .in("id", adminProfileIds)
+          : null,
+        adminMemberIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select(baseSelect)
+              .eq("tenant_id", tenantId)
+              .eq("status", "active")
+              .in("member_id", adminMemberIds)
+          : null,
+        artsMemberIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select(baseSelect)
+              .eq("tenant_id", tenantId)
+              .eq("status", "active")
+              .in("member_id", artsMemberIds)
+          : null,
+      ].filter(Boolean) as Array<ReturnType<typeof supabase.from>>;
 
-      const ministryId = tenantMinistry.data?.id ?? systemMinistry?.data?.id ?? null;
+      const results = await Promise.all(queries.map((q) => q));
+      const merged = new Map<string, { id: string; full_name: string | null; email: string | null }>();
 
-      const ministryMemberIds: string[] = [];
-      if (ministryId) {
-        const ministryMembersResult = await supabase
-          .from("member_ministries")
-          .select("member_id")
-          .eq("tenant_id", clientData.tenant.id)
-          .eq("ministry_id", ministryId);
-
-        if (!ministryMembersResult.error) {
-          (ministryMembersResult.data ?? []).forEach((row) => {
-            if (row.member_id) ministryMemberIds.push(String(row.member_id));
+      for (const res of results) {
+        if (res.error) continue;
+        (res.data ?? []).forEach((row) => {
+          const id = String((row as { id: unknown }).id);
+          if (!id) return;
+          merged.set(id, {
+            id,
+            full_name: (row as { full_name?: string | null }).full_name ?? null,
+            email: (row as { email?: string | null }).email ?? null,
           });
-        }
+        });
       }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, member_id, tenant_role")
-        .eq("tenant_id", clientData.tenant.id)
-        .eq("status", "active");
-
-      if (error) {
-        setPushCandidatesStatus("error");
-        setPushCandidatesMessage("Não foi possível carregar a lista de usuários.");
-        return;
-      }
-
-      const adminProfileSet = new Set(adminProfileIds);
-      const adminMemberSet = new Set(adminMemberIds);
-      const ministryMemberSet = new Set(ministryMemberIds);
-
-      const filtered = (data ?? []).filter((row) => {
-        const tenantRole = row.tenant_role as TenantRole | null;
-        if (tenantRole === "owner" || tenantRole === "admin") return true;
-        if (adminProfileSet.has(String(row.id))) return true;
-        const memberId = row.member_id ? String(row.member_id) : null;
-        if (!memberId) return false;
-        return adminMemberSet.has(memberId) || ministryMemberSet.has(memberId);
-      });
-
-      const list = filtered
+      const list = Array.from(merged.values())
         .map((row) => ({
-          profile_id: String(row.id),
+          profile_id: row.id,
           label: String(row.full_name ?? row.email ?? "Usuário"),
-          meta: row.email as string | undefined,
+          meta: row.email ?? undefined,
         }))
         .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 
       setPushCandidates(list);
+      if (list.length === 0) {
+        setPushCandidatesMessage("Nenhum usuário elegível encontrado (verifique se os membros têm usuário/app vinculado).");
+      }
       setPushCandidatesStatus("ready");
       return;
     }
@@ -2405,6 +2433,24 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
   }
 
+  function openWorshipPushForProfiles(profileIds: string[]) {
+    setPushComposerModule("worship");
+    setPushComposerMode("worship_selected");
+    setPushTitle("");
+    setPushBody("");
+    setPushSendStatus("idle");
+    setPushSendMessage("");
+    setPushCandidatesStatus("idle");
+    setPushCandidatesMessage("");
+    setPushCandidates([]);
+    setPushRecipientSearch("");
+    setPushKidsGroupId(kidsFilterGroupId || "");
+    setPushKidsDate(kidsAttendanceDate);
+    setPushComposerOpen(true);
+    setPushSelectedProfileIds(profileIds);
+    void loadPushCandidates("worship_selected", "worship");
+  }
+
   async function resolvePushProfileIds(mode: typeof pushComposerMode, moduleCode: typeof pushComposerModule): Promise<string[]> {
     if (!clientData) return [];
 
@@ -2444,35 +2490,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     if (moduleCode === "worship" && mode === "worship_ministry") {
-      const tenantMinistry = await supabase
-        .from("catalog_ministries")
-        .select("id")
-        .eq("tenant_id", clientData.tenant.id)
-        .ilike("name", "%louvor%")
-        .limit(1)
-        .maybeSingle<{ id: string }>();
-
-      const systemMinistry = !tenantMinistry.data?.id
-        ? await supabase
-            .from("catalog_ministries")
-            .select("id")
-            .is("tenant_id", null)
-            .ilike("name", "%louvor%")
-            .limit(1)
-            .maybeSingle<{ id: string }>()
-        : null;
-
-      const ministryId = tenantMinistry.data?.id ?? systemMinistry?.data?.id ?? null;
-      if (!ministryId) return [];
-
-      const mmResult = await supabase
-        .from("member_ministries")
-        .select("member_id")
-        .eq("tenant_id", clientData.tenant.id)
-        .eq("ministry_id", ministryId);
-
-      if (mmResult.error) return [];
-      const memberIds = (mmResult.data ?? []).map((r) => r.member_id).filter(Boolean) as string[];
+      const memberIds = uniq((worshipAssignableMembers ?? []).map((member) => member.id));
       if (memberIds.length === 0) return [];
 
       const profileResult = await supabase
@@ -2703,6 +2721,200 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return [...ministryNames, ...roleNames].some((name) => isArtsScheduleAccessLabel(name));
     });
   }, [catalogRoleNameById, clientData, clientData?.members, clientData?.memberMinistriesByMemberId, clientData?.memberRoleIdsByMemberId]);
+
+  const worshipEligibleMembers = useMemo(() => {
+    const term = worshipEligibleSearch.trim().toLowerCase();
+    if (!term) {
+      return worshipAssignableMembers;
+    }
+
+    return worshipAssignableMembers.filter((member) => {
+      const summary = memberSummaryById[member.id] ?? "";
+      return [member.name, member.email ?? "", member.phone ?? "", summary].join(" ").toLowerCase().includes(term);
+    });
+  }, [memberSummaryById, worshipAssignableMembers, worshipEligibleSearch]);
+
+  const worshipProfileByMemberId = useMemo(() => {
+    const rows = clientData?.users ?? [];
+    return rows.reduce<Record<string, TenantUserRecord>>((acc, row) => {
+      if (row.member_id) {
+        acc[row.member_id] = row;
+      }
+      return acc;
+    }, {});
+  }, [clientData?.users]);
+
+  const worshipMembersColumns = useMemo<MRT_ColumnDef<MemberRecord>[]>(() => {
+    return [
+      {
+        accessorKey: "name",
+        header: "Nome",
+        Cell: ({ row }) => {
+          const member = row.original;
+          return (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <strong style={{ fontSize: "0.92rem" }}>{member.name}</strong>
+              {worshipProfileByMemberId[member.id]?.email ? (
+                <small style={{ color: "var(--color-text-secondary)" }}>{worshipProfileByMemberId[member.id].email}</small>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        id: "member_email",
+        header: "E-mail (cadastro)",
+        accessorFn: (row) => row.email ?? "",
+        Cell: ({ row }) => (row.original.email ?? "—"),
+      },
+      {
+        accessorKey: "phone",
+        header: "Telefone",
+        Cell: ({ row }) => (row.original.phone ?? "—"),
+      },
+      {
+        id: "summary",
+        header: "Vínculos",
+        accessorFn: (row) => memberSummaryById[row.id] ?? "",
+        Cell: ({ row }) => (
+          <span style={{ color: "var(--color-text-secondary)" }}>
+            {memberSummaryById[row.original.id] ?? "—"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        Cell: ({ row }) => {
+          const member = row.original;
+          const profile = worshipProfileByMemberId[member.id];
+          if (!canManageWorship) {
+            return null;
+          }
+          if (!profile?.id) {
+            return <span style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem" }}>Sem usuário</span>;
+          }
+          return (
+            <button
+              type="button"
+              className="worship-email-btn"
+              style={{ padding: "6px 10px" }}
+              onClick={() => {
+                openWorshipPushForProfiles([profile.id]);
+                setWorshipMembersModalOpen(false);
+              }}
+              title="Enviar push para este usuário"
+            >
+              <Bell size={15} />
+              <span>Push</span>
+            </button>
+          );
+        },
+      },
+    ];
+  }, [canManageWorship, memberSummaryById, worshipProfileByMemberId]);
+
+  type WorshipDeclineRow = {
+    assignment_id: string;
+    member_id: string;
+    member_name: string;
+    event_title: string;
+    event_id: string;
+    event_starts_at: string;
+    role: string;
+    decline_reason: string;
+    notes: string;
+  };
+
+  const worshipDeclineRows = useMemo<WorshipDeclineRow[]>(() => {
+    if (!clientData) return [];
+    const eventById = (clientData.worshipEvents ?? []).reduce<Record<string, WorshipEventRecord>>((acc, evt) => {
+      acc[evt.id] = evt;
+      return acc;
+    }, {});
+    const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
+    return allAssignments
+      .filter((a) => a.status === "declined")
+      .filter((a) => (worshipDeclinesMemberId ? a.member_id === worshipDeclinesMemberId : true))
+      .filter((a) => (worshipDeclinesEventId ? a.event_id === worshipDeclinesEventId : true))
+      .map((a) => {
+        const evt = eventById[a.event_id];
+        return {
+          assignment_id: a.id,
+          member_id: a.member_id,
+          member_name: a.members?.name ?? "Membro",
+          event_title: evt?.title ?? "Evento",
+          event_id: a.event_id,
+          event_starts_at: evt?.starts_at ?? "",
+          role: a.worship_roles?.name ?? a.role_name ?? "—",
+          decline_reason: a.decline_reason ?? "—",
+          notes: a.notes ?? "—",
+        };
+      })
+      .sort((a, b) => a.event_starts_at.localeCompare(b.event_starts_at));
+  }, [clientData, worshipDeclinesEventId, worshipDeclinesMemberId]);
+
+  const worshipDeclineMemberName = useMemo(() => {
+    if (!worshipDeclinesMemberId || !clientData) return null;
+    const member = clientData.members.find((m) => m.id === worshipDeclinesMemberId);
+    return member?.name ?? null;
+  }, [clientData, worshipDeclinesMemberId]);
+
+  const worshipDeclineEventTitle = useMemo(() => {
+    if (!worshipDeclinesEventId || !clientData) return null;
+    const evt = clientData.worshipEvents.find((e) => e.id === worshipDeclinesEventId);
+    return evt?.title ?? null;
+  }, [clientData, worshipDeclinesEventId]);
+
+  const worshipDeclineColumns = useMemo<MRT_ColumnDef<WorshipDeclineRow>[]>(() => {
+    return [
+      {
+        accessorKey: "event_starts_at",
+        header: "Data",
+        Cell: ({ row }) =>
+          row.original.event_starts_at
+            ? new Date(row.original.event_starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+            : "—",
+      },
+      { accessorKey: "event_title", header: "Evento" },
+      { accessorKey: "member_name", header: "Membro" },
+      { accessorKey: "role", header: "Função" },
+      {
+        accessorKey: "decline_reason",
+        header: "Motivo",
+        Cell: ({ row }) => (
+          <span style={{ whiteSpace: "pre-wrap" }}>
+            {row.original.decline_reason}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "notes",
+        header: "Obs.",
+        Cell: ({ row }) => (
+          <span style={{ whiteSpace: "pre-wrap", color: "var(--color-text-secondary)" }}>
+            {row.original.notes}
+          </span>
+        ),
+      },
+    ];
+  }, []);
+
+  const worshipEventStats = useMemo(() => {
+    if (!clientData) return [];
+    return (clientData.worshipEvents ?? [])
+      .slice()
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      .map((evt) => {
+        const assignments = clientData.worshipAssignmentsByEventId[evt.id] ?? [];
+        const confirmed = assignments.filter((a) => a.status === "confirmed").length;
+        const declined = assignments.filter((a) => a.status === "declined").length;
+        const pending = assignments.filter((a) => a.status !== "confirmed" && a.status !== "declined").length;
+        const total = assignments.length;
+        const rate = total > 0 ? Math.round((confirmed / total) * 100) : 0;
+        return { event_id: evt.id, title: evt.title, starts_at: evt.starts_at, location: evt.location, total, confirmed, declined, pending, rate };
+      });
+  }, [clientData]);
 
   const filteredMembers = useMemo(() => {
     if (!clientData) {
@@ -3604,7 +3816,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .returns<WorshipAssignmentRecord[]>(),
         supabase
           .from("profiles")
-          .select("id, full_name, email, tenant_role, status")
+          .select("id, full_name, email, member_id, tenant_role, status")
           .eq("tenant_id", tenantId)
           .returns<TenantUserRecord[]>(),
         supabase
@@ -5540,7 +5752,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
   async function uploadEventBanner(file: File, eventId: string) {
     if (!clientData?.tenant?.id || !eventId) {
-      return { ok: false as const, message: "Dados do tenant ou evento inválidos." };
+      return { ok: false as const, message: "Dados da igreja ou evento inválidos." };
     }
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -6043,7 +6255,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     if (!worshipAssignableMembers.some((member) => member.id === worshipAssignmentForm.member_id)) {
       setWorshipSaveStatus("error");
-      setWorshipSaveMessage("Selecione um membro vinculado aos ministérios de arte, louvor, dança, mídia, teatro ou som.");
+      setWorshipSaveMessage("Selecione um membro vinculado aos ministérios de louvor, mídia/transmissão, som/áudio, iluminação, dança ou áreas de arte.");
       return;
     }
 
@@ -7776,7 +7988,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           <article>
             <span>Comunicados</span>
             <strong>{announcementCount}</strong>
-            <small>Mensagens para o tenant</small>
+            <small>Mensagens enviada para Membros da Igreja</small>
           </article>
           <article>
             <span>Módulos ativos</span>
@@ -8608,14 +8820,35 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <h4>Escalas de culto e ensaio</h4>
                 </div>
                 {canManageWorship ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    icon={<Bell size={16} />}
-                    onClick={() => openPushComposer("worship")}
-                  >
-                    Enviar push
-                  </Button>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      icon={<UsersRound size={16} />}
+                      onClick={() => {
+                        setWorshipEligibleSearch("");
+                        setWorshipMembersModalOpen(true);
+                      }}
+                    >
+                      Integrantes do Ministério
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      icon={<CalendarDays size={16} />}
+                      onClick={() => setWorshipEventsModalOpen(true)}
+                    >
+                      Eventos & escalas
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      icon={<Bell size={16} />}
+                      onClick={() => openPushComposer("worship")}
+                    >
+                      Enviar push
+                    </Button>
+                  </div>
                 ) : null}
               </div>
 
@@ -8648,53 +8881,192 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               {(() => {
                 const allAssignments = Object.values(clientData.worshipAssignmentsByEventId).flat();
                 if (allAssignments.length === 0) return null;
-                const statsByMember: Record<string, { name: string; total: number; confirmed: number; declined: number; pending: number }> = {};
+                const statsByMember: Record<string, { member_id: string; name: string; total: number; confirmed: number; declined: number; pending: number; event_ids: Set<string> }> = {};
                 for (const a of allAssignments) {
                   const name = a.members?.name ?? "Desconhecido";
                   if (!statsByMember[a.member_id]) {
-                    statsByMember[a.member_id] = { name, total: 0, confirmed: 0, declined: 0, pending: 0 };
+                    statsByMember[a.member_id] = { member_id: a.member_id, name, total: 0, confirmed: 0, declined: 0, pending: 0, event_ids: new Set() };
                   }
+                  statsByMember[a.member_id].event_ids.add(a.event_id);
                   statsByMember[a.member_id].total++;
                   if (a.status === "confirmed") statsByMember[a.member_id].confirmed++;
                   else if (a.status === "declined") statsByMember[a.member_id].declined++;
                   else statsByMember[a.member_id].pending++;
                 }
                 const sorted = Object.values(statsByMember).sort((a, b) => b.total - a.total);
+                const declinedTotal = sorted.reduce((s, item) => s + item.declined, 0);
+                const declinedTotalByEvent = worshipEventStats.reduce((s, evt) => s + evt.declined, 0);
                 return (
                   <div className="worship-member-stats">
                     <div className="worship-member-stats-header">
-                      <strong>Indicadores por integrante</strong>
-                      <small>{sorted.length} integrante{sorted.length === 1 ? "" : "s"} escalado{sorted.length === 1 ? "" : "s"}</small>
+                      <div>
+                        <strong>{worshipIndicatorsView === "event" ? "Indicadores por evento" : "Indicadores por integrante"}</strong>
+                        <small>
+                          {worshipIndicatorsView === "event"
+                            ? `${worshipEventStats.length} evento${worshipEventStats.length === 1 ? "" : "s"}`
+                            : `${sorted.length} integrante${sorted.length === 1 ? "" : "s"} escalado${sorted.length === 1 ? "" : "s"}`}
+                        </small>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <div className="worship-view-toggle">
+                          <button
+                            type="button"
+                            className={worshipIndicatorsView === "member" ? "active" : ""}
+                            onClick={() => setWorshipIndicatorsView("member")}
+                          >
+                            Por integrante
+                          </button>
+                          <button
+                            type="button"
+                            className={worshipIndicatorsView === "event" ? "active" : ""}
+                            onClick={() => setWorshipIndicatorsView("event")}
+                          >
+                            Por evento
+                          </button>
+                        </div>
+                        {canManageWorship && (worshipIndicatorsView === "event" ? declinedTotalByEvent : declinedTotal) > 0 ? (
+                          <button
+                            type="button"
+                            className="worship-email-btn"
+                            style={{ padding: "6px 10px" }}
+                            onClick={() => {
+                              setWorshipDeclinesMemberId(null);
+                              setWorshipDeclinesEventId(null);
+                              setWorshipDeclinesModalOpen(true);
+                            }}
+                            title="Ver motivos de recusa"
+                          >
+                            <X size={15} />
+                            <span>Ver recusas ({worshipIndicatorsView === "event" ? declinedTotalByEvent : declinedTotal})</span>
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="worship-member-stats-grid">
-                      {sorted.map((s) => {
-                        const rate = s.total > 0 ? Math.round((s.confirmed / s.total) * 100) : 0;
-                        return (
-                          <div key={s.name} className="worship-member-stat-row">
+                    {worshipIndicatorsView === "event" ? (
+                      <div className="worship-member-stats-grid">
+                        {worshipEventStats.map((evt) => (
+                          <div key={evt.event_id} className="worship-member-stat-row">
                             <div className="worship-member-stat-name">
-                              <span className="worship-member-avatar">{s.name.charAt(0).toUpperCase()}</span>
-                              <strong>{s.name}</strong>
+                              <span className="worship-member-avatar">{evt.title.trim().charAt(0).toUpperCase() || "E"}</span>
+                              <div style={{ display: "flex", flexDirection: "column" }}>
+                                <strong>{evt.title}</strong>
+                                <small style={{ marginTop: 2 }}>
+                                  {evt.starts_at ? new Date(evt.starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                  {evt.location ? ` · ${evt.location}` : ""}
+                                </small>
+                              </div>
                             </div>
                             <div className="worship-member-stat-counts">
-                              <span title="Confirmações" className="success">{s.confirmed}</span>
-                              <span title="Recusas" className="danger">{s.declined}</span>
-                              <span title="Pendentes" className="warning">{s.pending}</span>
+                              <span title="Confirmações" className="success">{evt.confirmed}</span>
+                              {canManageWorship && evt.declined > 0 ? (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  title="Recusas (clique para ver motivos)"
+                                  className="danger"
+                                  style={{ cursor: "pointer" }}
+                                  onClick={() => {
+                                    setWorshipDeclinesEventId(evt.event_id);
+                                    setWorshipDeclinesMemberId(null);
+                                    setWorshipDeclinesModalOpen(true);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      setWorshipDeclinesEventId(evt.event_id);
+                                      setWorshipDeclinesMemberId(null);
+                                      setWorshipDeclinesModalOpen(true);
+                                    }
+                                  }}
+                                >
+                                  {evt.declined}
+                                </span>
+                              ) : (
+                                <span title="Recusas" className="danger">{evt.declined}</span>
+                              )}
+                              <span title="Pendentes" className="warning">{evt.pending}</span>
                             </div>
                             <div className="worship-member-stat-bar">
-                              <div style={{ width: `${rate}%` }} />
+                              <div style={{ width: `${evt.rate}%` }} />
                             </div>
-                            <small>{rate}%</small>
+                            <small>{evt.rate}%</small>
                           </div>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="worship-member-stats-grid">
+                        {sorted.map((s) => {
+                          const rate = s.total > 0 ? Math.round((s.confirmed / s.total) * 100) : 0;
+                          const eventCount = s.event_ids.size;
+                          return (
+                            <div key={s.member_id} className="worship-member-stat-row">
+                              <div className="worship-member-stat-name">
+                                <span className="worship-member-avatar">{s.name.charAt(0).toUpperCase()}</span>
+                                <div style={{ display: "flex", flexDirection: "column" }}>
+                                  <strong>{s.name}</strong>
+                                  <span
+                                    style={{
+                                      marginTop: 2,
+                                      fontSize: "0.72rem",
+                                      fontWeight: 700,
+                                      padding: "2px 8px",
+                                      borderRadius: 999,
+                                      background: "var(--color-neutral-100)",
+                                      color: "var(--color-neutral-600)",
+                                      width: "fit-content",
+                                    }}
+                                    title="Quantidade de eventos distintos em que este integrante está escalado"
+                                  >
+                                    {eventCount} evento{eventCount === 1 ? "" : "s"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="worship-member-stat-counts">
+                                <span title="Confirmações" className="success">{s.confirmed}</span>
+                                {canManageWorship && s.declined > 0 ? (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    title="Recusas (clique para ver motivos)"
+                                    className="danger"
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => {
+                                      setWorshipDeclinesMemberId(s.member_id);
+                                      setWorshipDeclinesEventId(null);
+                                      setWorshipDeclinesModalOpen(true);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        setWorshipDeclinesMemberId(s.member_id);
+                                        setWorshipDeclinesEventId(null);
+                                        setWorshipDeclinesModalOpen(true);
+                                      }
+                                    }}
+                                  >
+                                    {s.declined}
+                                  </span>
+                                ) : (
+                                  <span title="Recusas" className="danger">{s.declined}</span>
+                                )}
+                                <span title="Pendentes" className="warning">{s.pending}</span>
+                              </div>
+                              <div className="worship-member-stat-bar">
+                                <div style={{ width: `${rate}%` }} />
+                              </div>
+                              <small>{rate}%</small>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
 
               <div className="worship-flow-layout">
                 {canManageWorship ? (
-                  <div className="worship-flow-form-col">
+                  <div className="worship-flow-form-col" style={{ gridColumn: "1 / -1" }}>
                     <div className="worship-steps">
                       <button
                         type="button"
@@ -8925,322 +9297,6 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     )}
                   </div>
                 ) : null}
-
-                <div className="worship-flow-list-col">
-                  <div className="worship-flow-list-head">
-                    <strong>Escalas criadas</strong>
-                    <div className="worship-view-toggle">
-                      <button
-                        type="button"
-                        className={worshipViewMode === "list" ? "active" : ""}
-                        onClick={() => setWorshipViewMode("list")}
-                      >
-                        Lista
-                      </button>
-                      <button
-                        type="button"
-                        className={worshipViewMode === "calendar" ? "active" : ""}
-                        onClick={() => setWorshipViewMode("calendar")}
-                      >
-                        Calendário
-                      </button>
-                    </div>
-                  </div>
-
-              {worshipEmailModalEventId ? (() => {
-                const modalEvent = clientData.worshipEvents.find((e) => e.id === worshipEmailModalEventId);
-                const modalAssignments = clientData.worshipAssignmentsByEventId[worshipEmailModalEventId] ?? [];
-                const withEmail = modalAssignments.filter((a) => a.members?.email).length;
-                const lastCampaigns = worshipEmailCampaignsByEventId[worshipEmailModalEventId];
-                const lastCampaign = lastCampaigns?.[0];
-                return (
-                  <div
-                    className="modal-overlay"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Enviar escala por e-mail"
-                    onClick={() => setWorshipEmailModalEventId(null)}
-                  >
-                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
-                      <div className="modal-header">
-                        <div>
-                          <span>Louvor</span>
-                          <h2 className="modal-title-compact">Enviar escala por e-mail</h2>
-                        </div>
-                        <button className="modal-close" type="button" onClick={() => setWorshipEmailModalEventId(null)}>
-                          <X size={18} />
-                        </button>
-                      </div>
-
-                      <div className="modal-body">
-                        <div className="worship-email-summary">
-                          <div><span>Escalados</span><strong>{modalAssignments.length}</strong></div>
-                          <div><span>Com e-mail</span><strong>{withEmail}</strong></div>
-                          {lastCampaign ? (
-                            <div>
-                              <span>Último envio</span>
-                              <strong>{new Date(lastCampaign.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <p className="worship-email-hint">
-                          Evento: {modalEvent?.title ?? "Evento"}
-                        </p>
-                        <p className="worship-email-hint">
-                          Cada escalado com e-mail cadastrado receberá uma mensagem com os dados do evento e sua função.
-                        </p>
-
-                        {modalAssignments.length > 0 && modalEvent ? (
-                          <div className="worship-whatsapp-list">
-                            <span className="worship-whatsapp-list-title">Links WhatsApp por escalado</span>
-                            {modalAssignments.map((a) => {
-                              const cleanPhone = (a.members?.phone ?? "").replace(/\D/g, "");
-                              const waLink = buildWhatsAppLink(a, modalEvent);
-                              const waLinkWithPhone = cleanPhone
-                                ? waLink.replace("https://wa.me/?text=", `https://wa.me/55${cleanPhone}?text=`)
-                                : waLink;
-                              return (
-                                <div key={a.id} className="worship-whatsapp-row">
-                                  <div>
-                                    <strong>{a.members?.name ?? "Membro"}</strong>
-                                    <small>{a.worship_roles?.name ?? a.role_name ?? "Função"}</small>
-                                  </div>
-                                  <a
-                                    href={waLinkWithPhone}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="worship-whatsapp-btn"
-                                  >
-                                    WhatsApp
-                                  </a>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-
-                        {worshipEmailFeedback && worshipEmailFeedbackType === "error" ? (
-                          <p className="login-feedback error">{worshipEmailFeedback}</p>
-                        ) : null}
-
-                        <div className="modal-actions">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => setWorshipEmailModalEventId(null)}
-                            disabled={worshipEmailSending}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            type="button"
-                            icon={<Send size={16} />}
-                            onClick={handleSendWorshipEmails}
-                            disabled={worshipEmailSending || withEmail === 0}
-                          >
-                            {worshipEmailSending ? "Enviando..." : "Enviar"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })() : null}
-
-              {worshipViewMode === "calendar" ? (
-                (() => {
-                  const year = worshipCalendarMonth.getFullYear();
-                  const month = worshipCalendarMonth.getMonth();
-                  const firstDay = new Date(year, month, 1).getDay();
-                  const daysInMonth = new Date(year, month + 1, 0).getDate();
-                  const monthName = worshipCalendarMonth.toLocaleString("pt-BR", { month: "long", year: "numeric" });
-                  const eventsByDay: Record<number, WorshipEventRecord[]> = {};
-                  for (const evt of clientData.worshipEvents) {
-                    const d = new Date(evt.starts_at);
-                    if (d.getFullYear() === year && d.getMonth() === month) {
-                      const day = d.getDate();
-                      if (!eventsByDay[day]) eventsByDay[day] = [];
-                      eventsByDay[day].push(evt);
-                    }
-                  }
-                  const cells: (number | null)[] = [
-                    ...Array(firstDay === 0 ? 6 : firstDay - 1).fill(null),
-                    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-                  ];
-                  while (cells.length % 7 !== 0) cells.push(null);
-                  const today = new Date();
-                  return (
-                    <div className="worship-calendar">
-                      <div className="worship-calendar-nav">
-                        <button
-                          type="button"
-                          onClick={() => setWorshipCalendarMonth(new Date(year, month - 1, 1))}
-                        >
-                          ‹
-                        </button>
-                        <strong>{monthName}</strong>
-                        <button
-                          type="button"
-                          onClick={() => setWorshipCalendarMonth(new Date(year, month + 1, 1))}
-                        >
-                          ›
-                        </button>
-                      </div>
-                      <div className="worship-calendar-grid">
-                        {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (
-                          <div key={d} className="worship-calendar-weekday">{d}</div>
-                        ))}
-                        {cells.map((day, i) => {
-                          const isToday =
-                            day !== null &&
-                            today.getFullYear() === year &&
-                            today.getMonth() === month &&
-                            today.getDate() === day;
-                          const dayEvents = day !== null ? (eventsByDay[day] ?? []) : [];
-                          return (
-                            <div
-                              key={i}
-                              className={`worship-calendar-cell${day === null ? " empty" : ""}${isToday ? " today" : ""}`}
-                            >
-                              {day !== null ? (
-                                <>
-                                  <span className="worship-calendar-day">{day}</span>
-                                  {dayEvents.map((evt) => (
-                                    <div
-                                      key={evt.id}
-                                      className={`worship-calendar-event ${evt.event_type}`}
-                                      title={evt.title}
-                                      onClick={() => canManageWorship && openEditWorshipEvent(evt)}
-                                    >
-                                      {evt.title}
-                                    </div>
-                                  ))}
-                                </>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()
-              ) : (
-                <div className="worship-event-list">
-                  {clientData.worshipEvents.length === 0 ? (
-                    <div className="catalog-empty">Nenhuma escala de louvor criada ainda.</div>
-                  ) : null}
-
-                  {clientData.worshipEvents.map((item) => {
-                    const assignments = clientData.worshipAssignmentsByEventId[item.id] ?? [];
-                    return (
-                      <section key={item.id} className="worship-event-card">
-                        <header>
-                          <div>
-                            <strong>{item.title}</strong>
-                            <small>
-                              {new Date(item.starts_at).toLocaleString("pt-BR")} {item.location ? `- ${item.location}` : ""}
-                            </small>
-                          </div>
-                          <div className="worship-event-actions">
-                            <em className={item.status === "published" ? "success" : "warning"}>{worshipStatusLabel(item.status)}</em>
-                            {canManageWorship && assignments.length > 0 ? (
-                              <button
-                                type="button"
-                                className="worship-email-btn"
-                                onClick={() => openWorshipEmailModal(item.id)}
-                                title="Enviar escala por e-mail"
-                              >
-                                <Mail size={15} />
-                                <span>E-mails</span>
-                              </button>
-                            ) : null}
-                            {canManageWorship ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="worship-action-btn"
-                                  onClick={() => openEditWorshipEvent(item)}
-                                  title="Editar evento"
-                                >
-                                  <Edit3 size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="worship-action-btn danger"
-                                  onClick={() => {
-                                    if (window.confirm(`Excluir "${item.title}" e todos os escalados?`)) {
-                                      void handleDeleteWorshipEvent(item.id);
-                                    }
-                                  }}
-                                  title="Excluir evento"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </>
-                            ) : null}
-                          </div>
-                        </header>
-
-                        {(() => {
-                          const campaigns = worshipEmailCampaignsByEventId[item.id];
-                          const last = campaigns?.[0];
-                          if (!last) return null;
-                          return (
-                            <div className="worship-email-last-campaign">
-                              <Mail size={13} />
-                              <span>
-                                Último envio: {last.sent_count} enviado{last.sent_count === 1 ? "" : "s"}
-                                {last.failed_count > 0 ? `, ${last.failed_count} falha${last.failed_count === 1 ? "" : "s"}` : ""}
-                                {" · "}{emailCampaignStatusLabel(last.status)}
-                              </span>
-                            </div>
-                          );
-                        })()}
-
-                        <div className="worship-assignment-list">
-                          {assignments.length === 0 ? (
-                            <span className="catalog-empty compact">Nenhum escalado neste evento.</span>
-                          ) : null}
-                          {assignments.map((assignment) => (
-                            <div key={assignment.id} className="worship-assignment-row">
-                              <div>
-                                <strong>{assignment.members?.name ?? "Membro"}</strong>
-                                <small>{assignment.worship_roles?.name ?? assignment.role_name ?? "Funcao"}</small>
-                              </div>
-                              <div className="worship-assignment-row-actions">
-                                <em className={assignment.status === "confirmed" ? "success" : assignment.status === "declined" ? "danger" : "warning"}>
-                                  {worshipAssignmentStatusLabel(assignment.status)}
-                                </em>
-                                {assignment.decline_reason ? (
-                                  <small className="worship-decline-reason" title={assignment.decline_reason}>
-                                    Motivo: {assignment.decline_reason}
-                                  </small>
-                                ) : null}
-                                {canManageWorship ? (
-                                  <button
-                                    type="button"
-                                    className="worship-action-btn danger small"
-                                    onClick={() => {
-                                      if (window.confirm(`Remover ${assignment.members?.name ?? "escalado"} da escala?`)) {
-                                        void handleDeleteWorshipAssignment(assignment.id, item.id);
-                                      }
-                                    }}
-                                    title="Remover escalado"
-                                  >
-                                    <X size={13} />
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              )}
-                </div>
               </div>
             </article>
           ) : null}
@@ -12660,7 +12716,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <section className="catalog-panel" aria-label="Lista de cargos">
                   <div className="catalog-header">
                     <strong>Cargos</strong>
-                    <small>Use nos cadastros do seu tenant. A base do sistema é compartilhada.</small>
+                    <small>Use nos cadastros da sua igreja. A base do sistema é compartilhada.</small>
                   </div>
 
                   {isTenantAdmin ? (
@@ -12730,7 +12786,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <section className="catalog-panel" aria-label="Lista de ministérios">
                   <div className="catalog-header">
                     <strong>Ministérios</strong>
-                    <small>Base de referência + itens do seu tenant para manter a nomenclatura local.</small>
+                    <small>Base de referência + ministérios da sua igreja para manter a nomenclatura local.</small>
                   </div>
 
                   {isTenantAdmin ? (
@@ -12935,7 +12991,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <label
                             key={module.id}
                             className={`check-row compact${!isActiveForTenant ? " check-row-disabled" : ""}`}
-                            title={!isActiveForTenant ? "Módulo não ativado para este tenant" : undefined}
+                            title={!isActiveForTenant ? "Módulo não ativado para esta igreja" : undefined}
                           >
                             <input
                               type="checkbox"
@@ -13153,7 +13209,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="modal-section">
                 <div className="modal-section-header">
                   <strong>Dependentes</strong>
-                  <small>Vincule membros do tenant a esta família e marque o responsável principal.</small>
+                  <small>Vincule membros da igreja a esta família e marque o responsável principal.</small>
                 </div>
 
                 <div className="family-add-grid">
@@ -13471,7 +13527,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="modal-section">
                 <div className="modal-section-header">
                   <strong>Cargos</strong>
-                  <small>Vínculos de função no tenant (base do sistema + lista do seu tenant).</small>
+                  <small>Vínculos de função na igreja (base do sistema + lista do seu tenant).</small>
                 </div>
                 <div className="check-grid">
                   {clientData.catalogRoles.map((role) => (
@@ -13542,7 +13598,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <div className="modal-section">
                   <div className="modal-section-header">
                     <strong>Acesso administrativo por módulo</strong>
-                    <small>Libere módulos para este membro administrar. Apenas módulos ativos no tenant aparecerão no menu do membro.</small>
+                    <small>Libere módulos para este membro administrar. Apenas módulos ativos na igreja aparecerão no menu do membro.</small>
                   </div>
                   <div className="check-grid">
                     {clientData.allPlatformModules.map((module) => {
@@ -14080,7 +14136,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   >
                     {pushComposerModule === "worship" ? (
                       <>
-                        <option value="worship_ministry">Membros do ministério de Louvor</option>
+                        <option value="worship_ministry">Membros de arte (Louvor/Mídia/Som/Dança/Iluminação)</option>
                         <option value="worship_admins">Admins do módulo</option>
                         <option value="worship_selected">Selecionar usuários</option>
                       </>
@@ -14226,6 +14282,346 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           </div>
         </div>
       ) : null}
+
+      {worshipMembersModalOpen ? (
+        <div className="modal-overlay" onClick={() => setWorshipMembersModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+            <div className="modal-header">
+              <div>
+                <UsersRound size={20} />
+                <strong>Integrantes do Ministério</strong>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setWorshipMembersModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="modal-grid">
+                <label style={{ gridColumn: "span 2" }}>
+                  <span>Buscar</span>
+                  <input
+                    className="catalog-input"
+                    placeholder="Nome, e-mail, telefone ou vínculos..."
+                    value={worshipEligibleSearch}
+                    onChange={(e) => setWorshipEligibleSearch(e.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <small style={{ color: "var(--color-text-secondary)" }}>
+                  {worshipAssignableMembers.length} elegível(eis) · {worshipEligibleMembers.length} exibido(s)
+                </small>
+                <small style={{ color: "var(--color-text-secondary)" }}>
+                  Clique em “Push” para abrir o envio já filtrado para o usuário.
+                </small>
+              </div>
+
+              <div style={{ marginTop: 10, border: "1px solid var(--color-border)", borderRadius: 10, overflow: "auto" }}>
+                <MaterialReactTable
+                  columns={worshipMembersColumns}
+                  data={worshipEligibleMembers}
+                  enableColumnActions={false}
+                  enableColumnFilters={false}
+                  enableDensityToggle={false}
+                  enableFullScreenToggle={false}
+                  enablePagination={false}
+                  enableSorting={true}
+                  enableTopToolbar={false}
+                  muiTablePaperProps={{ elevation: 0, style: { boxShadow: "none" } }}
+                  muiTableBodyCellProps={{ sx: { borderBottom: "1px solid var(--color-border)" } }}
+                  muiTableHeadCellProps={{ sx: { borderBottom: "1px solid var(--color-border)" } }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {worshipEventsModalOpen ? (
+        <div className="modal-overlay" onClick={() => setWorshipEventsModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+            <div className="modal-header">
+              <div>
+                <CalendarDays size={20} />
+                <strong>Eventos & escalas — Louvor</strong>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setWorshipEventsModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {clientData?.worshipEvents.length === 0 ? (
+                <div className="catalog-empty">Nenhum evento de louvor cadastrado.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {clientData.worshipEvents
+                    .slice()
+                    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+                    .map((evt) => {
+                      const assignments = clientData.worshipAssignmentsByEventId[evt.id] ?? [];
+                      const dateLabel = new Date(evt.starts_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                      return (
+                        <details key={evt.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}>
+                          <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <strong style={{ fontSize: "0.95rem" }}>{evt.title}</strong>
+                              <small style={{ color: "var(--color-text-secondary)" }}>
+                                {dateLabel}{evt.location ? ` · ${evt.location}` : ""} · {assignments.length} escalado(s)
+                              </small>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                              <em className={evt.status === "published" ? "success" : evt.status === "cancelled" ? "danger" : "warning"}>
+                                {worshipStatusLabel(evt.status)}
+                              </em>
+                              {canManageWorship && assignments.length > 0 ? (
+                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail">
+                                  <Mail size={15} />
+                                  <span>E-mails</span>
+                                </button>
+                              ) : null}
+                              {canManageWorship ? (
+                                <>
+                                  <button type="button" className="worship-action-btn" onClick={() => { openEditWorshipEvent(evt); setWorshipEventsModalOpen(false); }} title="Editar evento">
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="worship-action-btn danger"
+                                    onClick={() => {
+                                      if (window.confirm(`Excluir "${evt.title}" e todos os escalados?`)) {
+                                        void handleDeleteWorshipEvent(evt.id);
+                                      }
+                                    }}
+                                    title="Excluir evento"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </summary>
+
+                          {assignments.length === 0 ? (
+                            <div className="catalog-empty compact" style={{ marginTop: 10 }}>Nenhum escalado neste evento.</div>
+                          ) : (
+                            <div style={{ marginTop: 10, border: "1px solid var(--color-border)", borderRadius: 10, overflow: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Membro</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Função</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Status</th>
+                                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>Obs.</th>
+                                    {canManageWorship ? (
+                                      <th style={{ textAlign: "right", padding: "10px 12px", fontSize: "0.8rem", color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }} />
+                                    ) : null}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {assignments.map((a) => (
+                                    <tr key={a.id}>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                        <strong style={{ fontSize: "0.9rem" }}>{a.members?.name ?? "Membro"}</strong>
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                                        {a.worship_roles?.name ?? a.role_name ?? "—"}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                        <em className={a.status === "confirmed" ? "success" : a.status === "declined" ? "danger" : "warning"}>
+                                          {worshipAssignmentStatusLabel(a.status)}
+                                        </em>
+                                        {a.decline_reason ? (
+                                          <div style={{ marginTop: 4, color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                                            Motivo: {a.decline_reason}
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                                        {a.notes ?? "—"}
+                                      </td>
+                                      {canManageWorship ? (
+                                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", textAlign: "right" }}>
+                                          <button
+                                            type="button"
+                                            className="worship-action-btn danger small"
+                                            onClick={() => {
+                                              if (window.confirm(`Remover ${a.members?.name ?? "escalado"} da escala?`)) {
+                                                void handleDeleteWorshipAssignment(a.id, evt.id);
+                                              }
+                                            }}
+                                            title="Remover escalado"
+                                          >
+                                            <X size={13} />
+                                          </button>
+                                        </td>
+                                      ) : null}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </details>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {worshipDeclinesModalOpen ? (
+        <div className="modal-overlay" onClick={() => setWorshipDeclinesModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+            <div className="modal-header">
+              <div>
+                <X size={20} />
+                <strong>
+                  Recusas de escala
+                  {worshipDeclineEventTitle ? ` — Evento: ${worshipDeclineEventTitle}` : ""}
+                  {worshipDeclineMemberName ? ` — Membro: ${worshipDeclineMemberName}` : ""}
+                </strong>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setWorshipDeclinesModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <small style={{ color: "var(--color-text-secondary)" }}>
+                  {worshipDeclineRows.length} recusa(s) encontrada(s)
+                </small>
+                {worshipDeclinesMemberId || worshipDeclinesEventId ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setWorshipDeclinesMemberId(null);
+                      setWorshipDeclinesEventId(null);
+                    }}
+                  >
+                    Ver todas
+                  </Button>
+                ) : null}
+              </div>
+              <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, overflow: "auto" }}>
+                <MaterialReactTable
+                  columns={worshipDeclineColumns}
+                  data={worshipDeclineRows}
+                  enableColumnActions={false}
+                  enableColumnFilters={false}
+                  enableDensityToggle={false}
+                  enableFullScreenToggle={false}
+                  enablePagination={false}
+                  enableSorting={true}
+                  enableTopToolbar={false}
+                  muiTablePaperProps={{ elevation: 0, style: { boxShadow: "none" } }}
+                  muiTableBodyCellProps={{ sx: { borderBottom: "1px solid var(--color-border)" } }}
+                  muiTableHeadCellProps={{ sx: { borderBottom: "1px solid var(--color-border)" } }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {worshipEmailModalEventId ? (() => {
+        if (!clientData) return null;
+        const modalEvent = clientData.worshipEvents.find((e) => e.id === worshipEmailModalEventId);
+        const modalAssignments = clientData.worshipAssignmentsByEventId[worshipEmailModalEventId] ?? [];
+        const withEmail = modalAssignments.filter((a) => a.members?.email).length;
+        const lastCampaigns = worshipEmailCampaignsByEventId[worshipEmailModalEventId];
+        const lastCampaign = lastCampaigns?.[0];
+        return (
+          <div
+            className="modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Enviar escala por e-mail"
+            onClick={() => setWorshipEmailModalEventId(null)}
+          >
+            <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+              <div className="modal-header">
+                <div>
+                  <span>Louvor</span>
+                  <h2 className="modal-title-compact">Enviar escala por e-mail</h2>
+                </div>
+                <button className="modal-close" type="button" onClick={() => setWorshipEmailModalEventId(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div className="worship-email-summary">
+                  <div><span>Escalados</span><strong>{modalAssignments.length}</strong></div>
+                  <div><span>Com e-mail</span><strong>{withEmail}</strong></div>
+                  {lastCampaign ? (
+                    <div>
+                      <span>Último envio</span>
+                      <strong>{new Date(lastCampaign.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong>
+                    </div>
+                  ) : null}
+                </div>
+
+                <p className="worship-email-hint">
+                  Evento: {modalEvent?.title ?? "Evento"}
+                </p>
+                <p className="worship-email-hint">
+                  Cada escalado com e-mail cadastrado receberá uma mensagem com os dados do evento e sua função.
+                </p>
+
+                {modalAssignments.length > 0 && modalEvent ? (
+                  <div className="worship-whatsapp-list">
+                    <span className="worship-whatsapp-list-title">Links WhatsApp por escalado</span>
+                    {modalAssignments.map((a) => {
+                      const cleanPhone = (a.members?.phone ?? "").replace(/\D/g, "");
+                      const waLink = buildWhatsAppLink(a, modalEvent);
+                      const waLinkWithPhone = cleanPhone
+                        ? waLink.replace("https://wa.me/?text=", `https://wa.me/55${cleanPhone}?text=`)
+                        : waLink;
+                      return (
+                        <div key={a.id} className="worship-whatsapp-row">
+                          <div>
+                            <strong>{a.members?.name ?? "Membro"}</strong>
+                            <small>{a.worship_roles?.name ?? a.role_name ?? "Função"}</small>
+                          </div>
+                          <a
+                            href={waLinkWithPhone}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="worship-whatsapp-btn"
+                          >
+                            WhatsApp
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {worshipEmailFeedback && worshipEmailFeedbackType === "error" ? (
+                  <p className="login-feedback error">{worshipEmailFeedback}</p>
+                ) : null}
+
+                <div className="modal-actions">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setWorshipEmailModalEventId(null)}
+                    disabled={worshipEmailSending}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    icon={<Send size={16} />}
+                    onClick={handleSendWorshipEmails}
+                    disabled={worshipEmailSending || withEmail === 0}
+                  >
+                    {worshipEmailSending ? "Enviando..." : "Enviar"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
 
       {/* ── Modal: Criar / Editar Comunicado ────────────────────────────── */}
       {isAnnouncementFormOpen ? (
