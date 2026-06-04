@@ -2923,15 +2923,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   async function loadIntercessionData(tenantId: string) {
     setIntercessionLoadStatus("loading");
 
-    // Resolve ministry id for "Intercessão" (system or tenant-level)
-    const { data: ministryRow } = await supabase
+    // Resolve ministry ids for "Intercessão" (system or tenant-level)
+    const { data: ministryRows } = await supabase
       .from("catalog_ministries")
-      .select("id")
+      .select("id, name")
       .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
-      .ilike("name", "Intercessão")
+      .ilike("name", "%Intercess%")
       .order("tenant_id", { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle<{ id: string }>();
+      .limit(10)
+      .returns<Array<{ id: string; name: string }>>();
+    const intercessionMinistryIds = Array.from(new Set((ministryRows ?? []).map((row) => row.id)));
 
     const [requestsResult, assignmentsResult, moderationSettingResult] = await Promise.all([
       supabase
@@ -2966,24 +2967,25 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setIntercessionModerationEnabled(moderationSettingResult.data?.value === "true");
 
     // Load intercessors (members of the Intercessão ministry)
-    if (ministryRow?.id) {
+    if (intercessionMinistryIds.length > 0) {
       const { data: memberMinistries } = await supabase
         .from("member_ministries")
         .select("member_id, members(id, name, profiles(id))")
         .eq("tenant_id", tenantId)
-        .eq("ministry_id", ministryRow.id)
+        .in("ministry_id", intercessionMinistryIds)
         .returns<Array<{ member_id: string; members: { id: string; name: string; profiles: { id: string }[] } | null }>>();
 
-      const intercessors: IntercessorMember[] = (memberMinistries ?? [])
-        .filter((mm) => mm.members)
-        .map((mm) => ({
-          id: mm.members!.id,
-          name: mm.members!.name,
-          profile_id: Array.isArray(mm.members!.profiles) && mm.members!.profiles.length > 0
-            ? mm.members!.profiles[0].id
-            : null,
-        }));
-      setIntercessionMembers(intercessors);
+      const byMemberId = new Map<string, IntercessorMember>();
+      for (const mm of memberMinistries ?? []) {
+        if (!mm.members?.id) continue;
+        if (byMemberId.has(mm.members.id)) continue;
+        byMemberId.set(mm.members.id, {
+          id: mm.members.id,
+          name: mm.members.name,
+          profile_id: Array.isArray(mm.members.profiles) && mm.members.profiles.length > 0 ? mm.members.profiles[0].id : null,
+        });
+      }
+      setIntercessionMembers(Array.from(byMemberId.values()).sort((a, b) => a.name.localeCompare(b.name)));
     } else {
       setIntercessionMembers([]);
     }
@@ -7245,7 +7247,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const normalizedToken = raw.startsWith("kids-pass:") ? raw.slice("kids-pass:".length) : raw;
+    const normalizedToken = raw;
     setKidsSaveStatus("loading");
     setKidsSaveMessage("");
 
@@ -8952,83 +8954,96 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 const lastCampaigns = worshipEmailCampaignsByEventId[worshipEmailModalEventId];
                 const lastCampaign = lastCampaigns?.[0];
                 return (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet worship-email-modal">
-                      <div className="modal-section-header">
-                        <Send size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Enviar escala por e-mail"
+                    onClick={() => setWorshipEmailModalEventId(null)}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>Enviar escala por e-mail</strong>
-                          <small>{modalEvent?.title ?? "Evento"}</small>
+                          <span>Louvor</span>
+                          <h2 className="modal-title-compact">Enviar escala por e-mail</h2>
                         </div>
+                        <button className="modal-close" type="button" onClick={() => setWorshipEmailModalEventId(null)}>
+                          <X size={18} />
+                        </button>
                       </div>
 
-                      <div className="worship-email-summary">
-                        <div><span>Escalados</span><strong>{modalAssignments.length}</strong></div>
-                        <div><span>Com e-mail</span><strong>{withEmail}</strong></div>
-                        {lastCampaign ? (
-                          <div>
-                            <span>Último envio</span>
-                            <strong>{new Date(lastCampaign.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong>
+                      <div className="modal-body">
+                        <div className="worship-email-summary">
+                          <div><span>Escalados</span><strong>{modalAssignments.length}</strong></div>
+                          <div><span>Com e-mail</span><strong>{withEmail}</strong></div>
+                          {lastCampaign ? (
+                            <div>
+                              <span>Último envio</span>
+                              <strong>{new Date(lastCampaign.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <p className="worship-email-hint">
+                          Evento: {modalEvent?.title ?? "Evento"}
+                        </p>
+                        <p className="worship-email-hint">
+                          Cada escalado com e-mail cadastrado receberá uma mensagem com os dados do evento e sua função.
+                        </p>
+
+                        {modalAssignments.length > 0 && modalEvent ? (
+                          <div className="worship-whatsapp-list">
+                            <span className="worship-whatsapp-list-title">Links WhatsApp por escalado</span>
+                            {modalAssignments.map((a) => {
+                              const cleanPhone = (a.members?.phone ?? "").replace(/\D/g, "");
+                              const waLink = buildWhatsAppLink(a, modalEvent);
+                              const waLinkWithPhone = cleanPhone
+                                ? waLink.replace("https://wa.me/?text=", `https://wa.me/55${cleanPhone}?text=`)
+                                : waLink;
+                              return (
+                                <div key={a.id} className="worship-whatsapp-row">
+                                  <div>
+                                    <strong>{a.members?.name ?? "Membro"}</strong>
+                                    <small>{a.worship_roles?.name ?? a.role_name ?? "Função"}</small>
+                                  </div>
+                                  <a
+                                    href={waLinkWithPhone}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="worship-whatsapp-btn"
+                                  >
+                                    WhatsApp
+                                  </a>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : null}
-                      </div>
 
-                      <p className="worship-email-hint">
-                        Cada escalado com e-mail cadastrado receberá uma mensagem com os dados do evento e sua função.
-                      </p>
+                        {worshipEmailFeedback && worshipEmailFeedbackType === "error" ? (
+                          <p className="login-feedback error">{worshipEmailFeedback}</p>
+                        ) : null}
 
-                      {modalAssignments.length > 0 && modalEvent ? (
-                        <div className="worship-whatsapp-list">
-                          <span className="worship-whatsapp-list-title">Links WhatsApp por escalado</span>
-                          {modalAssignments.map((a) => {
-                            const cleanPhone = (a.members?.phone ?? "").replace(/\D/g, "");
-                            const waLink = buildWhatsAppLink(a, modalEvent);
-                            const waLinkWithPhone = cleanPhone
-                              ? waLink.replace("https://wa.me/?text=", `https://wa.me/55${cleanPhone}?text=`)
-                              : waLink;
-                            return (
-                              <div key={a.id} className="worship-whatsapp-row">
-                                <div>
-                                  <strong>{a.members?.name ?? "Membro"}</strong>
-                                  <small>{a.worship_roles?.name ?? a.role_name ?? "Função"}</small>
-                                </div>
-                                <a
-                                  href={waLinkWithPhone}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="worship-whatsapp-btn"
-                                >
-                                  WhatsApp
-                                </a>
-                              </div>
-                            );
-                          })}
+                        <div className="modal-actions">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setWorshipEmailModalEventId(null)}
+                            disabled={worshipEmailSending}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="button"
+                            icon={<Send size={16} />}
+                            onClick={handleSendWorshipEmails}
+                            disabled={worshipEmailSending || withEmail === 0}
+                          >
+                            {worshipEmailSending ? "Enviando..." : "Enviar"}
+                          </Button>
                         </div>
-                      ) : null}
-
-                      {worshipEmailFeedback && worshipEmailFeedbackType === "error" ? (
-                        <p className="login-feedback error">{worshipEmailFeedback}</p>
-                      ) : null}
-
-                      <div className="modal-actions">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => setWorshipEmailModalEventId(null)}
-                          disabled={worshipEmailSending}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button
-                          type="button"
-                          icon={<Send size={16} />}
-                          onClick={handleSendWorshipEmails}
-                          disabled={worshipEmailSending || withEmail === 0}
-                        >
-                          {worshipEmailSending ? "Enviando..." : "Enviar"}
-                        </Button>
                       </div>
-                    </section>
+                    </div>
                   </div>
                 );
               })() : null}
@@ -9370,49 +9385,68 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                 {/* ── Modal: comprovante ── */}
                 {receiptTx ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet worship-email-modal">
-                      <div className="modal-section-header">
-                        <Receipt size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Comprovante de lançamento"
+                    onClick={() => setFinancialReceiptTransactionId(null)}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>Comprovante de lançamento</strong>
-                          <small>{receiptTx.description}</small>
+                          <span>Financeiro</span>
+                          <h2 className="modal-title-compact">Comprovante de lançamento</h2>
                         </div>
-                      </div>
-                      <div className="worship-email-summary">
-                        <div><span>Tipo</span><strong>{receiptTx.type === "income" ? "Receita" : "Despesa"}</strong></div>
-                        <div><span>Valor</span><strong style={{ color: receiptTx.type === "income" ? "var(--color-success)" : "var(--color-danger)" }}>{fmtCurrency(receiptTx.amount)}</strong></div>
-                        <div><span>Data</span><strong>{new Date(receiptTx.date + "T12:00:00").toLocaleDateString("pt-BR")}</strong></div>
-                        <div><span>Forma</span><strong>{paymentLabel(receiptTx.payment_method)}</strong></div>
-                      </div>
-                      {receiptTx.financial_categories?.name ? (
-                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Categoria: {receiptTx.financial_categories.name}</p>
-                      ) : null}
-                      {receiptTx.members?.name ? (
-                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Membro: {receiptTx.members.name}</p>
-                      ) : null}
-                      {receiptTx.notes ? (
-                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Obs: {receiptTx.notes}</p>
-                      ) : null}
-                      <div className="modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={() => setFinancialReceiptTransactionId(null)}>
-                          Fechar
+                        <button className="modal-close" type="button" onClick={() => setFinancialReceiptTransactionId(null)}>
+                          <X size={18} />
                         </button>
                       </div>
-                    </section>
+                      <div className="modal-body">
+                        <div className="worship-email-summary">
+                          <div><span>Tipo</span><strong>{receiptTx.type === "income" ? "Receita" : "Despesa"}</strong></div>
+                          <div><span>Valor</span><strong style={{ color: receiptTx.type === "income" ? "var(--color-success)" : "var(--color-danger)" }}>{fmtCurrency(receiptTx.amount)}</strong></div>
+                          <div><span>Data</span><strong>{new Date(receiptTx.date + "T12:00:00").toLocaleDateString("pt-BR")}</strong></div>
+                          <div><span>Forma</span><strong>{paymentLabel(receiptTx.payment_method)}</strong></div>
+                        </div>
+                        <p className="worship-email-hint">{receiptTx.description}</p>
+                        {receiptTx.financial_categories?.name ? (
+                          <p className="worship-email-hint">Categoria: {receiptTx.financial_categories.name}</p>
+                        ) : null}
+                        {receiptTx.members?.name ? (
+                          <p className="worship-email-hint">Membro: {receiptTx.members.name}</p>
+                        ) : null}
+                        {receiptTx.notes ? (
+                          <p className="worship-email-hint">Obs: {receiptTx.notes}</p>
+                        ) : null}
+                        <div className="modal-actions">
+                          <Button type="button" variant="secondary" onClick={() => setFinancialReceiptTransactionId(null)}>
+                            Fechar
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: novo / editar lançamento ── */}
                 {isFinancialTransactionFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <DollarSign size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={financialTransactionForm.id ? "Editar lançamento" : "Novo lançamento"}
+                    onClick={() => setIsFinancialTransactionFormOpen(false)}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>{financialTransactionForm.id ? "Editar lançamento" : "Novo lançamento"}</strong>
-                          <small>Registre uma receita ou despesa da igreja.</small>
+                          <span>Financeiro</span>
+                          <h2 className="modal-title-compact">{financialTransactionForm.id ? "Editar lançamento" : "Novo lançamento"}</h2>
                         </div>
+                        <button className="modal-close" type="button" onClick={() => setIsFinancialTransactionFormOpen(false)}>
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleFinancialTransactionSubmit}>
                         <div className="modal-grid">
@@ -9524,7 +9558,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           </Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
@@ -10313,99 +10347,120 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               )}
 
               {isBibleSchoolClassFormOpen ? (
-                <div className="modal-backdrop">
-                  <section className="modal-sheet">
-                    <div className="modal-section-header">
-                      <strong>{bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}</strong>
-                      <button type="button" onClick={() => setIsBibleSchoolClassFormOpen(false)} aria-label="Fechar">
+                <div
+                  className="modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}
+                  onClick={() => setIsBibleSchoolClassFormOpen(false)}
+                >
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Escola Bíblica</span>
+                        <h2 className="modal-title-compact">{bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}</h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setIsBibleSchoolClassFormOpen(false)} aria-label="Fechar">
                         <X size={18} />
                       </button>
                     </div>
-                    <form className="tenant-form" onSubmit={handleBibleSchoolClassSubmit}>
-                      <label>
-                        <span>Nome</span>
-                        <input
-                          value={bibleSchoolClassForm.name}
-                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, name: e.target.value }))}
-                          placeholder="Ex.: 1º Trimestre 2026"
-                        />
-                      </label>
-                      <label>
-                        <span>Descrição</span>
-                        <input
-                          value={bibleSchoolClassForm.description}
-                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, description: e.target.value }))}
-                          placeholder="Opcional"
-                        />
-                      </label>
-                      <label>
-                        <span>Início</span>
-                        <input
-                          type="date"
-                          value={bibleSchoolClassForm.starts_at}
-                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, starts_at: e.target.value }))}
-                        />
-                      </label>
-                      <label>
-                        <span>Fim</span>
-                        <input
-                          type="date"
-                          value={bibleSchoolClassForm.ends_at}
-                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, ends_at: e.target.value }))}
-                        />
-                      </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                        <input
-                          type="checkbox"
-                          checked={bibleSchoolClassForm.is_active}
-                          onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, is_active: e.target.checked }))}
-                        />
-                        <span style={{ fontSize: "0.9rem", fontWeight: 700 }}>Turma ativa</span>
-                      </label>
-                      <label style={{ gridColumn: "span 2" }}>
-                        <span>Professores (membros)</span>
-                        <select
-                          multiple
-                          value={bibleSchoolClassForm.teacherMemberIds}
-                          onChange={(e) => {
-                            const values = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-                            setBibleSchoolClassForm((c) => ({ ...c, teacherMemberIds: values }));
-                          }}
-                          style={{ minHeight: 140 }}
-                        >
-                          {clientData.members
-                            .slice()
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <div className="tenant-form-actions">
-                        <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
-                          {bibleSchoolStatus === "loading" ? "Salvando..." : "Salvar"}
-                        </Button>
-                        <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolClassFormOpen(false)}>
-                          Cancelar
-                        </button>
-                      </div>
-                    </form>
-                  </section>
+                    <div className="modal-body">
+                      <form className="tenant-form" onSubmit={handleBibleSchoolClassSubmit}>
+                        <label>
+                          <span>Nome</span>
+                          <input
+                            value={bibleSchoolClassForm.name}
+                            onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, name: e.target.value }))}
+                            placeholder="Ex.: 1º Trimestre 2026"
+                          />
+                        </label>
+                        <label>
+                          <span>Descrição</span>
+                          <input
+                            value={bibleSchoolClassForm.description}
+                            onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, description: e.target.value }))}
+                            placeholder="Opcional"
+                          />
+                        </label>
+                        <label>
+                          <span>Início</span>
+                          <input
+                            type="date"
+                            value={bibleSchoolClassForm.starts_at}
+                            onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, starts_at: e.target.value }))}
+                          />
+                        </label>
+                        <label>
+                          <span>Fim</span>
+                          <input
+                            type="date"
+                            value={bibleSchoolClassForm.ends_at}
+                            onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, ends_at: e.target.value }))}
+                          />
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={bibleSchoolClassForm.is_active}
+                            onChange={(e) => setBibleSchoolClassForm((c) => ({ ...c, is_active: e.target.checked }))}
+                          />
+                          <span style={{ fontSize: "0.9rem", fontWeight: 700 }}>Turma ativa</span>
+                        </label>
+                        <label style={{ gridColumn: "span 2" }}>
+                          <span>Professores (membros)</span>
+                          <select
+                            multiple
+                            value={bibleSchoolClassForm.teacherMemberIds}
+                            onChange={(e) => {
+                              const values = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+                              setBibleSchoolClassForm((c) => ({ ...c, teacherMemberIds: values }));
+                            }}
+                            style={{ minHeight: 140 }}
+                          >
+                            {clientData.members
+                              .slice()
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <div className="tenant-form-actions">
+                          <Button type="submit" disabled={bibleSchoolStatus === "loading"} icon={<Plus size={16} />}>
+                            {bibleSchoolStatus === "loading" ? "Salvando..." : "Salvar"}
+                          </Button>
+                          <button className="secondary-action" type="button" onClick={() => setIsBibleSchoolClassFormOpen(false)}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
               {isBibleSchoolStudentFormOpen ? (
-                <div className="modal-backdrop">
-                  <section className="modal-sheet">
-                    <div className="modal-section-header">
-                      <strong>Matricular aluno</strong>
-                      <button type="button" onClick={() => setIsBibleSchoolStudentFormOpen(false)} aria-label="Fechar">
+                <div
+                  className="modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Matricular aluno"
+                  onClick={() => setIsBibleSchoolStudentFormOpen(false)}
+                >
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Escola Bíblica</span>
+                        <h2 className="modal-title-compact">Matricular aluno</h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setIsBibleSchoolStudentFormOpen(false)} aria-label="Fechar">
                         <X size={18} />
                       </button>
                     </div>
-                    <form className="tenant-form" onSubmit={handleBibleSchoolStudentSubmit}>
+                    <div className="modal-body">
+                      <form className="tenant-form" onSubmit={handleBibleSchoolStudentSubmit}>
                       <label>
                         <span>Vincular a membro (opcional)</span>
                         <select
@@ -10464,20 +10519,31 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </button>
                       </div>
                     </form>
-                  </section>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
               {isBibleSchoolSessionFormOpen ? (
-                <div className="modal-backdrop">
-                  <section className="modal-sheet">
-                    <div className="modal-section-header">
-                      <strong>Nova aula</strong>
-                      <button type="button" onClick={() => setIsBibleSchoolSessionFormOpen(false)} aria-label="Fechar">
+                <div
+                  className="modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Nova aula"
+                  onClick={() => setIsBibleSchoolSessionFormOpen(false)}
+                >
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Escola Bíblica</span>
+                        <h2 className="modal-title-compact">Nova aula</h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setIsBibleSchoolSessionFormOpen(false)} aria-label="Fechar">
                         <X size={18} />
                       </button>
                     </div>
-                    <form className="tenant-form" onSubmit={handleBibleSchoolSessionSubmit}>
+                    <div className="modal-body">
+                      <form className="tenant-form" onSubmit={handleBibleSchoolSessionSubmit}>
                       <label>
                         <span>Data</span>
                         <input
@@ -10511,20 +10577,31 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </button>
                       </div>
                     </form>
-                  </section>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
               {isBibleSchoolMaterialFormOpen ? (
-                <div className="modal-backdrop">
-                  <section className="modal-sheet">
-                    <div className="modal-section-header">
-                      <strong>Novo material</strong>
-                      <button type="button" onClick={() => setIsBibleSchoolMaterialFormOpen(false)} aria-label="Fechar">
+                <div
+                  className="modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Novo material"
+                  onClick={() => setIsBibleSchoolMaterialFormOpen(false)}
+                >
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Escola Bíblica</span>
+                        <h2 className="modal-title-compact">Novo material</h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setIsBibleSchoolMaterialFormOpen(false)} aria-label="Fechar">
                         <X size={18} />
                       </button>
                     </div>
-                    <form className="tenant-form" onSubmit={handleBibleSchoolMaterialSubmit}>
+                    <div className="modal-body">
+                      <form className="tenant-form" onSubmit={handleBibleSchoolMaterialSubmit}>
                       <label>
                         <span>Título</span>
                         <input
@@ -10581,20 +10658,31 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </button>
                       </div>
                     </form>
-                  </section>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
               {isBibleSchoolGradeFormOpen ? (
-                <div className="modal-backdrop">
-                  <section className="modal-sheet">
-                    <div className="modal-section-header">
-                      <strong>Nova nota</strong>
-                      <button type="button" onClick={() => setIsBibleSchoolGradeFormOpen(false)} aria-label="Fechar">
+                <div
+                  className="modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Nova nota"
+                  onClick={() => setIsBibleSchoolGradeFormOpen(false)}
+                >
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                    <div className="modal-header">
+                      <div>
+                        <span>Escola Bíblica</span>
+                        <h2 className="modal-title-compact">Nova nota</h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setIsBibleSchoolGradeFormOpen(false)} aria-label="Fechar">
                         <X size={18} />
                       </button>
                     </div>
-                    <form className="tenant-form" onSubmit={handleBibleSchoolGradeSubmit}>
+                    <div className="modal-body">
+                      <form className="tenant-form" onSubmit={handleBibleSchoolGradeSubmit}>
                       <label style={{ gridColumn: "span 2" }}>
                         <span>Aluno (matrícula)</span>
                         <select
@@ -10650,7 +10738,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </button>
                       </div>
                     </form>
-                  </section>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </article>
@@ -10751,14 +10840,27 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                 {/* ── Modal: turma ── */}
                 {isKidsGroupFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <Baby size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={kidsGroupForm.id ? "Editar turma" : "Nova turma"}
+                    onClick={() => { setIsKidsGroupFormOpen(false); setKidsGroupForm(emptyKidsGroupForm); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>{kidsGroupForm.id ? "Editar turma" : "Nova turma"}</strong>
-                          <small>Defina nome, faixa etária e cor da turma.</small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">{kidsGroupForm.id ? "Editar turma" : "Nova turma"}</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsGroupFormOpen(false); setKidsGroupForm(emptyKidsGroupForm); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsGroupSubmit}>
                         <label>
@@ -10787,26 +10889,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           </div>
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsGroupFormOpen(false); setKidsGroupForm(emptyKidsGroupForm); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsGroupFormOpen(false); setKidsGroupForm(emptyKidsGroupForm); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsGroupForm.id ? "Salvar" : "Criar turma"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: criança ── */}
                 {isKidsChildFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <Baby size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={kidsChildForm.id ? "Editar criança" : "Cadastrar criança"}
+                    onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); setKidsChildSearch(""); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>{kidsChildForm.id ? "Editar criança" : "Cadastrar criança"}</strong>
-                          <small>
-                            Dica: se os pais já são membros, você pode vincular o cadastro da criança ao membro responsável usando o campo abaixo.
-                          </small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">{kidsChildForm.id ? "Editar criança" : "Cadastrar criança"}</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); setKidsChildSearch(""); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsChildSubmit}>
                         {(() => {
@@ -10952,24 +11065,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <textarea className="catalog-input catalog-textarea" rows={2} value={kidsChildForm.notes} onChange={(e) => setKidsChildForm((c) => ({ ...c, notes: e.target.value }))} />
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); setKidsChildSearch(""); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsChildFormOpen(false); setKidsChildForm(emptyKidsChildForm); setKidsChildSearch(""); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsChildForm.id ? "Salvar" : "Cadastrar"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: responsável ── */}
                 {isKidsGuardianFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <Users2 size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={kidsGuardianForm.id ? "Editar responsável" : "Adicionar responsável"}
+                    onClick={() => { setIsKidsGuardianFormOpen(false); setKidsGuardianForm(emptyKidsGuardianForm); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>{kidsGuardianForm.id ? "Editar responsável" : "Adicionar responsável"}</strong>
-                          <small>Informe os dados de quem irá buscar ou deixar a criança.</small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">{kidsGuardianForm.id ? "Editar responsável" : "Adicionar responsável"}</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsGuardianFormOpen(false); setKidsGuardianForm(emptyKidsGuardianForm); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsGuardianSubmit}>
                         <label>
@@ -11013,24 +11139,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <span>Responsável principal</span>
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsGuardianFormOpen(false); setKidsGuardianForm(emptyKidsGuardianForm); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsGuardianFormOpen(false); setKidsGuardianForm(emptyKidsGuardianForm); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsGuardianForm.id ? "Salvar" : "Adicionar"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: escala professor ── */}
                 {isKidsTeacherScheduleFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <CalendarCheck size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Escalar professor(a)"
+                    onClick={() => { setIsKidsTeacherScheduleFormOpen(false); setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>Escalar professor(a)</strong>
-                          <small>Adicione um membro como professor(a) da Escolinha para a data selecionada.</small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">Escalar professor(a)</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsTeacherScheduleFormOpen(false); setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsTeacherScheduleSubmit}>
                         <div className="modal-grid">
@@ -11062,24 +11201,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <input className="catalog-input" placeholder="Opcional" value={kidsTeacherScheduleForm.notes} onChange={(e) => setKidsTeacherScheduleForm((c) => ({ ...c, notes: e.target.value }))} />
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsTeacherScheduleFormOpen(false); setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsTeacherScheduleFormOpen(false); setKidsTeacherScheduleForm(emptyKidsTeacherScheduleForm); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : "Escalar"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: presença ── */}
                 {isKidsAttendanceFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <CheckCircle2 size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Registrar presença"
+                    onClick={() => { setIsKidsAttendanceFormOpen(false); setKidsAttendanceForm(emptyKidsAttendanceForm); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>Registrar presença</strong>
-                          <small>Registre o check-in de uma criança na Escolinha.</small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">Registrar presença</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsAttendanceFormOpen(false); setKidsAttendanceForm(emptyKidsAttendanceForm); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsAttendanceSubmit}>
                         <div className="modal-grid">
@@ -11111,24 +11263,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <input className="catalog-input" placeholder="Opcional" value={kidsAttendanceForm.notes} onChange={(e) => setKidsAttendanceForm((c) => ({ ...c, notes: e.target.value }))} />
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsAttendanceFormOpen(false); setKidsAttendanceForm(emptyKidsAttendanceForm); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsAttendanceFormOpen(false); setKidsAttendanceForm(emptyKidsAttendanceForm); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<CheckCircle2 size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : "Registrar check-in"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: atividade ── */}
                 {isKidsActivityFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <BookOpen size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={kidsActivityForm.id ? "Editar atividade" : "Nova atividade"}
+                    onClick={() => { setIsKidsActivityFormOpen(false); setKidsActivityForm(emptyKidsActivityForm); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>{kidsActivityForm.id ? "Editar atividade" : "Nova atividade"}</strong>
-                          <small>Registre a atividade ou lição do dia para uma turma.</small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">{kidsActivityForm.id ? "Editar atividade" : "Nova atividade"}</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsActivityFormOpen(false); setKidsActivityForm(emptyKidsActivityForm); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsActivitySubmit}>
                         <div className="modal-grid">
@@ -11153,24 +11318,37 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <textarea className="catalog-input catalog-textarea" rows={3} placeholder="Descreva a atividade, materiais necessários, links de apoio..." value={kidsActivityForm.description} onChange={(e) => setKidsActivityForm((c) => ({ ...c, description: e.target.value }))} />
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsActivityFormOpen(false); setKidsActivityForm(emptyKidsActivityForm); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsActivityFormOpen(false); setKidsActivityForm(emptyKidsActivityForm); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Plus size={16} />}>{kidsSaveStatus === "loading" ? "Salvando..." : kidsActivityForm.id ? "Salvar" : "Criar atividade"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Modal: comunicado ── */}
                 {isKidsCommunicationFormOpen ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet">
-                      <div className="modal-section-header">
-                        <MessageCircle size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Novo comunicado"
+                    onClick={() => { setIsKidsCommunicationFormOpen(false); setKidsCommunicationForm(emptyKidsCommunicationForm); }}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>Novo comunicado</strong>
-                          <small>Envie uma mensagem para os responsáveis de uma criança ou para todos.</small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">Novo comunicado</h2>
                         </div>
+                        <button
+                          className="modal-close"
+                          type="button"
+                          onClick={() => { setIsKidsCommunicationFormOpen(false); setKidsCommunicationForm(emptyKidsCommunicationForm); }}
+                          aria-label="Fechar"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
                       <form className="modal-body" onSubmit={handleKidsCommunicationSubmit}>
                         <label>
@@ -11197,90 +11375,111 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           </select>
                         </label>
                         <div className="modal-actions">
-                          <button type="button" className="btn btn-secondary" onClick={() => { setIsKidsCommunicationFormOpen(false); setKidsCommunicationForm(emptyKidsCommunicationForm); }}>Cancelar</button>
+                          <button type="button" className="secondary-action" onClick={() => { setIsKidsCommunicationFormOpen(false); setKidsCommunicationForm(emptyKidsCommunicationForm); }}>Cancelar</button>
                           <Button type="submit" disabled={kidsSaveStatus === "loading"} icon={<Send size={16} />}>{kidsSaveStatus === "loading" ? "Enviando..." : "Enviar comunicado"}</Button>
                         </div>
                       </form>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
                 {/* ── Painel de detalhes da criança ── */}
                 {selectedChild ? (
-                  <div className="modal-backdrop">
-                    <section className="modal-sheet worship-email-modal">
-                      <div className="modal-section-header">
-                        <Baby size={20} />
+                  <div
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Detalhes da criança"
+                    onClick={() => setKidsSelectedChildId(null)}
+                  >
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+                      <div className="modal-header">
                         <div>
-                          <strong>{selectedChild.name}</strong>
-                          <small>
-                            {selectedChild.date_of_birth
-                              ? `${new Date(selectedChild.date_of_birth + "T12:00:00").toLocaleDateString("pt-BR")} · ${calcAge(selectedChild.date_of_birth)} anos`
-                              : "Sem data de nascimento"}
-                            {selectedChild.kids_groups ? ` · ${selectedChild.kids_groups.name}` : ""}
-                          </small>
+                          <span>Kids</span>
+                          <h2 className="modal-title-compact">{selectedChild.name}</h2>
+                        </div>
+                        <button className="modal-close" type="button" onClick={() => setKidsSelectedChildId(null)} aria-label="Fechar">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <div className="modal-body">
+                        <p className="worship-email-hint" style={{ margin: 0 }}>
+                          {selectedChild.date_of_birth
+                            ? `${new Date(selectedChild.date_of_birth + "T12:00:00").toLocaleDateString("pt-BR")} · ${calcAge(selectedChild.date_of_birth)} anos`
+                            : "Sem data de nascimento"}
+                          {selectedChild.kids_groups ? ` · ${selectedChild.kids_groups.name}` : ""}
+                        </p>
+                        {selectedChild.allergies ? (
+                          <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 6, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}>
+                            <strong>⚠ Alergias:</strong> {selectedChild.allergies}
+                          </div>
+                        ) : null}
+                        {selectedChild.special_needs ? (
+                          <div style={{ background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 6, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}>
+                            <strong>ℹ Necessidades especiais:</strong> {selectedChild.special_needs}
+                          </div>
+                        ) : null}
+                        {selectedChildGuardians.length > 0 ? (
+                          <div className="worship-email-summary">
+                            {selectedChildGuardians.map((g) => (
+                              <div key={g.id}>
+                                <span>{relationshipLabel(g.relationship)}{g.is_primary ? " (principal)" : ""}</span>
+                                <strong>
+                                  {g.name}
+                                  {g.phone ? (
+                                    <a
+                                      href={`https://wa.me/55${g.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá ${g.name}, temos um recado sobre ${selectedChild.name} na Escolinha!`)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ marginLeft: "0.5rem", fontSize: "0.8rem", color: "#25D366" }}
+                                    >
+                                      WhatsApp
+                                    </a>
+                                  ) : null}
+                                </strong>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="worship-email-hint">Nenhum responsável cadastrado.</p>
+                        )}
+                        <div className="modal-actions">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => {
+                              setKidsGuardianForm({ ...emptyKidsGuardianForm, child_id: selectedChild.id });
+                              setIsKidsGuardianFormOpen(true);
+                            }}
+                          >
+                            + Responsável
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => {
+                              setKidsChildForm({
+                                id: selectedChild.id,
+                                name: selectedChild.name,
+                                date_of_birth: selectedChild.date_of_birth ?? "",
+                                group_id: selectedChild.group_id ?? "",
+                                member_id: selectedChild.member_id ?? "",
+                                allergies: selectedChild.allergies ?? "",
+                                special_needs: selectedChild.special_needs ?? "",
+                                notes: selectedChild.notes ?? "",
+                              });
+                              setKidsSelectedChildId(null);
+                              setIsKidsChildFormOpen(true);
+                            }}
+                          >
+                            Editar
+                          </Button>
+                          <Button type="button" onClick={() => setKidsSelectedChildId(null)}>
+                            Fechar
+                          </Button>
                         </div>
                       </div>
-                      {selectedChild.allergies ? (
-                        <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 6, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}>
-                          <strong>⚠ Alergias:</strong> {selectedChild.allergies}
-                        </div>
-                      ) : null}
-                      {selectedChild.special_needs ? (
-                        <div style={{ background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 6, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}>
-                          <strong>ℹ Necessidades especiais:</strong> {selectedChild.special_needs}
-                        </div>
-                      ) : null}
-                      {selectedChildGuardians.length > 0 ? (
-                        <div className="worship-email-summary">
-                          {selectedChildGuardians.map((g) => (
-                            <div key={g.id}>
-                              <span>{relationshipLabel(g.relationship)}{g.is_primary ? " (principal)" : ""}</span>
-                              <strong>
-                                {g.name}
-                                {g.phone ? (
-                                  <a
-                                    href={`https://wa.me/55${g.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá ${g.name}, temos um recado sobre ${selectedChild.name} na Escolinha!`)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{ marginLeft: "0.5rem", fontSize: "0.8rem", color: "#25D366" }}
-                                  >
-                                    WhatsApp
-                                  </a>
-                                ) : null}
-                              </strong>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p style={{ fontSize: "0.85rem", color: "var(--color-neutral-500)" }}>Nenhum responsável cadastrado.</p>
-                      )}
-                      <div className="modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={() => {
-                          setKidsGuardianForm({ ...emptyKidsGuardianForm, child_id: selectedChild.id });
-                          setIsKidsGuardianFormOpen(true);
-                        }}>
-                          + Responsável
-                        </button>
-                        <button type="button" className="btn btn-secondary" onClick={() => {
-                          setKidsChildForm({
-                            id: selectedChild.id,
-                            name: selectedChild.name,
-                            date_of_birth: selectedChild.date_of_birth ?? "",
-                            group_id: selectedChild.group_id ?? "",
-                            member_id: selectedChild.member_id ?? "",
-                            allergies: selectedChild.allergies ?? "",
-                            special_needs: selectedChild.special_needs ?? "",
-                            notes: selectedChild.notes ?? "",
-                          });
-                          setKidsSelectedChildId(null);
-                          setIsKidsChildFormOpen(true);
-                        }}>
-                          Editar
-                        </button>
-                        <button type="button" className="btn btn-primary" onClick={() => setKidsSelectedChildId(null)}>Fechar</button>
-                      </div>
-                    </section>
+                    </div>
                   </div>
                 ) : null}
 
@@ -11340,21 +11539,64 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     </div>
 
                     <div style={{ marginTop: "1.5rem" }}>
-                      <strong style={{ display: "block", marginBottom: "0.5rem" }}>Professores escalados para hoje</strong>
                       {todaySchedule.length === 0 ? (
                         <div className="catalog-empty">Nenhum professor escalado para hoje.</div>
                       ) : (
-                        <div className="catalog-list">
-                          {todaySchedule.map((s) => (
-                            <div key={s.id} className="catalog-row">
-                              <span>
-                                <strong>{s.members?.name ?? "—"}</strong>
-                                {s.role_label ? <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>{s.role_label}</small> : null}
-                              </span>
-                              {s.kids_groups ? <em style={{ fontSize: "0.8rem", color: "var(--color-neutral-500)" }}>{s.kids_groups.name}</em> : null}
+                        (() => {
+                          const groupKey = (s: (typeof todaySchedule)[number]) => s.group_id ?? "all";
+                          const groupLabel = (s: (typeof todaySchedule)[number]) => s.kids_groups?.name ?? "Todas as turmas";
+                          const groupsByKey = todaySchedule.reduce<Record<string, { label: string; items: Array<(typeof todaySchedule)[number]> }>>(
+                            (acc, item) => {
+                              const key = groupKey(item);
+                              const label = groupLabel(item);
+                              if (!acc[key]) acc[key] = { label, items: [] };
+                              acc[key].items = [...acc[key].items, item];
+                              return acc;
+                            },
+                            {},
+                          );
+
+                          const grouped = Object.entries(groupsByKey)
+                            .map(([key, value]) => ({ key, ...value }))
+                            .sort((a, b) => {
+                              if (a.label === "Todas as turmas" && b.label !== "Todas as turmas") return 1;
+                              if (b.label === "Todas as turmas" && a.label !== "Todas as turmas") return -1;
+                              return a.label.localeCompare(b.label);
+                            });
+
+                          return (
+                            <div style={{ display: "grid", gap: "0.9rem" }}>
+                              {grouped.map((grp) => (
+                                <div key={grp.key}>
+                                  <div className="kids-schedule-title">
+                                    <span className="kids-schedule-title-prefix">
+                                      {grp.label === "Todas as turmas"
+                                        ? "Professores escalados para hoje"
+                                        : "Professores escalados para turma"}
+                                    </span>
+                                    <span className={`kids-schedule-title-group${grp.label === "Todas as turmas" ? " all" : ""}`}>
+                                      {grp.label === "Todas as turmas" ? "todas as turmas" : grp.label}
+                                    </span>
+                                  </div>
+                                  <div className="catalog-list">
+                                    {grp.items.map((s) => (
+                                      <div key={s.id} className="catalog-row">
+                                        <span>
+                                          <strong>{s.members?.name ?? "—"}</strong>
+                                          {s.role_label ? (
+                                            <small style={{ color: "var(--color-neutral-500)", marginLeft: "0.4rem" }}>
+                                              {s.role_label}
+                                            </small>
+                                          ) : null}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })()
                       )}
                     </div>
                   </div>
@@ -11479,7 +11721,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         </label>
                         <input
                           className="catalog-input"
-                          placeholder="Escanear/colar token QR"
+                          placeholder="Cole o token (ex.: ABC-DEF)"
                           value={kidsQrToken}
                           onChange={(e) => setKidsQrToken(e.target.value)}
                           style={{ minWidth: 240 }}
@@ -12334,60 +12576,66 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
               {/* Modal de atribuição direta */}
               {assignModalTarget ? (
-                <div className="modal-overlay" onClick={() => setAssignModalTarget(null)}>
-                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div
+                  className="modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Atribuição de pedido de oração"
+                  onClick={() => setAssignModalTarget(null)}
+                >
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
                     <div className="modal-header">
                       <div>
-                        <span>Atribuição direta</span>
-                        <h2 style={{ fontSize: "1.1rem", margin: 0 }}>Escolher intercessor</h2>
+                        <span>Intercessão</span>
+                        <h2 className="modal-title-compact">Atribuir pedido a um intercessor</h2>
                       </div>
                       <button className="modal-close" type="button" onClick={() => setAssignModalTarget(null)}>
                         <X size={18} />
                       </button>
                     </div>
 
-                    <div style={{ padding: "16px 0 4px" }}>
-                      <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--color-text-secondary)", fontStyle: "italic", lineHeight: 1.5 }}>
-                        "{assignModalTarget.content.length > 120 ? assignModalTarget.content.slice(0, 120) + "…" : assignModalTarget.content}"
-                      </p>
+                    <div className="modal-body">
+                      <div className="intercession-request-preview">
+                        <p>
+                          {assignModalTarget.content.length > 240
+                            ? assignModalTarget.content.slice(0, 240) + "…"
+                            : assignModalTarget.content}
+                        </p>
+                      </div>
 
                       {intercessionMembers.length === 0 ? (
-                        <p style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
-                          Nenhum membro no ministério de Intercessão.
-                        </p>
+                        <div className="catalog-empty">Nenhum membro no ministério de Intercessão.</div>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          <label style={{ fontSize: "0.82rem", fontWeight: 600 }}>Intercessor</label>
+                        <label>
+                          <span>Intercessor</span>
                           <select
                             value={assignSelectedMemberId}
                             onChange={(e) => setAssignSelectedMemberId(e.target.value)}
-                            style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
                           >
                             <option value="">Selecione um intercessor...</option>
                             {intercessionMembers.map((m) => (
                               <option key={m.id} value={m.id}>{m.name}</option>
                             ))}
                           </select>
-                        </div>
+                        </label>
                       )}
 
                       {assignMessage ? (
                         <p className={`login-feedback ${assignStatus}`} style={{ marginTop: 10 }}>{assignMessage}</p>
                       ) : null}
-                    </div>
 
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 12 }}>
-                      <button type="button" className="btn btn-secondary" onClick={() => setAssignModalTarget(null)}>
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={!assignSelectedMemberId || assignStatus === "loading" || assignStatus === "success"}
-                        onClick={handleDirectAssign}
-                      >
-                        {assignStatus === "loading" ? "Atribuindo..." : assignStatus === "success" ? "Atribuído!" : "Atribuir"}
-                      </button>
+                      <div className="modal-actions">
+                        <button type="button" className="secondary-action" onClick={() => setAssignModalTarget(null)}>
+                          Cancelar
+                        </button>
+                        <Button
+                          type="button"
+                          disabled={!assignSelectedMemberId || assignStatus === "loading" || assignStatus === "success"}
+                          onClick={handleDirectAssign}
+                        >
+                          {assignStatus === "loading" ? "Atribuindo..." : assignStatus === "success" ? "Atribuído!" : "Atribuir"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -13700,8 +13948,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
       {/* ── Modal: Notificações de Evento ────────────────────────────────── */}
       {eventNotifyOpen && eventNotifyTarget ? (
-        <div className="modal-backdrop" onClick={() => setEventNotifyOpen(false)}>
-          <div className="modal-sheet event-notify-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Notificar membros" onClick={() => setEventNotifyOpen(false)}>
+          <div className="modal-card event-notify-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <Send size={20} />
@@ -13798,7 +14046,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
       {pushComposerOpen ? (
         <div className="modal-overlay" onClick={closePushComposer}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
             <div className="modal-header">
               <div>
                 <Bell size={20} />
@@ -13982,13 +14230,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       {/* ── Modal: Criar / Editar Comunicado ────────────────────────────── */}
       {isAnnouncementFormOpen ? (
         <div className="modal-overlay" onClick={() => setIsAnnouncementFormOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
               <div>
                 <Bell size={20} />
                 <strong>{announcementForm.id ? "Editar comunicado" : "Novo comunicado"}</strong>
               </div>
-              <button type="button" onClick={() => setIsAnnouncementFormOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setIsAnnouncementFormOpen(false)}><X size={18} /></button>
             </div>
             <form className="modal-body" onSubmit={handleAnnouncementSubmit}>
               <label>
@@ -14069,9 +14317,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               ) : null}
 
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAnnouncementFormOpen(false)}>
+                <Button type="button" variant="secondary" onClick={() => setIsAnnouncementFormOpen(false)}>
                   Cancelar
-                </button>
+                </Button>
                 <Button type="submit" disabled={announcementSaveStatus === "loading"} icon={<ScrollText size={16} />}>
                   {announcementSaveStatus === "loading" ? "Salvando..." : announcementForm.id ? "Salvar alterações" : "Publicar comunicado"}
                 </Button>
@@ -14084,13 +14332,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       {/* ── Modal: Notificar membros (comunicado) ───────────────────────── */}
       {announcementNotifyOpen && announcementNotifyTarget ? (
         <div className="modal-overlay" onClick={() => setAnnouncementNotifyOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
               <div>
                 <Send size={20} />
                 <strong>Notificar membros</strong>
               </div>
-              <button type="button" onClick={() => setAnnouncementNotifyOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setAnnouncementNotifyOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body">
               <div style={{ background: "var(--color-bg-subtle)", borderRadius: 8, padding: "12px 16px", marginBottom: 16 }}>
@@ -14179,15 +14427,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       {/* ── Modal: Pré-visualização de Comunicado ───────────────────────── */}
       {announcementPreviewOpen && announcementPreviewTarget ? (
         <div className="modal-overlay" onClick={() => setAnnouncementPreviewOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Eye size={20} />
                 <strong>Pré-visualização</strong>
               </div>
-              <button type="button" onClick={() => setAnnouncementPreviewOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setAnnouncementPreviewOpen(false)}><X size={18} /></button>
             </div>
-            <div style={{ padding: "20px 22px", overflowY: "auto", maxHeight: "75vh" }}>
+            <div className="modal-body" style={{ padding: 0, overflowY: "auto", maxHeight: "75vh" }}>
+              <div style={{ padding: "20px 22px" }}>
               <div style={{
                 background: "linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)",
                 borderRadius: "10px 10px 0 0",
@@ -14213,6 +14462,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{announcementPreviewTarget.message}</p>
                 )}
               </div>
+              </div>
             </div>
           </div>
         </div>
@@ -14221,15 +14471,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       {/* ── Modal: Preview do Evento ─────────────────────────────────────── */}
       {eventPreviewOpen && eventPreviewTarget ? (
         <div className="modal-overlay" onClick={() => setEventPreviewOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Eye size={20} />
                 <strong>Pré-visualização do evento</strong>
               </div>
-              <button type="button" onClick={() => setEventPreviewOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setEventPreviewOpen(false)}><X size={18} /></button>
             </div>
-            <div style={{ padding: "20px 22px", overflowY: "auto", maxHeight: "75vh" }}>
+            <div className="modal-body" style={{ padding: 0, overflowY: "auto", maxHeight: "75vh" }}>
+              <div style={{ padding: "20px 22px" }}>
               <div
                 dangerouslySetInnerHTML={{
                   __html: renderEventCardHtml(
@@ -14245,6 +14496,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   ),
                 }}
               />
+              </div>
             </div>
           </div>
         </div>

@@ -205,6 +205,20 @@ type KidsCheckinPassRecord = {
   created_at: string;
 };
 
+type MyKidsChildRpcRow = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  date_of_birth: string | null;
+  group_id: string | null;
+  allergies: string | null;
+  special_needs: string | null;
+  notes: string | null;
+  is_active: boolean;
+  group_name: string | null;
+  source: string;
+};
+
 type BibleSchoolClassRecord = {
   id: string;
   tenant_id: string;
@@ -390,6 +404,8 @@ export function MemberPortal() {
   const [kidsChildren, setKidsChildren] = useState<KidsChildRecord[]>([]);
   const [kidsGuardiansByChildId, setKidsGuardiansByChildId] = useState<Record<string, KidsGuardianRecord[]>>({});
   const [kidsPassesByChildId, setKidsPassesByChildId] = useState<Record<string, KidsCheckinPassRecord[]>>({});
+  const [kidsAdminAllChildren, setKidsAdminAllChildren] = useState<KidsChildRecord[]>([]);
+  const [kidsAdminSearch, setKidsAdminSearch] = useState("");
   const [kidsForm, setKidsForm] = useState<KidsChildFormState>(emptyKidsChildForm);
   const [isKidsFormOpen, setIsKidsFormOpen] = useState(false);
   const [kidsMessage, setKidsMessage] = useState("");
@@ -950,6 +966,9 @@ export function MemberPortal() {
     const hasSchedulePortalAccess = portalMinistries.some((row) =>
       isSchedulableMinistryName(row.catalog_ministries?.name),
     );
+    const isKidsModuleAdminLocal = (moduleAccessResult.data ?? []).some(
+      (row) => (row.platform_modules as { code?: string } | null)?.code === "kids",
+    );
 
     setMemberMinistries(portalMinistries);
     setModuleAdminAccesses(moduleAccessResult.data ?? []);
@@ -1014,7 +1033,7 @@ export function MemberPortal() {
       setAssignments([]);
     }
 
-    const [groupsResult, guardiansResult] = await Promise.all([
+    const [groupsResult, guardiansResult, myKidsResult] = await Promise.all([
       supabase
         .from("kids_groups")
         .select("id, name")
@@ -1036,6 +1055,7 @@ export function MemberPortal() {
             }
           >
         >(),
+      supabase.rpc("get_my_kids_children"),
     ]);
 
     if (!groupsResult.error) {
@@ -1062,12 +1082,45 @@ export function MemberPortal() {
       });
     }
 
-    const children = Array.from(childById.values()).sort((a, b) => a.name.localeCompare(b.name));
-    setKidsChildren(children);
+    const fallbackChildren: KidsChildRecord[] = Array.from(childById.values());
+    const myKidsRowsRaw = myKidsResult.data;
+    const myKidsRows: MyKidsChildRpcRow[] = Array.isArray(myKidsRowsRaw) ? (myKidsRowsRaw as MyKidsChildRpcRow[]) : [];
+    const children: KidsChildRecord[] =
+      myKidsRows.length > 0
+        ? myKidsRows.map((row) => ({
+            id: row.id,
+            tenant_id: row.tenant_id,
+            name: row.name,
+            date_of_birth: row.date_of_birth,
+            group_id: row.group_id,
+            allergies: row.allergies,
+            special_needs: row.special_needs,
+            notes: row.notes,
+            is_active: row.is_active,
+            kids_groups: row.group_name ? { name: row.group_name } : null,
+          }))
+        : fallbackChildren;
+
+    const sortedChildren: KidsChildRecord[] = children.sort((a, b) => a.name.localeCompare(b.name));
+    setKidsChildren(sortedChildren);
     setKidsGuardiansByChildId(guardiansByChild);
 
-    if (children.length > 0) {
-      const childIds = children.map((c) => c.id);
+    if (isKidsModuleAdminLocal) {
+      const allKidsResult = await supabase
+        .from("kids_children")
+        .select("id, tenant_id, name, date_of_birth, group_id, allergies, special_needs, notes, is_active, kids_groups (name)")
+        .eq("tenant_id", profileData.tenant_id)
+        .order("name", { ascending: true })
+        .returns<KidsChildRecord[]>();
+      setKidsAdminAllChildren(allKidsResult.error ? [] : allKidsResult.data ?? []);
+      setKidsAdminSearch("");
+    } else {
+      setKidsAdminAllChildren([]);
+      setKidsAdminSearch("");
+    }
+
+    if (sortedChildren.length > 0) {
+      const childIds = sortedChildren.map((c) => c.id);
       const passesResult = await supabase
         .from("kids_checkin_passes")
         .select("id, child_id, pass_token, valid_from, valid_until, used_at, created_at")
@@ -1840,6 +1893,12 @@ export function MemberPortal() {
     return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
   }
 
+  function kidsPassDisplayCode(passToken: string) {
+    const raw = (passToken ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase();
+    if (raw.length < 6) return raw;
+    return `${raw.slice(0, 3)}-${raw.slice(3, 6)}`;
+  }
+
   const upcomingAssignments = assignments.filter((a) => {
     const starts = a.worship_events?.starts_at;
     if (!starts) return false;
@@ -1903,7 +1962,7 @@ export function MemberPortal() {
   const hasAnnouncements = portalAnnouncements.length > 0;
   const portalTabs = [
     { id: "inicio" as const, label: "Início", icon: <Check size={16} />, visible: true },
-    { id: "oracao" as const, label: "Pedidos", icon: <Heart size={16} />, visible: true, badge: ownPrayerRequests.length || undefined },
+    { id: "oracao" as const, label: "Meus Pedidos de oração", icon: <Heart size={16} />, visible: true, badge: ownPrayerRequests.length || undefined },
     { id: "intercessao" as const, label: "Intercessão", icon: <Users2 size={16} />, visible: isInIntercessionMinistry || myAssignments.length > 0, badge: myAssignments.length || undefined },
     { id: "agenda" as const, label: "Agenda", icon: <CalendarDays size={16} />, visible: hasSchedulePortalAccess || portalEvents.length > 0, badge: (upcomingAssignments.length || portalEvents.length) || undefined },
     { id: "comunicados" as const, label: "Comunicados", icon: <Bell size={16} />, visible: hasAnnouncements, badge: unreadAnnouncementCount || undefined },
@@ -2539,12 +2598,18 @@ export function MemberPortal() {
 
         {socialMediaVideoModal ? (
           <div className="modal-overlay" onClick={() => setSocialMediaVideoModal(null)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: "95vw" }}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 820, width: "95vw" }}>
               <div className="modal-header">
-                <strong style={{ fontSize: "0.88rem" }}>{socialMediaVideoModal.video.title}</strong>
-                <button type="button" onClick={() => setSocialMediaVideoModal(null)}><X size={18} /></button>
+                <div>
+                  <span>Mídias</span>
+                  <h2 className="modal-title-compact">{socialMediaVideoModal.video.title}</h2>
+                </div>
+                <button className="modal-close" type="button" onClick={() => setSocialMediaVideoModal(null)}>
+                  <X size={18} />
+                </button>
               </div>
-              <div style={{ position: "relative", width: "100%", paddingTop: "56.25%", background: "#000", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+              <div className="modal-body" style={{ paddingTop: 0 }}>
+                <div className="video-embed-frame">
                 <iframe
                   style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
                   src={`https://www.youtube.com/embed/${socialMediaVideoModal.video.videoId}?autoplay=1`}
@@ -2552,6 +2617,7 @@ export function MemberPortal() {
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
+                </div>
               </div>
             </div>
           </div>
@@ -2698,7 +2764,7 @@ export function MemberPortal() {
           </AccordionPanel>
         ) : null}
 
-        {activePortalTab === "kids" && !isKidsModuleAdmin ? (
+        {activePortalTab === "kids" ? (
           <AccordionPanel
             id="kids"
             title="Kids"
@@ -2803,7 +2869,12 @@ export function MemberPortal() {
                         <div className="member-portal-kids-qr">
                           <img src={qrImageUrl(activePass.pass_token)} alt={`QR de check-in de ${child.name}`} />
                           <small>Válido até {new Date(activePass.valid_until).toLocaleString("pt-BR")}</small>
-                          <small>Código fallback: {activePass.pass_token.slice(0, 12)}</small>
+                          <div className="member-portal-kids-pass-code">
+                            {kidsPassDisplayCode(activePass.pass_token)}
+                          </div>
+                          <div className="member-portal-kids-pass-help">
+                            Se não der para ler o QR, o professor pode digitar este código no campo Token do QR em Kids → Presença (painel administrativo).
+                          </div>
                         </div>
                       ) : null}
                     </article>
@@ -2811,6 +2882,53 @@ export function MemberPortal() {
                 })}
               </div>
             )}
+
+            {isKidsModuleAdmin ? (
+              <AccordionPanel
+                id="kids-admin-all"
+                title="Todas as crianças"
+                description="Lista completa do cadastro do Kids."
+                icon={<Users2 size={18} />}
+                badge={kidsAdminAllChildren.length}
+                defaultOpen={false}
+                className="member-portal-accordion-compact"
+              >
+                <input
+                  className="catalog-input"
+                  placeholder="Buscar por nome..."
+                  value={kidsAdminSearch}
+                  onChange={(e) => setKidsAdminSearch(e.target.value)}
+                  style={{ marginBottom: 10 }}
+                />
+                {(() => {
+                  const term = kidsAdminSearch.trim().toLowerCase();
+                  const filtered = term
+                    ? kidsAdminAllChildren.filter((c) => c.name.toLowerCase().includes(term))
+                    : kidsAdminAllChildren;
+                  return filtered.length === 0 ? (
+                    <div className="member-portal-empty-inline">
+                      <Baby size={18} />
+                      <span>Nenhuma criança encontrada.</span>
+                    </div>
+                  ) : (
+                    <div className="member-portal-history">
+                      {filtered.slice(0, 120).map((c) => (
+                        <div key={c.id} className="member-portal-history-row">
+                          <div>
+                            <strong>{c.name}</strong>
+                            <small>
+                              {c.date_of_birth ? new Date(`${c.date_of_birth}T12:00:00`).toLocaleDateString("pt-BR") : "Data de nascimento não informada"}
+                              {c.kids_groups?.name ? ` · ${c.kids_groups.name}` : " · Sem turma"}
+                            </small>
+                          </div>
+                          <em className="member-portal-status pending">{c.is_active ? "Ativo" : "Inativo"}</em>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </AccordionPanel>
+            ) : null}
           </AccordionPanel>
         ) : null}
 
@@ -3377,14 +3495,32 @@ export function MemberPortal() {
       </main>
 
       {isBibleSchoolClassFormOpen ? (
-        <div className="modal-backdrop">
-          <section className="modal-sheet">
-            <div className="modal-section-header">
-              <BookOpen size={18} />
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}
+          onClick={() => {
+            setIsBibleSchoolClassFormOpen(false);
+            setBibleSchoolClassForm(emptyBibleSchoolClassForm);
+          }}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
               <div>
-                <strong>{bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}</strong>
-                <small>Turmas definem aulas, presença e materiais.</small>
+                <span>Escola Bíblica</span>
+                <h2 className="modal-title-compact">{bibleSchoolClassForm.id ? "Editar turma" : "Nova turma"}</h2>
               </div>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => {
+                  setIsBibleSchoolClassFormOpen(false);
+                  setBibleSchoolClassForm(emptyBibleSchoolClassForm);
+                }}
+              >
+                <X size={18} />
+              </button>
             </div>
             <form className="modal-body" onSubmit={(event) => void handleBibleSchoolClassSubmit(event)}>
               <label>
@@ -3455,19 +3591,37 @@ export function MemberPortal() {
                 </Button>
               </div>
             </form>
-          </section>
+          </div>
         </div>
       ) : null}
 
       {isBibleSchoolSessionFormOpen ? (
-        <div className="modal-backdrop">
-          <section className="modal-sheet">
-            <div className="modal-section-header">
-              <BookOpen size={18} />
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nova aula"
+          onClick={() => {
+            setIsBibleSchoolSessionFormOpen(false);
+            setBibleSchoolSessionForm(emptyBibleSchoolSessionForm);
+          }}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
               <div>
-                <strong>Nova aula</strong>
-                <small>Registrar uma aula para a turma selecionada.</small>
+                <span>Escola Bíblica</span>
+                <h2 className="modal-title-compact">Nova aula</h2>
               </div>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => {
+                  setIsBibleSchoolSessionFormOpen(false);
+                  setBibleSchoolSessionForm(emptyBibleSchoolSessionForm);
+                }}
+              >
+                <X size={18} />
+              </button>
             </div>
             <form
               className="modal-body"
@@ -3522,19 +3676,37 @@ export function MemberPortal() {
                 </Button>
               </div>
             </form>
-          </section>
+          </div>
         </div>
       ) : null}
 
       {isBibleSchoolMaterialFormOpen ? (
-        <div className="modal-backdrop">
-          <section className="modal-sheet">
-            <div className="modal-section-header">
-              <BookOpen size={18} />
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Novo material"
+          onClick={() => {
+            setIsBibleSchoolMaterialFormOpen(false);
+            setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
+          }}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
               <div>
-                <strong>Novo material</strong>
-                <small>Disponibilize conteúdo para a turma selecionada.</small>
+                <span>Escola Bíblica</span>
+                <h2 className="modal-title-compact">Novo material</h2>
               </div>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => {
+                  setIsBibleSchoolMaterialFormOpen(false);
+                  setBibleSchoolMaterialForm(emptyBibleSchoolMaterialForm);
+                }}
+              >
+                <X size={18} />
+              </button>
             </div>
             <form
               className="modal-body"
@@ -3625,19 +3797,37 @@ export function MemberPortal() {
                 </Button>
               </div>
             </form>
-          </section>
+          </div>
         </div>
       ) : null}
 
       {isBibleSchoolGradeFormOpen ? (
-        <div className="modal-backdrop">
-          <section className="modal-sheet">
-            <div className="modal-section-header">
-              <BookOpen size={18} />
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nova nota"
+          onClick={() => {
+            setIsBibleSchoolGradeFormOpen(false);
+            setBibleSchoolGradeForm(emptyBibleSchoolGradeForm);
+          }}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
               <div>
-                <strong>Nova nota</strong>
-                <small>Lançar avaliação para uma matrícula.</small>
+                <span>Escola Bíblica</span>
+                <h2 className="modal-title-compact">Nova nota</h2>
               </div>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => {
+                  setIsBibleSchoolGradeFormOpen(false);
+                  setBibleSchoolGradeForm(emptyBibleSchoolGradeForm);
+                }}
+              >
+                <X size={18} />
+              </button>
             </div>
             <form className="modal-body" onSubmit={(event) => void handleBibleSchoolGradeSubmit(event)}>
               <label>
@@ -3709,19 +3899,37 @@ export function MemberPortal() {
                 </Button>
               </div>
             </form>
-          </section>
+          </div>
         </div>
       ) : null}
 
       {isKidsFormOpen ? (
-        <div className="modal-backdrop">
-          <section className="modal-sheet">
-            <div className="modal-section-header">
-              <Baby size={18} />
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={kidsForm.id ? "Editar criança" : "Cadastrar criança"}
+          onClick={() => {
+            setIsKidsFormOpen(false);
+            setKidsForm(emptyKidsChildForm);
+          }}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
               <div>
-                <strong>{kidsForm.id ? "Editar criança" : "Cadastrar criança"}</strong>
-                <small>Dados visíveis para check-in no módulo Kids.</small>
+                <span>Kids</span>
+                <h2 className="modal-title-compact">{kidsForm.id ? "Editar criança" : "Cadastrar criança"}</h2>
               </div>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => {
+                  setIsKidsFormOpen(false);
+                  setKidsForm(emptyKidsChildForm);
+                }}
+              >
+                <X size={18} />
+              </button>
             </div>
             <form className="modal-body" onSubmit={(event) => void handleKidsChildSubmit(event)}>
               <label>
@@ -3800,7 +4008,7 @@ export function MemberPortal() {
                 </Button>
               </div>
             </form>
-          </section>
+          </div>
         </div>
       ) : null}
 
@@ -3850,7 +4058,7 @@ export function MemberPortal() {
                 <p className={`login-feedback ${policyAcceptStatus}`} style={{ marginTop: 12 }}>{policyAcceptMessage}</p>
               )}
             </div>
-            <div className="modal-footer" style={{ display: "flex", gap: 12, padding: "16px 24px", borderTop: "1px solid #e5e7eb" }}>
+            <div className="modal-actions" style={{ padding: "0 22px 22px" }}>
               <Button
                 type="button"
                 disabled={!policyChecked || policyAcceptStatus === "loading"}
@@ -3877,16 +4085,18 @@ export function MemberPortal() {
 
       {/* ── Modal: Detalhe do Comunicado ────────────────────────────────── */}
       {announcementPreviewOpen && announcementPreviewTarget ? (
-        <div className="modal-overlay" onClick={() => setAnnouncementPreviewOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Comunicado" onClick={() => setAnnouncementPreviewOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Bell size={20} style={{ color: "var(--color-brand-primary)" }} />
-                <strong>Comunicado</strong>
+              <div>
+                <span>Comunicado</span>
+                <h2 className="modal-title-compact">{announcementPreviewTarget.title}</h2>
               </div>
-              <button type="button" onClick={() => setAnnouncementPreviewOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setAnnouncementPreviewOpen(false)}>
+                <X size={18} />
+              </button>
             </div>
-            <div style={{ overflowY: "auto", maxHeight: "78vh" }}>
+            <div className="modal-body" style={{ padding: 0, overflowY: "auto", maxHeight: "78vh" }}>
               <div style={{
                 background: "linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)",
                 padding: "18px 22px",
@@ -3894,9 +4104,6 @@ export function MemberPortal() {
                 <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#e9d5ff" }}>
                   📢 Comunicado
                 </p>
-                <h2 style={{ margin: 0, color: "#fff", fontSize: "1.15rem", lineHeight: 1.3 }}>
-                  {announcementPreviewTarget.title}
-                </h2>
                 <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "#c4b5fd" }}>
                   Publicado em {new Date(announcementPreviewTarget.published_at).toLocaleDateString("pt-BR")}
                 </p>
@@ -3915,11 +4122,11 @@ export function MemberPortal() {
 
       {/* ── Modal: Detalhe do Evento ─────────────────────────────────────── */}
       {eventPreviewOpen && eventPreviewTarget ? (
-        <div className="modal-overlay" onClick={() => setEventPreviewOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Evento" onClick={() => setEventPreviewOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
             <div className="modal-header">
               <div>
-                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--color-brand-primary)", display: "block", marginBottom: 2 }}>
+                <span>
                   {eventPreviewTarget.event_type === "culto" ? "Culto"
                     : eventPreviewTarget.event_type === "conferencia" ? "Conferência"
                     : eventPreviewTarget.event_type === "retiro" ? "Retiro"
@@ -3928,11 +4135,14 @@ export function MemberPortal() {
                     : eventPreviewTarget.event_type === "social" ? "Social"
                     : "Evento"}
                 </span>
-                <strong style={{ fontSize: "1.05rem" }}>{eventPreviewTarget.title}</strong>
+                <h2 className="modal-title-compact">{eventPreviewTarget.title}</h2>
               </div>
-              <button type="button" onClick={() => setEventPreviewOpen(false)}><X size={18} /></button>
+              <button className="modal-close" type="button" onClick={() => setEventPreviewOpen(false)}>
+                <X size={18} />
+              </button>
             </div>
-            <div style={{ padding: "20px 22px", overflowY: "auto", maxHeight: "75vh" }}>
+            <div className="modal-body" style={{ padding: 0, overflowY: "auto", maxHeight: "75vh" }}>
+              <div style={{ padding: "20px 22px" }}>
               <div
                 dangerouslySetInnerHTML={{
                   __html: renderEventCardHtml(
@@ -3951,6 +4161,7 @@ export function MemberPortal() {
                   ),
                 }}
               />
+              </div>
             </div>
           </div>
         </div>
