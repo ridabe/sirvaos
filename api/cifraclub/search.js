@@ -28,7 +28,11 @@ async function fetchHtml(url) {
       redirect: "follow",
       headers: {
         "User-Agent": "SirvaOS/1.0",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        Referer: "https://www.cifraclub.com.br/",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
       },
     });
   } catch {
@@ -91,10 +95,32 @@ function extractCandidatesFromArtistPage(html, artistSlug, originUrl) {
 }
 
 async function fetchSong(artist, song) {
-  const fallbackUrl = `https://www.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}`;
-  const { ok, status, url, html } = await fetchHtml(fallbackUrl);
-  if (!ok) {
-    return { ok: false, status, url: fallbackUrl, html: "", upstream_status: status };
+  const urls = [
+    `https://www.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}/`,
+    `https://www.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}/imprimir.html`,
+    `https://m.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}/`,
+  ];
+
+  let lastStatus = 0;
+  let lastUrl = urls[0];
+  let html = "";
+  let resolvedUrl = "";
+
+  for (const u of urls) {
+    const result = await fetchHtml(u);
+    lastStatus = result.status;
+    lastUrl = u;
+    if (!result.ok) {
+      if (result.status === 403) continue;
+      return { ok: false, status: result.status || 502, url: u, html: "", upstream_status: result.status || null };
+    }
+    html = result.html;
+    resolvedUrl = result.url || u;
+    break;
+  }
+
+  if (!html) {
+    return { ok: false, status: lastStatus || 502, url: lastUrl, html: "", upstream_status: lastStatus || null };
   }
 
   const $ = load(html);
@@ -114,7 +140,7 @@ async function fetchSong(artist, song) {
       artist: artistName || null,
       name: name || null,
       youtube_url: youtubeUrl,
-      cifraclub_url: url || fallbackUrl,
+      cifraclub_url: resolvedUrl || urls[0],
       cifra,
     },
   };
@@ -173,4 +199,3 @@ export default async function handler(req, res) {
 
   res.status(200).json({ mode: "candidates", candidates: [] });
 }
-

@@ -43,25 +43,48 @@ export default async function handler(req, res) {
     return;
   }
 
-  const fallbackUrl = `https://www.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}`;
+  const urls = [
+    `https://www.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}/`,
+    `https://www.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}/imprimir.html`,
+    `https://m.cifraclub.com.br/${encodeURIComponent(artist)}/${encodeURIComponent(song)}/`,
+  ];
 
-  let response;
-  try {
-    response = await globalThis.fetch(fallbackUrl, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "User-Agent": "SirvaOS/1.0",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-      },
-    });
-  } catch {
+  let response = null;
+  let lastStatus = 0;
+  let lastUrl = urls[0];
+  for (const url of urls) {
+    lastUrl = url;
+    try {
+      response = await globalThis.fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "User-Agent": "SirvaOS/1.0",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+          Referer: "https://www.cifraclub.com.br/",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+    } catch {
+      response = null;
+    }
+
+    if (!response) continue;
+    lastStatus = response.status;
+    if (response.ok) break;
+    if (response.status === 403) continue;
+    break;
+  }
+
+  if (!response) {
     res.status(502).json({ error: "FETCH_FAILED" });
     return;
   }
 
   if (!response.ok) {
-    res.status(response.status === 404 ? 404 : 502).json({ error: "UPSTREAM_ERROR", status: response.status });
+    res.status(response.status === 404 ? 404 : 502).json({ error: "UPSTREAM_ERROR", status: response.status, upstream_status: response.status, url: lastUrl });
     return;
   }
 
@@ -84,7 +107,7 @@ export default async function handler(req, res) {
     artist: artistName || null,
     name: name || null,
     youtube_url: youtubeUrl,
-    cifraclub_url: response.url || fallbackUrl,
+    cifraclub_url: response.url || urls[0],
     cifra,
   });
 }

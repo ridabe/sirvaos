@@ -6356,7 +6356,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
         setCifraClubStatus("error");
         setCifraClubMessage(
-          `Falha ao buscar no Cifra Club (${status}).${upstreamStatus ? ` Upstream: ${upstreamStatus}.` : ""} ${details || "Verifique o artista/música e tente novamente."}`.trim(),
+          `Falha ao buscar no Cifra Club (${status}).${
+            upstreamStatus ? ` Upstream: ${upstreamStatus}.` : ""
+          } ${
+            upstreamStatus === 403
+              ? "O Cifra Club bloqueou a consulta automática (403). Isso pode acontecer por regras anti-bot. Tente novamente ou use o link direto/importe manualmente."
+              : details || "Verifique o artista/música e tente novamente."
+          }`.trim(),
         );
         return;
       }
@@ -7085,7 +7091,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
         setWorshipCifraClubStatus("error");
         setWorshipCifraClubMessage(
-          `Falha ao buscar no Cifra Club (${status}).${upstreamStatus ? ` Upstream: ${upstreamStatus}.` : ""} ${details || "Verifique o artista/música e tente novamente."}`.trim(),
+          `Falha ao buscar no Cifra Club (${status}).${
+            upstreamStatus ? ` Upstream: ${upstreamStatus}.` : ""
+          } ${
+            upstreamStatus === 403
+              ? "O Cifra Club bloqueou a consulta automática (403). Isso pode acontecer por regras anti-bot. Tente novamente ou use o link direto/importe manualmente."
+              : details || "Verifique o artista/música e tente novamente."
+          }`.trim(),
         );
         return;
       }
@@ -10824,7 +10836,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
                             <div className="modal-section-header">
                               <strong>Cifra Club</strong>
-                              <small>Busca via endpoint serverless (Vercel) sem Selenium.</small>
+                              <small>Busca via API.</small>
                             </div>
 
                             <div className="modal-grid">
@@ -16333,7 +16345,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
                   <div className="modal-section-header">
                     <strong>Cifra Club</strong>
-                    <small>Busca via endpoint serverless (Vercel) sem Selenium.</small>
+                    <small>Busca via API.</small>
                   </div>
 
                   <div className="modal-grid">
