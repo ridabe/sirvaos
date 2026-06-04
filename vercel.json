@@ -1,6 +1,6 @@
 {
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/api/cifraclub/artists/([^/]+)/songs/([^/]+)", "dest": "/api/cifraclub/artists/[artist]/songs/[song].js?artist=$1&song=$2" },
     { "handle": "filesystem" },
     { "src": "/.*", "dest": "/index.html" }
   ]
