@@ -6310,6 +6310,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         return;
       }
 
+      const contentType = response.headers.get("content-type") || "";
+      if (/text\/html/i.test(contentType)) {
+        setCifraClubStatus("error");
+        setCifraClubMessage('O endpoint retornou HTML (provável rewrite para /index.html). Verifique o deploy na Vercel e o vercel.json para liberar rotas /api.');
+        return;
+      }
+
       let json: CifraClubSongResponse;
       try {
         json = (await response.json()) as CifraClubSongResponse;
@@ -6920,6 +6927,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
         setWorshipCifraClubStatus("error");
         setWorshipCifraClubMessage(`Falha ao buscar no Cifra Club (${status}). ${details || "Verifique o artista/música e tente novamente."}`.trim());
+        return;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (/text\/html/i.test(contentType)) {
+        setWorshipCifraClubStatus("error");
+        setWorshipCifraClubMessage('O endpoint retornou HTML (provável rewrite para /index.html). Verifique o deploy na Vercel e o vercel.json para liberar rotas /api.');
         return;
       }
 
