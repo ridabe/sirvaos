@@ -230,6 +230,28 @@ type CatalogItemRecord = {
   name: string;
 };
 
+type CatalogSongRecord = {
+  id: string;
+  tenant_id: string | null;
+  title: string;
+  artist: string;
+  genre: string;
+  source: "seed" | "manual" | "cifraclub";
+  cifraclub_url: string | null;
+  youtube_url: string | null;
+};
+
+type TenantEventSongRecord = {
+  id: string;
+  tenant_id: string;
+  event_id: string;
+  song_id: string;
+  position: number;
+  key: string | null;
+  notes: string | null;
+  catalog_songs: CatalogSongRecord | null;
+};
+
 type MemberRoleRecord = {
   tenant_id: string;
   member_id: string;
@@ -574,6 +596,7 @@ type ClientDashboardData = {
   moduleAdminModuleIdsByMemberId: Record<string, string[]>;
   catalogRoles: CatalogItemRecord[];
   catalogMinistries: CatalogItemRecord[];
+  catalogSongs: CatalogSongRecord[];
   financialCategories: FinancialCategoryRecord[];
   financialTransactions: FinancialTransactionRecord[];
   kidsGroups: KidsGroupRecord[];
@@ -622,6 +645,20 @@ type FamilyFormState = {
 };
 type EventFormState = Omit<EventRecord, "created_at"> & { tenant_id: string };
 type AnnouncementFormState = Omit<AnnouncementRecord, "created_at"> & { tenant_id: string };
+type EventRepertoireItem = {
+  id: string | null;
+  song: CatalogSongRecord;
+  position: number;
+  key: string;
+  notes: string;
+};
+type CifraClubSongResponse = {
+  artist: string | null;
+  name: string | null;
+  youtube_url: string | null;
+  cifraclub_url: string | null;
+  cifra: string[];
+};
 type WorshipEventFormState = {
   title: string;
   event_type: WorshipEventRecord["event_type"];
@@ -1093,6 +1130,7 @@ const sampleClientDashboardData: ClientDashboardData = {
       id: "user-1",
       full_name: "Eduardo Lima",
       email: "eduardo@igreja.org",
+      member_id: null,
       tenant_role: "admin",
       status: "active",
     },
@@ -1100,6 +1138,7 @@ const sampleClientDashboardData: ClientDashboardData = {
       id: "user-2",
       full_name: "Patrícia Melo",
       email: "patricia@igreja.org",
+      member_id: null,
       tenant_role: "member",
       status: "active",
     },
@@ -1170,6 +1209,11 @@ const sampleClientDashboardData: ClientDashboardData = {
     { id: "min-sys-1", tenant_id: null, name: "Ministério de Louvor" },
     { id: "min-sys-2", tenant_id: null, name: "Intercessão / Oração" },
     { id: "min-tenant-1", tenant_id: "demo-tenant", name: "Ministério de Artes" },
+  ],
+  catalogSongs: [
+    { id: "song-sys-1", tenant_id: null, title: "A Casa É Sua", artist: "Casa Worship", genre: "gospel_contemporaneo", source: "seed", cifraclub_url: null, youtube_url: null },
+    { id: "song-sys-2", tenant_id: null, title: "Lugar Secreto", artist: "Gabriela Rocha", genre: "gospel_contemporaneo", source: "seed", cifraclub_url: null, youtube_url: null },
+    { id: "song-tenant-1", tenant_id: "demo-tenant", title: "Canção da Igreja", artist: "Autoral", genre: "gospel_contemporaneo", source: "manual", cifraclub_url: null, youtube_url: null },
   ],
   allPlatformModules: [
     { id: "module-1", code: "members",       name: "Membresia",          description: "Cadastro de membros, famílias e ministérios.", status: "active" },
@@ -1894,6 +1938,17 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [eventBannerPreviewUrl, setEventBannerPreviewUrl] = useState<string | null>(null);
   const [eventBannerUploadStatus, setEventBannerUploadStatus] = useState<LoginStatus>("idle");
   const [eventBannerUploadMessage, setEventBannerUploadMessage] = useState("");
+  const [eventRepertoire, setEventRepertoire] = useState<EventRepertoireItem[]>([]);
+  const [catalogSongSearchTerm, setCatalogSongSearchTerm] = useState("");
+  const [newCatalogSongTitle, setNewCatalogSongTitle] = useState("");
+  const [newCatalogSongArtist, setNewCatalogSongArtist] = useState("");
+  const [songCatalogStatus, setSongCatalogStatus] = useState<LoginStatus>("idle");
+  const [songCatalogMessage, setSongCatalogMessage] = useState("");
+  const [cifraClubArtistInput, setCifraClubArtistInput] = useState("");
+  const [cifraClubSongInput, setCifraClubSongInput] = useState("");
+  const [cifraClubStatus, setCifraClubStatus] = useState<LoadStatus>("idle");
+  const [cifraClubMessage, setCifraClubMessage] = useState("");
+  const [cifraClubResult, setCifraClubResult] = useState<CifraClubSongResponse | null>(null);
   const eventDescriptionEditorRef = useRef<HTMLDivElement | null>(null);
   const [eventViewMode, setEventViewMode] = useState<"list" | "calendar">("list");
   const [eventCalendarMonth, setEventCalendarMonth] = useState(() => {
@@ -2207,44 +2262,50 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .eq("tenant_id", tenantId)
           .eq("status", "active")
           .in("tenant_role", ["owner", "admin"]),
-        adminProfileIds.length > 0
-          ? supabase
-              .from("profiles")
-              .select(baseSelect)
-              .eq("tenant_id", tenantId)
-              .eq("status", "active")
-              .in("id", adminProfileIds)
-          : null,
-        adminMemberIds.length > 0
-          ? supabase
-              .from("profiles")
-              .select(baseSelect)
-              .eq("tenant_id", tenantId)
-              .eq("status", "active")
-              .in("member_id", adminMemberIds)
-          : null,
-        artsMemberIds.length > 0
-          ? supabase
-              .from("profiles")
-              .select(baseSelect)
-              .eq("tenant_id", tenantId)
-              .eq("status", "active")
-              .in("member_id", artsMemberIds)
-          : null,
-      ].filter(Boolean) as Array<ReturnType<typeof supabase.from>>;
+        ...(adminProfileIds.length > 0
+          ? [
+              supabase
+                .from("profiles")
+                .select(baseSelect)
+                .eq("tenant_id", tenantId)
+                .eq("status", "active")
+                .in("id", adminProfileIds),
+            ]
+          : []),
+        ...(adminMemberIds.length > 0
+          ? [
+              supabase
+                .from("profiles")
+                .select(baseSelect)
+                .eq("tenant_id", tenantId)
+                .eq("status", "active")
+                .in("member_id", adminMemberIds),
+            ]
+          : []),
+        ...(artsMemberIds.length > 0
+          ? [
+              supabase
+                .from("profiles")
+                .select(baseSelect)
+                .eq("tenant_id", tenantId)
+                .eq("status", "active")
+                .in("member_id", artsMemberIds),
+            ]
+          : []),
+      ];
 
-      const results = await Promise.all(queries.map((q) => q));
+      const results = await Promise.all(queries);
       const merged = new Map<string, { id: string; full_name: string | null; email: string | null }>();
 
       for (const res of results) {
         if (res.error) continue;
-        (res.data ?? []).forEach((row) => {
-          const id = String((row as { id: unknown }).id);
+        (res.data ?? []).forEach((row: { id: string; full_name: string | null; email: string | null }) => {
+          const id = String(row.id);
           if (!id) return;
           merged.set(id, {
             id,
-            full_name: (row as { full_name?: string | null }).full_name ?? null,
-            email: (row as { email?: string | null }).email ?? null,
+            full_name: row.full_name ?? null,
+            email: row.email ?? null,
           });
         });
       }
@@ -3736,6 +3797,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       moduleAdminsResult,
       catalogRolesResult,
       catalogMinistriesResult,
+      catalogSongsResult,
       financialCategoriesResult,
       financialTransactionsResult,
       kidsGroupsResult,
@@ -3842,6 +3904,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           .order("name", { ascending: true })
           .returns<CatalogItemRecord[]>(),
         supabase
+          .from("catalog_songs")
+          .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
+          .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+          .order("title", { ascending: true })
+          .returns<CatalogSongRecord[]>(),
+        supabase
           .from("financial_categories")
           .select("id, tenant_id, name, type, color, is_system, sort_order")
           .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
@@ -3930,6 +3998,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       moduleAdminsResult.error ||
       catalogRolesResult.error ||
       catalogMinistriesResult.error ||
+      catalogSongsResult.error ||
       financialCategoriesResult.error ||
       financialTransactionsResult.error ||
       kidsGroupsResult.error ||
@@ -4056,6 +4125,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       moduleAdminModuleIdsByMemberId,
       catalogRoles: catalogRolesResult.data ?? [],
       catalogMinistries: catalogMinistriesResult.data ?? [],
+      catalogSongs: catalogSongsResult.data ?? [],
       financialCategories: financialCategoriesResult.data ?? [],
       financialTransactions: financialTransactionsResult.data ?? [],
       kidsGroups: kidsGroupsResult.data ?? [],
@@ -5731,6 +5801,20 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       .replace(/'/g, "&#39;");
   }
 
+  function createSlug(value: string) {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function resolveCifraClubApiBaseUrl() {
+    const raw = (import.meta.env.VITE_CIFRACLUB_API_BASE_URL as string | undefined) ?? "";
+    return raw.replace(/\/+$/g, "");
+  }
+
   function syncEventDescriptionFromEditor() {
     const editor = eventDescriptionEditorRef.current;
     if (!editor) return;
@@ -5855,6 +5939,17 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventBannerPreviewUrl(null);
     setEventBannerUploadStatus("idle");
     setEventBannerUploadMessage("");
+    setEventRepertoire([]);
+    setCatalogSongSearchTerm("");
+    setNewCatalogSongTitle("");
+    setNewCatalogSongArtist("");
+    setSongCatalogStatus("idle");
+    setSongCatalogMessage("");
+    setCifraClubArtistInput("");
+    setCifraClubSongInput("");
+    setCifraClubStatus("idle");
+    setCifraClubMessage("");
+    setCifraClubResult(null);
     setIsEventFormOpen(true);
   }
 
@@ -5870,11 +5965,278 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventBannerPreviewUrl(resolveEventBannerUrl(eventRecord.cover_image_url));
     setEventBannerUploadStatus("idle");
     setEventBannerUploadMessage("");
+    setEventRepertoire([]);
+    setCatalogSongSearchTerm("");
+    setNewCatalogSongTitle("");
+    setNewCatalogSongArtist("");
+    setSongCatalogStatus("idle");
+    setSongCatalogMessage("");
+    setCifraClubArtistInput("");
+    setCifraClubSongInput("");
+    setCifraClubStatus("idle");
+    setCifraClubMessage("");
+    setCifraClubResult(null);
     setIsEventFormOpen(true);
   }
 
   function updateEventForm(field: keyof EventFormState, value: string) {
     setEventForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function addSongToRepertoire(song: CatalogSongRecord) {
+    setEventRepertoire((current) => {
+      if (current.some((item) => item.song.id === song.id)) return current;
+      const max = current.reduce((acc, item) => Math.max(acc, item.position), 0);
+      const nextPosition = Number.isFinite(max) && max > 0 ? max + 10 : 10;
+      return [...current, { id: null, song, position: nextPosition, key: "", notes: "" }].sort((a, b) => a.position - b.position);
+    });
+  }
+
+  function removeSongFromRepertoire(songId: string) {
+    setEventRepertoire((current) => current.filter((item) => item.song.id !== songId));
+  }
+
+  function moveSongInRepertoire(songId: string, direction: -1 | 1) {
+    setEventRepertoire((current) => {
+      const sorted = [...current].sort((a, b) => a.position - b.position);
+      const index = sorted.findIndex((item) => item.song.id === songId);
+      if (index < 0) return current;
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= sorted.length) return current;
+      const next = [...sorted];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return next.map((it, idx) => ({ ...it, position: (idx + 1) * 10 }));
+    });
+  }
+
+  function updateRepertoireField(songId: string, field: "key" | "notes", value: string) {
+    setEventRepertoire((current) =>
+      current.map((item) => (item.song.id === songId ? { ...item, [field]: value } : item)),
+    );
+  }
+
+  async function loadEventRepertoire(eventId: string) {
+    if (!clientData?.tenant?.id || !eventId) return;
+
+    if (demoMode) {
+      setEventRepertoire([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("tenant_event_songs")
+      .select("id, tenant_id, event_id, song_id, position, key, notes, catalog_songs (id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url)")
+      .eq("event_id", eventId)
+      .order("position", { ascending: true })
+      .returns<TenantEventSongRecord[]>();
+
+    if (error) {
+      setEventRepertoire([]);
+      return;
+    }
+
+    const next = (data ?? [])
+      .filter((row) => Boolean(row.catalog_songs))
+      .map((row) => ({
+        id: row.id,
+        song: row.catalog_songs!,
+        position: row.position,
+        key: row.key ?? "",
+        notes: row.notes ?? "",
+      }));
+
+    setEventRepertoire(next);
+  }
+
+  async function persistEventRepertoire(eventId: string) {
+    if (!clientData?.tenant?.id || !eventId) return { ok: false as const };
+    if (demoMode) return { ok: true as const };
+
+    const tenantId = clientData.tenant.id;
+    const deleteResult = await supabase.from("tenant_event_songs").delete().eq("event_id", eventId);
+    if (deleteResult.error) return { ok: false as const };
+
+    const rows = [...eventRepertoire]
+      .sort((a, b) => a.position - b.position)
+      .map((item, index) => ({
+        tenant_id: tenantId,
+        event_id: eventId,
+        song_id: item.song.id,
+        position: (index + 1) * 10,
+        key: item.key.trim() || null,
+        notes: item.notes.trim() || null,
+      }));
+
+    if (!rows.length) return { ok: true as const };
+
+    const insertResult = await supabase.from("tenant_event_songs").insert(rows);
+    if (insertResult.error) return { ok: false as const };
+
+    return { ok: true as const };
+  }
+
+  async function handleCreateTenantCatalogSong() {
+    if (!clientData?.tenant?.id) return;
+    const title = newCatalogSongTitle.trim();
+    const artist = newCatalogSongArtist.trim();
+    if (!title || !artist) {
+      setSongCatalogStatus("error");
+      setSongCatalogMessage("Informe música e autor/banda.");
+      return;
+    }
+
+    setSongCatalogStatus("loading");
+    setSongCatalogMessage("");
+
+    if (demoMode) {
+      const record: CatalogSongRecord = {
+        id: `song-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "manual",
+        cifraclub_url: null,
+        youtube_url: null,
+      };
+      setClientData((current) =>
+        current ? { ...current, catalogSongs: [...current.catalogSongs, record].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+      );
+      addSongToRepertoire(record);
+      setNewCatalogSongTitle("");
+      setNewCatalogSongArtist("");
+      setSongCatalogStatus("success");
+      setSongCatalogMessage("Música adicionada ao seu catálogo.");
+      return;
+    }
+
+    const result = await supabase
+      .from("catalog_songs")
+      .insert({
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "manual",
+        cifraclub_url: null,
+        youtube_url: null,
+        created_by: profile?.id ?? null,
+      })
+      .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
+      .single<CatalogSongRecord>();
+
+    if (result.error || !result.data) {
+      setSongCatalogStatus("error");
+      setSongCatalogMessage("Não foi possível criar a música no seu catálogo.");
+      return;
+    }
+
+    setClientData((current) =>
+      current ? { ...current, catalogSongs: [...current.catalogSongs, result.data].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+    );
+    addSongToRepertoire(result.data);
+    setNewCatalogSongTitle("");
+    setNewCatalogSongArtist("");
+    setSongCatalogStatus("success");
+    setSongCatalogMessage("Música adicionada ao seu catálogo.");
+  }
+
+  async function handleCifraClubSearch() {
+    const artist = cifraClubArtistInput.trim();
+    const song = cifraClubSongInput.trim();
+    const artistSlug = createSlug(artist);
+    const songSlug = createSlug(song);
+
+    setCifraClubStatus("loading");
+    setCifraClubMessage("");
+    setCifraClubResult(null);
+
+    if (!artistSlug || !songSlug) {
+      setCifraClubStatus("error");
+      setCifraClubMessage("Informe artista e música.");
+      return;
+    }
+
+    const base = resolveCifraClubApiBaseUrl();
+    const url = `${base}/api/cifraclub/artists/${encodeURIComponent(artistSlug)}/songs/${encodeURIComponent(songSlug)}`;
+
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch {
+      setCifraClubStatus("error");
+      setCifraClubMessage("Não foi possível consultar o Cifra Club.");
+      return;
+    }
+
+    if (!response.ok) {
+      setCifraClubStatus("error");
+      setCifraClubMessage("Música não encontrada no Cifra Club.");
+      return;
+    }
+
+    const json = (await response.json()) as CifraClubSongResponse;
+    setCifraClubResult(json);
+    setCifraClubStatus("ready");
+  }
+
+  async function handleImportCifraClubToCatalog() {
+    if (!clientData?.tenant?.id || !cifraClubResult?.name) return;
+    const title = cifraClubResult.name.trim();
+    const artist = (cifraClubResult.artist ?? "").trim();
+    if (!title || !artist) return;
+
+    setSongCatalogStatus("loading");
+    setSongCatalogMessage("");
+
+    if (demoMode) {
+      const record: CatalogSongRecord = {
+        id: `song-${Date.now()}`,
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "cifraclub",
+        cifraclub_url: cifraClubResult.cifraclub_url ?? null,
+        youtube_url: cifraClubResult.youtube_url ?? null,
+      };
+      setClientData((current) =>
+        current ? { ...current, catalogSongs: [...current.catalogSongs, record].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+      );
+      addSongToRepertoire(record);
+      setSongCatalogStatus("success");
+      setSongCatalogMessage("Música importada para o seu catálogo.");
+      return;
+    }
+
+    const result = await supabase
+      .from("catalog_songs")
+      .insert({
+        tenant_id: clientData.tenant.id,
+        title,
+        artist,
+        genre: "gospel_contemporaneo",
+        source: "cifraclub",
+        cifraclub_url: cifraClubResult.cifraclub_url ?? null,
+        youtube_url: cifraClubResult.youtube_url ?? null,
+        created_by: profile?.id ?? null,
+      })
+      .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
+      .single<CatalogSongRecord>();
+
+    if (result.error || !result.data) {
+      setSongCatalogStatus("error");
+      setSongCatalogMessage("Não foi possível importar a música para o seu catálogo.");
+      return;
+    }
+
+    setClientData((current) =>
+      current ? { ...current, catalogSongs: [...current.catalogSongs, result.data].sort((a, b) => a.title.localeCompare(b.title)) } : current,
+    );
+    addSongToRepertoire(result.data);
+    setSongCatalogStatus("success");
+    setSongCatalogMessage("Música importada para o seu catálogo.");
   }
 
   useEffect(() => {
@@ -5883,6 +6245,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     if (!editor) return;
     const initial = sanitizeRichHtml(eventForm.description_html) || (eventForm.description ? `<p>${escapePlainTextAsHtml(eventForm.description)}</p>` : "");
     editor.innerHTML = initial;
+  }, [isEventFormOpen, eventForm.id]);
+
+  useEffect(() => {
+    if (!isEventFormOpen) return;
+    if (!eventForm.id) {
+      setEventRepertoire([]);
+      return;
+    }
+    void loadEventRepertoire(eventForm.id);
   }, [isEventFormOpen, eventForm.id]);
 
   async function handleEventSubmit(event: FormEvent<HTMLFormElement>) {
@@ -5928,6 +6299,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         setEventSaveMessage("Não foi possível salvar o evento.");
         return;
       }
+      const repertoryResult = await persistEventRepertoire(eventForm.id);
+      if (!repertoryResult.ok) {
+        setEventSaveStatus("error");
+        setEventSaveMessage("Evento salvo, mas não foi possível salvar o repertório.");
+        return;
+      }
     } else {
       const insertResult = await supabase
         .from("tenant_events")
@@ -5942,6 +6319,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       }
 
       const createdEventId = insertResult.data.id;
+      setEventForm((current) => ({ ...current, id: createdEventId }));
       if (eventBannerFile) {
         const uploadResult = await uploadEventBanner(eventBannerFile, createdEventId);
         if (uploadResult.ok) {
@@ -5962,6 +6340,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
           return;
         }
       }
+      const repertoryResult = await persistEventRepertoire(createdEventId);
+      if (!repertoryResult.ok) {
+        setEventSaveStatus("error");
+        setEventSaveMessage("Evento criado, mas não foi possível salvar o repertório.");
+        return;
+      }
     }
 
     setEventSaveStatus("success");
@@ -5972,6 +6356,17 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setEventBannerPreviewUrl(null);
     setEventBannerUploadStatus("idle");
     setEventBannerUploadMessage("");
+    setEventRepertoire([]);
+    setCatalogSongSearchTerm("");
+    setNewCatalogSongTitle("");
+    setNewCatalogSongArtist("");
+    setSongCatalogStatus("idle");
+    setSongCatalogMessage("");
+    setCifraClubArtistInput("");
+    setCifraClubSongInput("");
+    setCifraClubStatus("idle");
+    setCifraClubMessage("");
+    setCifraClubResult(null);
     if (profile) {
       await loadClientData(profile.id);
     }
@@ -13940,6 +14335,219 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   />
                 </div>
               </label>
+
+              <div className="modal-section">
+                <div className="modal-section-header">
+                  <strong>Repertório (opcional)</strong>
+                  <small>Monte a lista de músicas do evento usando o catálogo global, o seu catálogo ou importando do Cifra Club.</small>
+                </div>
+
+                <div className="catalog-list">
+                  {eventRepertoire.length === 0 ? (
+                    <div className="catalog-empty">Nenhuma música adicionada ainda.</div>
+                  ) : (
+                    [...eventRepertoire]
+                      .sort((a, b) => a.position - b.position)
+                      .map((item) => (
+                        <div key={item.song.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
+                          <div className={`catalog-row${item.song.tenant_id ? "" : " system"}`} style={{ border: 0, padding: 0 }}>
+                            <span>
+                              <strong>{item.song.title}</strong>
+                              <small>
+                                {item.song.artist}
+                                {item.song.tenant_id ? " · Minha música" : " · Global"}
+                              </small>
+                            </span>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <button type="button" onClick={() => moveSongInRepertoire(item.song.id, -1)} aria-label="Subir">
+                                <ChevronUp size={16} />
+                              </button>
+                              <button type="button" onClick={() => moveSongInRepertoire(item.song.id, 1)} aria-label="Descer">
+                                <ChevronDown size={16} />
+                              </button>
+                              <button type="button" onClick={() => removeSongFromRepertoire(item.song.id)} aria-label="Remover">
+                                <X size={16} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, marginTop: 10 }}>
+                            <input
+                              className="catalog-input"
+                              placeholder="Tom (ex.: G)"
+                              value={item.key}
+                              onChange={(e) => updateRepertoireField(item.song.id, "key", e.target.value)}
+                            />
+                            <input
+                              className="catalog-input"
+                              placeholder="Notas (opcional)"
+                              value={item.notes}
+                              onChange={(e) => updateRepertoireField(item.song.id, "notes", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+
+                <div className="modal-grid" style={{ marginTop: 12 }}>
+                  <div>
+                    <label>
+                      <span>Buscar no catálogo</span>
+                      <input
+                        className="catalog-input"
+                        placeholder="Digite parte do nome ou autor"
+                        value={catalogSongSearchTerm}
+                        onChange={(e) => setCatalogSongSearchTerm(e.target.value)}
+                      />
+                    </label>
+
+                    <div className="catalog-list">
+                      {(() => {
+                        const songs = clientData?.catalogSongs ?? [];
+                        const q = catalogSongSearchTerm.trim().toLowerCase();
+                        const filtered = q
+                          ? songs.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(q))
+                          : songs;
+                        const limited = filtered.slice(0, 10);
+                        if (limited.length === 0) return <div className="catalog-empty">Nenhuma música encontrada.</div>;
+                        return limited.map((song) => {
+                          const alreadyAdded = eventRepertoire.some((it) => it.song.id === song.id);
+                          return (
+                            <div key={song.id} className={`catalog-row${song.tenant_id ? "" : " system"}`}>
+                              <span>
+                                <strong>{song.title}</strong>
+                                <small>
+                                  {song.artist}
+                                  {song.tenant_id ? " · Minha música" : " · Global"}
+                                </small>
+                              </span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                icon={<Plus size={16} />}
+                                disabled={alreadyAdded}
+                                onClick={() => addSongToRepertoire(song)}
+                              >
+                                {alreadyAdded ? "Adicionada" : "Adicionar"}
+                              </Button>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <label>
+                        <span>Adicionar música do cliente</span>
+                        <input
+                          className="catalog-input"
+                          placeholder="Música (ex.: Minha Canção)"
+                          value={newCatalogSongTitle}
+                          onChange={(e) => setNewCatalogSongTitle(e.target.value)}
+                        />
+                      </label>
+                      <input
+                        className="catalog-input"
+                        placeholder="Autor/Banda (ex.: Autoral)"
+                        value={newCatalogSongArtist}
+                        onChange={(e) => setNewCatalogSongArtist(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        icon={<Plus size={18} />}
+                        onClick={handleCreateTenantCatalogSong}
+                        disabled={songCatalogStatus === "loading" || !newCatalogSongTitle.trim() || !newCatalogSongArtist.trim()}
+                      >
+                        {songCatalogStatus === "loading" ? "Adicionando..." : "Criar e adicionar"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
+                  <div className="modal-section-header">
+                    <strong>Cifra Club</strong>
+                    <small>Busca via endpoint serverless (Vercel) sem Selenium.</small>
+                  </div>
+
+                  <div className="modal-grid">
+                    <label>
+                      <span>Artista</span>
+                      <input
+                        className="catalog-input"
+                        placeholder="Ex.: Gabriela Rocha"
+                        value={cifraClubArtistInput}
+                        onChange={(e) => setCifraClubArtistInput(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Música</span>
+                      <input
+                        className="catalog-input"
+                        placeholder="Ex.: Lugar Secreto"
+                        value={cifraClubSongInput}
+                        onChange={(e) => setCifraClubSongInput(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleCifraClubSearch}
+                      disabled={cifraClubStatus === "loading" || !cifraClubArtistInput.trim() || !cifraClubSongInput.trim()}
+                    >
+                      {cifraClubStatus === "loading" ? "Buscando..." : "Buscar no Cifra Club"}
+                    </Button>
+                    {cifraClubResult?.cifraclub_url ? (
+                      <a href={cifraClubResult.cifraclub_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                        Abrir no Cifra Club
+                      </a>
+                    ) : null}
+                    {cifraClubResult?.youtube_url ? (
+                      <a href={cifraClubResult.youtube_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                        YouTube
+                      </a>
+                    ) : null}
+                  </div>
+
+                  {cifraClubMessage ? (
+                    <p className={`login-feedback ${cifraClubStatus === "error" ? "error" : "idle"}`} style={{ marginTop: 10 }}>
+                      {cifraClubMessage}
+                    </p>
+                  ) : null}
+
+                  {cifraClubResult?.name && cifraClubResult.artist ? (
+                    <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 10, padding: 12 }}>
+                      <strong>{cifraClubResult.name}</strong>
+                      <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
+                        {cifraClubResult.artist}
+                        {Array.isArray(cifraClubResult.cifra) && cifraClubResult.cifra.length ? ` · ${cifraClubResult.cifra.length} linhas` : ""}
+                      </div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                        <Button
+                          type="button"
+                          icon={<Plus size={18} />}
+                          onClick={handleImportCifraClubToCatalog}
+                          disabled={songCatalogStatus === "loading"}
+                        >
+                          {songCatalogStatus === "loading" ? "Importando..." : "Importar e adicionar ao repertório"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {songCatalogMessage ? (
+                    <p className={`login-feedback ${songCatalogStatus}`} style={{ marginTop: 10 }}>
+                      {songCatalogMessage}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
 
               <div className="modal-grid">
                 <label>
