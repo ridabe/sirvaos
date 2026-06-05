@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Church,
   Eye,
+  EyeOff,
   Fingerprint,
   Layers3,
   LockKeyhole,
@@ -40,6 +41,7 @@ import { supabase } from "./lib/supabase";
 import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 import { ClientAdmin } from "./pages/ClientAdmin";
 import { MemberPortal } from "./pages/MemberPortal";
+import { Produto } from "./pages/Produto";
 
 type LandingLoginStatus = "idle" | "loading" | "success" | "error";
 type LoginMode = "login" | "first-access";
@@ -182,6 +184,7 @@ export function App() {
   const [firstAccessRequiresBirthDate, setFirstAccessRequiresBirthDate] = useState(false);
   const [firstAccessToken, setFirstAccessToken] = useState("");
   const [firstAccessContext, setFirstAccessContext] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -204,6 +207,10 @@ export function App() {
 
   if (window.location.pathname === "/membro") {
     return <MemberPortal />;
+  }
+
+  if (window.location.pathname === "/produto") {
+    return <Produto />;
   }
 
   /* Faz login pelo Supabase sem enviar credenciais via query string. */
@@ -575,15 +582,19 @@ export function App() {
                 <TextField
                   autoComplete="current-password"
                   endIcon={
-                    <button type="button" aria-label="Mostrar senha">
-                      <Eye size={18} />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   }
                   icon={<LockKeyhole size={18} />}
                   label="Senha"
                   name="password"
                   placeholder="Sua senha"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                 />
               ) : null}
 
