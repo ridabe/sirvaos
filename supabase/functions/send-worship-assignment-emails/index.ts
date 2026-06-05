@@ -22,6 +22,18 @@ interface AssignmentRow {
   worship_roles: { name: string } | null;
 }
 
+interface WorshipEventSongRow {
+  position: number;
+  key: string | null;
+  notes: string | null;
+  catalog_songs: {
+    title: string;
+    artist: string;
+    cifraclub_url: string | null;
+    youtube_url: string | null;
+  } | null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -110,6 +122,27 @@ Deno.serve(async (req) => {
     });
   }
 
+  const { data: worshipSongsData, error: worshipSongsError } = await supabase
+    .from('worship_event_songs')
+    .select('position, key, notes, catalog_songs (title, artist, cifraclub_url, youtube_url)')
+    .eq('event_id', event_id)
+    .order('position', { ascending: true })
+    .returns<WorshipEventSongRow[]>();
+
+  const repertoireItems = (worshipSongsError ? [] : (worshipSongsData ?? []))
+    .filter((row) => Boolean(row.catalog_songs?.title))
+    .map((row, index) => ({
+      index: index + 1,
+      title: row.catalog_songs!.title,
+      artist: row.catalog_songs!.artist,
+      key: (row.key ?? '').trim() || null,
+      notes: (row.notes ?? '').trim() || null,
+      cifraclub_url: row.catalog_songs!.cifraclub_url,
+      youtube_url: row.catalog_songs!.youtube_url,
+    }));
+
+  const repertoireHtml = buildRepertoireHtml(repertoireItems);
+
   // Fetch queued recipients
   const { data: recipients } = await supabase
     .from('worship_email_campaign_recipients')
@@ -163,6 +196,7 @@ Deno.serve(async (req) => {
       location: event.location,
       roleName,
       notes,
+      repertoireHtml,
     });
 
     try {
@@ -232,8 +266,9 @@ function buildEmailHtml(params: {
   location: string | null;
   roleName: string;
   notes: string | null;
+  repertoireHtml: string;
 }): string {
-  const { memberName, eventTitle, eventDate, location, roleName, notes } = params;
+  const { memberName, eventTitle, eventDate, location, roleName, notes, repertoireHtml } = params;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -297,6 +332,8 @@ function buildEmailHtml(params: {
                 </tr>` : ''}
               </table>
 
+              ${repertoireHtml ? `<div style="margin:0 0 24px;">${repertoireHtml}</div>` : ''}
+
               <p style="margin:0;font-size:14px;color:#9ca3af;">
                 Este e-mail foi enviado automaticamente pelo sistema SirvaOS.
               </p>
@@ -314,6 +351,63 @@ function buildEmailHtml(params: {
   </table>
 </body>
 </html>`;
+}
+
+function buildRepertoireHtml(items: Array<{
+  index: number;
+  title: string;
+  artist: string;
+  key: string | null;
+  notes: string | null;
+  cifraclub_url: string | null;
+  youtube_url: string | null;
+}>): string {
+  if (!items.length) {
+    return `
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 8px;font-size:13px;font-weight:800;color:#111827;">🎵 Repertório</p>
+      <p style="margin:0;font-size:13px;color:#6b7280;">Repertório não informado.</p>
+    </td>
+  </tr>
+</table>`.trim();
+  }
+
+  const rows = items.map((item) => {
+    const metaParts = [
+      item.key ? `Tom: <strong>${escapeHtml(item.key)}</strong>` : null,
+      item.notes ? escapeHtml(item.notes) : null,
+    ].filter(Boolean).join(' · ');
+
+    const links = [
+      item.cifraclub_url ? `<a href="${escapeHtml(item.cifraclub_url)}" target="_blank" rel="noreferrer" style="color:#6d28d9;text-decoration:none;">Cifra Club</a>` : null,
+      item.youtube_url ? `<a href="${escapeHtml(item.youtube_url)}" target="_blank" rel="noreferrer" style="color:#6d28d9;text-decoration:none;">YouTube</a>` : null,
+    ].filter(Boolean).join(' · ');
+
+    return `
+<tr>
+  <td style="padding:10px 0;border-top:1px solid #f3f4f6;">
+    <p style="margin:0;font-size:14px;line-height:1.35;color:#111827;">${item.index}. ${escapeHtml(item.title)} — <span style="color:#6b7280;">${escapeHtml(item.artist)}</span></p>
+    ${metaParts ? `<p style="margin:4px 0 0;font-size:12px;line-height:1.45;color:#6b7280;">${metaParts}</p>` : ''}
+    ${links ? `<p style="margin:6px 0 0;font-size:12px;line-height:1.45;">${links}</p>` : ''}
+  </td>
+</tr>`.trim();
+  }).join('\n');
+
+  return `
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 8px;font-size:13px;font-weight:800;color:#111827;">🎵 Repertório</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </td>
+  </tr>
+</table>`.trim();
 }
 
 function escapeHtml(str: string): string {

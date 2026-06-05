@@ -663,23 +663,22 @@ type EventRepertoireItem = {
   key: string;
   notes: string;
 };
-type CifraClubSongResponse = {
-  artist: string | null;
-  name: string | null;
-  youtube_url: string | null;
-  cifraclub_url: string | null;
-  cifra: string[];
+type MusicSearchResult = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  artworkUrl: string | null;
 };
-type CifraClubCandidate = {
-  artist_slug: string;
-  song_slug: string;
-  artist_name: string | null;
-  song_name: string | null;
+type SongAutoImportPreview = {
+  title: string;
+  artist: string;
+  album: string;
+  artworkUrl: string | null;
   cifraclub_url: string;
+  youtube_url: string;
+  lyrics: string[] | null;
 };
-type CifraClubSearchResponse =
-  | { mode: "song"; song: CifraClubSongResponse }
-  | { mode: "candidates"; candidates: CifraClubCandidate[] };
 type WorshipEventFormState = {
   title: string;
   event_type: WorshipEventRecord["event_type"];
@@ -1968,12 +1967,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [newCatalogSongArtist, setNewCatalogSongArtist] = useState("");
   const [songCatalogStatus, setSongCatalogStatus] = useState<LoginStatus>("idle");
   const [songCatalogMessage, setSongCatalogMessage] = useState("");
-  const [cifraClubArtistInput, setCifraClubArtistInput] = useState("");
-  const [cifraClubSongInput, setCifraClubSongInput] = useState("");
-  const [cifraClubStatus, setCifraClubStatus] = useState<LoadStatus>("idle");
-  const [cifraClubMessage, setCifraClubMessage] = useState("");
-  const [cifraClubResult, setCifraClubResult] = useState<CifraClubSongResponse | null>(null);
-  const [cifraClubCandidates, setCifraClubCandidates] = useState<CifraClubCandidate[]>([]);
+  const [songSearchArtistInput, setSongSearchArtistInput] = useState("");
+  const [songSearchTitleInput, setSongSearchTitleInput] = useState("");
+  const [songSearchStatus, setSongSearchStatus] = useState<LoadStatus>("idle");
+  const [songSearchMessage, setSongSearchMessage] = useState("");
+  const [songSearchResults, setSongSearchResults] = useState<MusicSearchResult[]>([]);
+  const [songSearchSelected, setSongSearchSelected] = useState<SongAutoImportPreview | null>(null);
   const eventDescriptionEditorRef = useRef<HTMLDivElement | null>(null);
   const catalogSongPickerRef = useRef<HTMLDivElement | null>(null);
   const [eventViewMode, setEventViewMode] = useState<"list" | "calendar">("list");
@@ -2040,12 +2039,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [worshipNewSongArtist, setWorshipNewSongArtist] = useState("");
   const [worshipSongCatalogStatus, setWorshipSongCatalogStatus] = useState<LoginStatus>("idle");
   const [worshipSongCatalogMessage, setWorshipSongCatalogMessage] = useState("");
-  const [worshipCifraClubArtistInput, setWorshipCifraClubArtistInput] = useState("");
-  const [worshipCifraClubSongInput, setWorshipCifraClubSongInput] = useState("");
-  const [worshipCifraClubStatus, setWorshipCifraClubStatus] = useState<LoadStatus>("idle");
-  const [worshipCifraClubMessage, setWorshipCifraClubMessage] = useState("");
-  const [worshipCifraClubResult, setWorshipCifraClubResult] = useState<CifraClubSongResponse | null>(null);
-  const [worshipCifraClubCandidates, setWorshipCifraClubCandidates] = useState<CifraClubCandidate[]>([]);
+  const [worshipSongSearchArtistInput, setWorshipSongSearchArtistInput] = useState("");
+  const [worshipSongSearchTitleInput, setWorshipSongSearchTitleInput] = useState("");
+  const [worshipSongSearchStatus, setWorshipSongSearchStatus] = useState<LoadStatus>("idle");
+  const [worshipSongSearchMessage, setWorshipSongSearchMessage] = useState("");
+  const [worshipSongSearchResults, setWorshipSongSearchResults] = useState<MusicSearchResult[]>([]);
+  const [worshipSongSearchSelected, setWorshipSongSearchSelected] = useState<SongAutoImportPreview | null>(null);
   const [worshipRepertoireSaveStatus, setWorshipRepertoireSaveStatus] = useState<LoginStatus>("idle");
   const [worshipRepertoireSaveMessage, setWorshipRepertoireSaveMessage] = useState("");
   const [worshipRepertoireCompleted, setWorshipRepertoireCompleted] = useState(false);
@@ -5900,9 +5899,56 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       .replace(/^-+|-+$/g, "");
   }
 
-  function resolveCifraClubApiBaseUrl() {
-    const raw = (import.meta.env.VITE_CIFRACLUB_API_BASE_URL as string | undefined) ?? "";
-    return raw.replace(/\/+$/g, "");
+  function buildCifrasClubUrl(artist: string, title: string) {
+    const a = createSlug(artist);
+    const t = createSlug(title);
+    return `https://www.cifraclub.com.br/${a}/${t}/`;
+  }
+
+  function buildYouTubeSearchUrl(artist: string, title: string) {
+    const q = `${artist} ${title}`.trim();
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  }
+
+  async function fetchLyricsLines(artist: string, title: string): Promise<string[] | null> {
+    const a = artist.trim();
+    const t = title.trim();
+    if (!a || !t) return null;
+    try {
+      const response = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(a)}/${encodeURIComponent(t)}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return null;
+      const json = (await response.json()) as { lyrics?: unknown; error?: unknown };
+      const raw = typeof json?.lyrics === "string" ? json.lyrics.trim() : "";
+      if (!raw) return null;
+      return raw.split(/\r?\n/);
+    } catch {
+      return null;
+    }
+  }
+
+  async function searchMusicItunes(query: string): Promise<MusicSearchResult[]> {
+    const q = query.trim();
+    if (!q) return [];
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=15&country=BR`;
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) return [];
+    const json = (await response.json()) as { results?: unknown[] };
+    const seen = new Set<string>();
+    const results: MusicSearchResult[] = [];
+    for (const item of json.results ?? []) {
+      const artist = String((item as { artistName?: unknown }).artistName ?? "").trim();
+      const title = String((item as { trackName?: unknown }).trackName ?? "").trim();
+      const album = String((item as { collectionName?: unknown }).collectionName ?? "").trim();
+      const artworkUrl = String((item as { artworkUrl60?: unknown }).artworkUrl60 ?? "").trim() || null;
+      if (!artist || !title) continue;
+      const key = `${artist}::${title}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push({ id: key, title, artist, album, artworkUrl });
+    }
+    return results;
   }
 
   function syncEventDescriptionFromEditor() {
@@ -6038,11 +6084,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setNewCatalogSongArtist("");
     setSongCatalogStatus("idle");
     setSongCatalogMessage("");
-    setCifraClubArtistInput("");
-    setCifraClubSongInput("");
-    setCifraClubStatus("idle");
-    setCifraClubMessage("");
-    setCifraClubResult(null);
+    setSongSearchArtistInput("");
+    setSongSearchTitleInput("");
+    setSongSearchStatus("idle");
+    setSongSearchMessage("");
+    setSongSearchResults([]);
+    setSongSearchSelected(null);
     setIsEventFormOpen(true);
   }
 
@@ -6067,11 +6114,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setNewCatalogSongArtist("");
     setSongCatalogStatus("idle");
     setSongCatalogMessage("");
-    setCifraClubArtistInput("");
-    setCifraClubSongInput("");
-    setCifraClubStatus("idle");
-    setCifraClubMessage("");
-    setCifraClubResult(null);
+    setSongSearchArtistInput("");
+    setSongSearchTitleInput("");
+    setSongSearchStatus("idle");
+    setSongSearchMessage("");
+    setSongSearchResults([]);
+    setSongSearchSelected(null);
     setIsEventFormOpen(true);
   }
 
@@ -6262,209 +6310,60 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setSongCatalogMessage("Música adicionada ao seu catálogo.");
   }
 
-  async function handleCifraClubSearch() {
-    setCifraClubStatus("loading");
-    setCifraClubMessage("");
-    setCifraClubResult(null);
-    setCifraClubCandidates([]);
+  async function handleSongSearch() {
+    setSongSearchStatus("loading");
+    setSongSearchMessage("");
+    setSongSearchResults([]);
+    setSongSearchSelected(null);
+
+    const artist = songSearchArtistInput.trim();
+    const title = songSearchTitleInput.trim();
+    const query = `${artist} ${title}`.trim();
+    if (!query) {
+      setSongSearchStatus("error");
+      setSongSearchMessage("Informe artista ou música.");
+      return;
+    }
 
     try {
-      const artist = cifraClubArtistInput.trim();
-      const song = cifraClubSongInput.trim();
-      const artistSlug = createSlug(artist);
-      const songSlug = createSlug(song);
-
-      if (!artistSlug && !songSlug) {
-        setCifraClubStatus("error");
-        setCifraClubMessage("Informe artista ou música.");
-        return;
-      }
-
-      if (!artistSlug && songSlug) {
-        const matches = (clientData?.catalogSongs ?? [])
-          .filter((s) => s.title.toLowerCase().includes(song.toLowerCase()))
-          .slice(0, 12);
-
-        const candidates: CifraClubCandidate[] = [];
-        const seen = new Set<string>();
-        for (const m of matches) {
-          const a = createSlug(m.artist);
-          const s = createSlug(m.title);
-          const key = `${a}/${s}`;
-          if (!a || !s || seen.has(key)) continue;
-          seen.add(key);
-          candidates.push({
-            artist_slug: a,
-            song_slug: s,
-            artist_name: m.artist,
-            song_name: m.title,
-            cifraclub_url: `https://www.cifraclub.com.br/${encodeURIComponent(a)}/${encodeURIComponent(s)}`,
-          });
-        }
-
-        if (candidates.length === 0) {
-          setCifraClubStatus("error");
-          setCifraClubMessage("Para buscar apenas pela música, informe também o artista.");
-          return;
-        }
-
-        setCifraClubCandidates(candidates);
-        setCifraClubStatus("ready");
-        setCifraClubMessage("Selecione um artista sugerido (do catálogo) para buscar no Cifra Club.");
-        return;
-      }
-
-      const base = resolveCifraClubApiBaseUrl();
-      const url = `${base}/api/cifraclub/search?artist=${encodeURIComponent(artistSlug)}&song=${encodeURIComponent(songSlug)}`;
-
-      if (import.meta.env.DEV && !base) {
-        setCifraClubStatus("error");
-        setCifraClubMessage('Consulta ao Cifra Club indisponível no modo local. Configure VITE_CIFRACLUB_API_BASE_URL (URL do seu deploy na Vercel).');
-        return;
-      }
-
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 15000);
-
-      let response: Response;
-      try {
-        response = await fetch(url, { signal: controller.signal });
-      } catch (err) {
-        const isAbort = (err as { name?: string } | null)?.name === "AbortError";
-        setCifraClubStatus("error");
-        setCifraClubMessage(isAbort ? "Tempo esgotado ao consultar o Cifra Club." : "Não foi possível consultar o Cifra Club.");
-        return;
-      } finally {
-        window.clearTimeout(timeout);
-      }
-
-      if (!response.ok) {
-        const status = response.status;
-        let details = "";
-        let upstreamStatus: number | null = null;
-        try {
-          const body = (await response.json()) as { error?: string; message?: string; upstream_status?: number | null };
-          details = body?.error || body?.message || "";
-          upstreamStatus = typeof body?.upstream_status === "number" ? body.upstream_status : null;
-        } catch {
-          try {
-            details = (await response.text()).slice(0, 160);
-          } catch {
-            details = "";
-          }
-        }
-
-        setCifraClubStatus("error");
-        setCifraClubMessage(
-          `Falha ao buscar no Cifra Club (${status}).${
-            upstreamStatus ? ` Upstream: ${upstreamStatus}.` : ""
-          } ${
-            upstreamStatus === 403
-              ? "O Cifra Club bloqueou a consulta automática (403). Isso pode acontecer por regras anti-bot. Tente novamente ou use o link direto/importe manualmente."
-              : details || "Verifique o artista/música e tente novamente."
-          }`.trim(),
-        );
-        return;
-      }
-
-      const contentType = response.headers.get("content-type") || "";
-      if (/text\/html/i.test(contentType)) {
-        setCifraClubStatus("error");
-        setCifraClubMessage('O endpoint retornou HTML (provável rewrite para /index.html). Verifique o deploy na Vercel e o vercel.json para liberar rotas /api.');
-        return;
-      }
-
-      let json: CifraClubSearchResponse;
-      try {
-        json = (await response.json()) as CifraClubSearchResponse;
-      } catch {
-        setCifraClubStatus("error");
-        setCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
-        return;
-      }
-
-      if (json.mode === "song") {
-        setCifraClubResult(json.song);
-        setCifraClubCandidates([]);
-        setCifraClubStatus("ready");
-        return;
-      }
-
-      if (json.mode === "candidates") {
-        setCifraClubCandidates(json.candidates);
-        setCifraClubStatus("ready");
-        if (json.candidates.length === 0) setCifraClubMessage("Nenhum resultado encontrado.");
-        return;
-      }
-
-      setCifraClubStatus("error");
-      setCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
-    } catch (err) {
-      setCifraClubStatus("error");
-      setCifraClubMessage((err as { message?: string } | null)?.message ? String((err as { message?: string }).message) : "Erro inesperado ao consultar o Cifra Club.");
+      const results = await searchMusicItunes(query);
+      setSongSearchResults(results);
+      setSongSearchStatus("ready");
+      if (results.length === 0) setSongSearchMessage("Nenhum resultado encontrado.");
+    } catch {
+      setSongSearchStatus("error");
+      setSongSearchMessage("Não foi possível buscar músicas.");
     }
   }
 
-  async function handleCifraClubSelectCandidate(candidate: CifraClubCandidate) {
-    const artistSlug = candidate.artist_slug;
-    const songSlug = candidate.song_slug;
-    if (!artistSlug || !songSlug) return;
+  async function handleSongSearchSelect(result: MusicSearchResult) {
+    setSongSearchStatus("loading");
+    setSongSearchMessage("");
+    setSongSearchSelected(null);
 
-    setCifraClubArtistInput(artistSlug);
-    setCifraClubSongInput(songSlug);
-    setCifraClubStatus("loading");
-    setCifraClubMessage("");
-    setCifraClubResult(null);
-    setCifraClubCandidates([]);
-
-    const base = resolveCifraClubApiBaseUrl();
-    const url = `${base}/api/cifraclub/search?artist=${encodeURIComponent(artistSlug)}&song=${encodeURIComponent(songSlug)}`;
-
-    let response: Response;
     try {
-      response = await fetch(url);
+      const lyrics = await fetchLyricsLines(result.artist, result.title);
+      setSongSearchSelected({
+        title: result.title,
+        artist: result.artist,
+        album: result.album,
+        artworkUrl: result.artworkUrl,
+        cifraclub_url: buildCifrasClubUrl(result.artist, result.title),
+        youtube_url: buildYouTubeSearchUrl(result.artist, result.title),
+        lyrics,
+      });
+      setSongSearchStatus("ready");
+      if (!lyrics) setSongSearchMessage("Música encontrada, mas a letra não foi localizada automaticamente.");
     } catch {
-      setCifraClubStatus("error");
-      setCifraClubMessage("Não foi possível consultar o Cifra Club.");
-      return;
+      setSongSearchStatus("error");
+      setSongSearchMessage("Não foi possível preparar a importação da música.");
     }
-
-    if (!response.ok) {
-      setCifraClubStatus("error");
-      setCifraClubMessage(`Falha ao buscar no Cifra Club (${response.status}).`);
-      return;
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (/text\/html/i.test(contentType)) {
-      setCifraClubStatus("error");
-      setCifraClubMessage('O endpoint retornou HTML (provável rewrite para /index.html). Verifique o deploy na Vercel e o vercel.json para liberar rotas /api.');
-      return;
-    }
-
-    let json: CifraClubSearchResponse;
-    try {
-      json = (await response.json()) as CifraClubSearchResponse;
-    } catch {
-      setCifraClubStatus("error");
-      setCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
-      return;
-    }
-
-    if (json.mode === "song") {
-      setCifraClubResult(json.song);
-      setCifraClubStatus("ready");
-      return;
-    }
-
-    setCifraClubStatus("error");
-    setCifraClubMessage("Não foi possível carregar a música selecionada.");
   }
 
-  async function handleImportCifraClubToCatalog() {
-    if (!clientData?.tenant?.id || !cifraClubResult?.name) return;
-    const title = cifraClubResult.name.trim();
-    const artist = (cifraClubResult.artist ?? "").trim();
+  async function handleImportSongSearchToCatalog() {
+    if (!clientData?.tenant?.id || !songSearchSelected) return;
+    const title = songSearchSelected.title.trim();
+    const artist = songSearchSelected.artist.trim();
     if (!title || !artist) return;
 
     setSongCatalogStatus("loading");
@@ -6477,16 +6376,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         title,
         artist,
         genre: "gospel_contemporaneo",
-        source: "cifraclub",
-        cifraclub_url: cifraClubResult.cifraclub_url ?? null,
-        youtube_url: cifraClubResult.youtube_url ?? null,
+        source: "manual",
+        cifraclub_url: songSearchSelected.cifraclub_url,
+        youtube_url: songSearchSelected.youtube_url,
       };
       setClientData((current) =>
         current ? { ...current, catalogSongs: [...current.catalogSongs, record].sort((a, b) => a.title.localeCompare(b.title)) } : current,
       );
       addSongToRepertoire(record);
       setSongCatalogStatus("success");
-      setSongCatalogMessage("Música importada para o seu catálogo.");
+      setSongCatalogMessage("Música importada para o seu catálogo e adicionada ao repertório.");
       return;
     }
 
@@ -6497,9 +6396,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         title,
         artist,
         genre: "gospel_contemporaneo",
-        source: "cifraclub",
-        cifraclub_url: cifraClubResult.cifraclub_url ?? null,
-        youtube_url: cifraClubResult.youtube_url ?? null,
+        source: "manual",
+        cifraclub_url: songSearchSelected.cifraclub_url,
+        youtube_url: songSearchSelected.youtube_url,
         created_by: profile?.id ?? null,
       })
       .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
@@ -6516,7 +6415,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     );
     addSongToRepertoire(result.data);
     setSongCatalogStatus("success");
-    setSongCatalogMessage("Música importada para o seu catálogo.");
+    setSongCatalogMessage("Música importada para o seu catálogo e adicionada ao repertório.");
   }
 
   useEffect(() => {
@@ -6672,11 +6571,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setNewCatalogSongArtist("");
     setSongCatalogStatus("idle");
     setSongCatalogMessage("");
-    setCifraClubArtistInput("");
-    setCifraClubSongInput("");
-    setCifraClubStatus("idle");
-    setCifraClubMessage("");
-    setCifraClubResult(null);
+    setSongSearchArtistInput("");
+    setSongSearchTitleInput("");
+    setSongSearchStatus("idle");
+    setSongSearchMessage("");
+    setSongSearchResults([]);
+    setSongSearchSelected(null);
     if (profile) {
       await loadClientData(profile.id);
     }
@@ -6776,11 +6676,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setWorshipNewSongArtist("");
     setWorshipSongCatalogStatus("idle");
     setWorshipSongCatalogMessage("");
-    setWorshipCifraClubArtistInput("");
-    setWorshipCifraClubSongInput("");
-    setWorshipCifraClubStatus("idle");
-    setWorshipCifraClubMessage("");
-    setWorshipCifraClubResult(null);
+    setWorshipSongSearchArtistInput("");
+    setWorshipSongSearchTitleInput("");
+    setWorshipSongSearchStatus("idle");
+    setWorshipSongSearchMessage("");
+    setWorshipSongSearchResults([]);
+    setWorshipSongSearchSelected(null);
     setWorshipRepertoireSaveStatus("idle");
     setWorshipRepertoireSaveMessage("");
     setWorshipRepertoireCompleted(false);
@@ -6802,11 +6703,12 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setWorshipNewSongArtist("");
     setWorshipSongCatalogStatus("idle");
     setWorshipSongCatalogMessage("");
-    setWorshipCifraClubArtistInput("");
-    setWorshipCifraClubSongInput("");
-    setWorshipCifraClubStatus("idle");
-    setWorshipCifraClubMessage("");
-    setWorshipCifraClubResult(null);
+    setWorshipSongSearchArtistInput("");
+    setWorshipSongSearchTitleInput("");
+    setWorshipSongSearchStatus("idle");
+    setWorshipSongSearchMessage("");
+    setWorshipSongSearchResults([]);
+    setWorshipSongSearchSelected(null);
     setWorshipRepertoireSaveStatus("idle");
     setWorshipRepertoireSaveMessage("");
     setWorshipRepertoireCompleted(false);
@@ -6997,209 +6899,60 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     setWorshipSongCatalogMessage("Música adicionada ao seu catálogo.");
   }
 
-  async function handleWorshipCifraClubSearch() {
-    setWorshipCifraClubStatus("loading");
-    setWorshipCifraClubMessage("");
-    setWorshipCifraClubResult(null);
-    setWorshipCifraClubCandidates([]);
+  async function handleWorshipSongSearch() {
+    setWorshipSongSearchStatus("loading");
+    setWorshipSongSearchMessage("");
+    setWorshipSongSearchResults([]);
+    setWorshipSongSearchSelected(null);
+
+    const artist = worshipSongSearchArtistInput.trim();
+    const title = worshipSongSearchTitleInput.trim();
+    const query = `${artist} ${title}`.trim();
+    if (!query) {
+      setWorshipSongSearchStatus("error");
+      setWorshipSongSearchMessage("Informe artista ou música.");
+      return;
+    }
 
     try {
-      const artist = worshipCifraClubArtistInput.trim();
-      const song = worshipCifraClubSongInput.trim();
-      const artistSlug = createSlug(artist);
-      const songSlug = createSlug(song);
-
-      if (!artistSlug && !songSlug) {
-        setWorshipCifraClubStatus("error");
-        setWorshipCifraClubMessage("Informe artista ou música.");
-        return;
-      }
-
-      if (!artistSlug && songSlug) {
-        const matches = (clientData?.catalogSongs ?? [])
-          .filter((s) => s.title.toLowerCase().includes(song.toLowerCase()))
-          .slice(0, 12);
-
-        const candidates: CifraClubCandidate[] = [];
-        const seen = new Set<string>();
-        for (const m of matches) {
-          const a = createSlug(m.artist);
-          const s = createSlug(m.title);
-          const key = `${a}/${s}`;
-          if (!a || !s || seen.has(key)) continue;
-          seen.add(key);
-          candidates.push({
-            artist_slug: a,
-            song_slug: s,
-            artist_name: m.artist,
-            song_name: m.title,
-            cifraclub_url: `https://www.cifraclub.com.br/${encodeURIComponent(a)}/${encodeURIComponent(s)}`,
-          });
-        }
-
-        if (candidates.length === 0) {
-          setWorshipCifraClubStatus("error");
-          setWorshipCifraClubMessage("Para buscar apenas pela música, informe também o artista.");
-          return;
-        }
-
-        setWorshipCifraClubCandidates(candidates);
-        setWorshipCifraClubStatus("ready");
-        setWorshipCifraClubMessage("Selecione um artista sugerido (do catálogo) para buscar no Cifra Club.");
-        return;
-      }
-
-      const base = resolveCifraClubApiBaseUrl();
-      const url = `${base}/api/cifraclub/search?artist=${encodeURIComponent(artistSlug)}&song=${encodeURIComponent(songSlug)}`;
-
-      if (import.meta.env.DEV && !base) {
-        setWorshipCifraClubStatus("error");
-        setWorshipCifraClubMessage('Consulta ao Cifra Club indisponível no modo local. Configure VITE_CIFRACLUB_API_BASE_URL (URL do seu deploy na Vercel).');
-        return;
-      }
-
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 15000);
-
-      let response: Response;
-      try {
-        response = await fetch(url, { signal: controller.signal });
-      } catch (err) {
-        const isAbort = (err as { name?: string } | null)?.name === "AbortError";
-        setWorshipCifraClubStatus("error");
-        setWorshipCifraClubMessage(isAbort ? "Tempo esgotado ao consultar o Cifra Club." : "Não foi possível consultar o Cifra Club.");
-        return;
-      } finally {
-        window.clearTimeout(timeout);
-      }
-
-      if (!response.ok) {
-        const status = response.status;
-        let details = "";
-        let upstreamStatus: number | null = null;
-        try {
-          const body = (await response.json()) as { error?: string; message?: string; upstream_status?: number | null };
-          details = body?.error || body?.message || "";
-          upstreamStatus = typeof body?.upstream_status === "number" ? body.upstream_status : null;
-        } catch {
-          try {
-            details = (await response.text()).slice(0, 160);
-          } catch {
-            details = "";
-          }
-        }
-
-        setWorshipCifraClubStatus("error");
-        setWorshipCifraClubMessage(
-          `Falha ao buscar no Cifra Club (${status}).${
-            upstreamStatus ? ` Upstream: ${upstreamStatus}.` : ""
-          } ${
-            upstreamStatus === 403
-              ? "O Cifra Club bloqueou a consulta automática (403). Isso pode acontecer por regras anti-bot. Tente novamente ou use o link direto/importe manualmente."
-              : details || "Verifique o artista/música e tente novamente."
-          }`.trim(),
-        );
-        return;
-      }
-
-      const contentType = response.headers.get("content-type") || "";
-      if (/text\/html/i.test(contentType)) {
-        setWorshipCifraClubStatus("error");
-        setWorshipCifraClubMessage('O endpoint retornou HTML (provável rewrite para /index.html). Verifique o deploy na Vercel e o vercel.json para liberar rotas /api.');
-        return;
-      }
-
-      let json: CifraClubSearchResponse;
-      try {
-        json = (await response.json()) as CifraClubSearchResponse;
-      } catch {
-        setWorshipCifraClubStatus("error");
-        setWorshipCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
-        return;
-      }
-
-      if (json.mode === "song") {
-        setWorshipCifraClubResult(json.song);
-        setWorshipCifraClubCandidates([]);
-        setWorshipCifraClubStatus("ready");
-        return;
-      }
-
-      if (json.mode === "candidates") {
-        setWorshipCifraClubCandidates(json.candidates);
-        setWorshipCifraClubStatus("ready");
-        if (json.candidates.length === 0) setWorshipCifraClubMessage("Nenhum resultado encontrado.");
-        return;
-      }
-
-      setWorshipCifraClubStatus("error");
-      setWorshipCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
-    } catch (err) {
-      setWorshipCifraClubStatus("error");
-      setWorshipCifraClubMessage((err as { message?: string } | null)?.message ? String((err as { message?: string }).message) : "Erro inesperado ao consultar o Cifra Club.");
+      const results = await searchMusicItunes(query);
+      setWorshipSongSearchResults(results);
+      setWorshipSongSearchStatus("ready");
+      if (results.length === 0) setWorshipSongSearchMessage("Nenhum resultado encontrado.");
+    } catch {
+      setWorshipSongSearchStatus("error");
+      setWorshipSongSearchMessage("Não foi possível buscar músicas.");
     }
   }
 
-  async function handleWorshipCifraClubSelectCandidate(candidate: CifraClubCandidate) {
-    const artistSlug = candidate.artist_slug;
-    const songSlug = candidate.song_slug;
-    if (!artistSlug || !songSlug) return;
+  async function handleWorshipSongSearchSelect(result: MusicSearchResult) {
+    setWorshipSongSearchStatus("loading");
+    setWorshipSongSearchMessage("");
+    setWorshipSongSearchSelected(null);
 
-    setWorshipCifraClubArtistInput(artistSlug);
-    setWorshipCifraClubSongInput(songSlug);
-    setWorshipCifraClubStatus("loading");
-    setWorshipCifraClubMessage("");
-    setWorshipCifraClubResult(null);
-    setWorshipCifraClubCandidates([]);
-
-    const base = resolveCifraClubApiBaseUrl();
-    const url = `${base}/api/cifraclub/search?artist=${encodeURIComponent(artistSlug)}&song=${encodeURIComponent(songSlug)}`;
-
-    let response: Response;
     try {
-      response = await fetch(url);
+      const lyrics = await fetchLyricsLines(result.artist, result.title);
+      setWorshipSongSearchSelected({
+        title: result.title,
+        artist: result.artist,
+        album: result.album,
+        artworkUrl: result.artworkUrl,
+        cifraclub_url: buildCifrasClubUrl(result.artist, result.title),
+        youtube_url: buildYouTubeSearchUrl(result.artist, result.title),
+        lyrics,
+      });
+      setWorshipSongSearchStatus("ready");
+      if (!lyrics) setWorshipSongSearchMessage("Música encontrada, mas a letra não foi localizada automaticamente.");
     } catch {
-      setWorshipCifraClubStatus("error");
-      setWorshipCifraClubMessage("Não foi possível consultar o Cifra Club.");
-      return;
+      setWorshipSongSearchStatus("error");
+      setWorshipSongSearchMessage("Não foi possível preparar a importação da música.");
     }
-
-    if (!response.ok) {
-      setWorshipCifraClubStatus("error");
-      setWorshipCifraClubMessage(`Falha ao buscar no Cifra Club (${response.status}).`);
-      return;
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (/text\/html/i.test(contentType)) {
-      setWorshipCifraClubStatus("error");
-      setWorshipCifraClubMessage('O endpoint retornou HTML (provável rewrite para /index.html). Verifique o deploy na Vercel e o vercel.json para liberar rotas /api.');
-      return;
-    }
-
-    let json: CifraClubSearchResponse;
-    try {
-      json = (await response.json()) as CifraClubSearchResponse;
-    } catch {
-      setWorshipCifraClubStatus("error");
-      setWorshipCifraClubMessage("Resposta inválida ao consultar o Cifra Club.");
-      return;
-    }
-
-    if (json.mode === "song") {
-      setWorshipCifraClubResult(json.song);
-      setWorshipCifraClubStatus("ready");
-      return;
-    }
-
-    setWorshipCifraClubStatus("error");
-    setWorshipCifraClubMessage("Não foi possível carregar a música selecionada.");
   }
 
-  async function handleWorshipImportCifraClubToCatalog() {
-    if (!clientData?.tenant?.id || !worshipCifraClubResult?.name) return;
-    const title = worshipCifraClubResult.name.trim();
-    const artist = (worshipCifraClubResult.artist ?? "").trim();
+  async function handleWorshipImportSongSearchToCatalog() {
+    if (!clientData?.tenant?.id || !worshipSongSearchSelected) return;
+    const title = worshipSongSearchSelected.title.trim();
+    const artist = worshipSongSearchSelected.artist.trim();
     if (!title || !artist) return;
 
     setWorshipSongCatalogStatus("loading");
@@ -7212,16 +6965,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         title,
         artist,
         genre: "gospel_contemporaneo",
-        source: "cifraclub",
-        cifraclub_url: worshipCifraClubResult.cifraclub_url ?? null,
-        youtube_url: worshipCifraClubResult.youtube_url ?? null,
+        source: "manual",
+        cifraclub_url: worshipSongSearchSelected.cifraclub_url,
+        youtube_url: worshipSongSearchSelected.youtube_url,
       };
       setClientData((current) =>
         current ? { ...current, catalogSongs: [...current.catalogSongs, record].sort((a, b) => a.title.localeCompare(b.title)) } : current,
       );
       addSongToWorshipRepertoire(record);
       setWorshipSongCatalogStatus("success");
-      setWorshipSongCatalogMessage("Música importada para o seu catálogo.");
+      setWorshipSongCatalogMessage("Música importada para o seu catálogo e adicionada ao repertório.");
       return;
     }
 
@@ -7232,9 +6985,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         title,
         artist,
         genre: "gospel_contemporaneo",
-        source: "cifraclub",
-        cifraclub_url: worshipCifraClubResult.cifraclub_url ?? null,
-        youtube_url: worshipCifraClubResult.youtube_url ?? null,
+        source: "manual",
+        cifraclub_url: worshipSongSearchSelected.cifraclub_url,
+        youtube_url: worshipSongSearchSelected.youtube_url,
         created_by: profile?.id ?? null,
       })
       .select("id, tenant_id, title, artist, genre, source, cifraclub_url, youtube_url")
@@ -7251,7 +7004,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     );
     addSongToWorshipRepertoire(result.data);
     setWorshipSongCatalogStatus("success");
-    setWorshipSongCatalogMessage("Música importada para o seu catálogo.");
+    setWorshipSongCatalogMessage("Música importada para o seu catálogo e adicionada ao repertório.");
   }
 
   async function handleSaveWorshipRepertoireAndAdvance() {
@@ -10532,7 +10285,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <span className="worship-form-icon"><Music size={16} /></span>
                           <div>
                             <strong>Repertório</strong>
-                            <small>Selecione músicas do catálogo ou importe do Cifra Club.</small>
+                            <small>Selecione músicas do catálogo ou busque automaticamente.</small>
                           </div>
                         </div>
 
@@ -10835,8 +10588,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                         {worshipRepertoireEventId ? (
                           <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
                             <div className="modal-section-header">
-                              <strong>Cifra Club</strong>
-                              <small>Busca via API.</small>
+                              <strong>Busca automática</strong>
+                              <small>Busca música (iTunes), letra (lyrics.ovh) e gera links.</small>
                             </div>
 
                             <div className="modal-grid">
@@ -10845,8 +10598,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                                 <input
                                   className="catalog-input"
                                   placeholder="Ex.: Gabriela Rocha"
-                                  value={worshipCifraClubArtistInput}
-                                  onChange={(e) => setWorshipCifraClubArtistInput(e.target.value)}
+                                  value={worshipSongSearchArtistInput}
+                                  onChange={(e) => setWorshipSongSearchArtistInput(e.target.value)}
                                 />
                               </label>
                               <label>
@@ -10854,8 +10607,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                                 <input
                                   className="catalog-input"
                                   placeholder="Ex.: Lugar Secreto"
-                                  value={worshipCifraClubSongInput}
-                                  onChange={(e) => setWorshipCifraClubSongInput(e.target.value)}
+                                  value={worshipSongSearchTitleInput}
+                                  onChange={(e) => setWorshipSongSearchTitleInput(e.target.value)}
                                 />
                               </label>
                             </div>
@@ -10864,43 +10617,43 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                               <Button
                                 type="button"
                                 variant="secondary"
-                                onClick={handleWorshipCifraClubSearch}
-                                disabled={worshipCifraClubStatus === "loading" || (!worshipCifraClubArtistInput.trim() && !worshipCifraClubSongInput.trim())}
+                                onClick={handleWorshipSongSearch}
+                                disabled={worshipSongSearchStatus === "loading" || (!worshipSongSearchArtistInput.trim() && !worshipSongSearchTitleInput.trim())}
                               >
-                                {worshipCifraClubStatus === "loading" ? "Buscando..." : "Buscar no Cifra Club"}
+                                {worshipSongSearchStatus === "loading" ? "Buscando..." : "Buscar música"}
                               </Button>
-                              {worshipCifraClubResult?.cifraclub_url ? (
-                                <a href={worshipCifraClubResult.cifraclub_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
-                                  Abrir no Cifra Club
+                              {worshipSongSearchSelected?.cifraclub_url ? (
+                                <a href={worshipSongSearchSelected.cifraclub_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                                  Cifra Club
                                 </a>
                               ) : null}
-                              {worshipCifraClubResult?.youtube_url ? (
-                                <a href={worshipCifraClubResult.youtube_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                              {worshipSongSearchSelected?.youtube_url ? (
+                                <a href={worshipSongSearchSelected.youtube_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
                                   YouTube
                                 </a>
                               ) : null}
                             </div>
 
-                            {worshipCifraClubMessage ? (
-                              <p className={`login-feedback ${worshipCifraClubStatus === "error" ? "error" : "idle"}`} style={{ marginTop: 10 }}>
-                                {worshipCifraClubMessage}
+                            {worshipSongSearchMessage ? (
+                              <p className={`login-feedback ${worshipSongSearchStatus === "error" ? "error" : "idle"}`} style={{ marginTop: 10 }}>
+                                {worshipSongSearchMessage}
                               </p>
                             ) : null}
 
-                            {worshipCifraClubCandidates.length > 0 ? (
+                            {worshipSongSearchResults.length > 0 ? (
                               <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 10, overflow: "hidden" }}>
                                 <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", background: "rgba(0, 126, 124, 0.06)" }}>
                                   <strong style={{ fontSize: "0.95rem" }}>Resultados</strong>
                                   <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
-                                    Selecione uma música para carregar a cifra.
+                                    Selecione uma música para preparar a importação.
                                   </div>
                                 </div>
                                 <div>
-                                  {worshipCifraClubCandidates.slice(0, 20).map((c) => (
+                                  {worshipSongSearchResults.slice(0, 20).map((r) => (
                                     <button
-                                      key={`${c.artist_slug}/${c.song_slug}`}
+                                      key={r.id}
                                       type="button"
-                                      onClick={() => handleWorshipCifraClubSelectCandidate(c)}
+                                      onClick={() => void handleWorshipSongSearchSelect(r)}
                                       style={{
                                         width: "100%",
                                         textAlign: "left",
@@ -10917,10 +10670,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                                     >
                                       <span style={{ minWidth: 0, display: "block" }}>
                                         <strong style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                          {c.song_name ?? c.song_slug}
+                                          {r.title}
                                         </strong>
                                         <small style={{ display: "block", color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                          {(c.artist_name ?? c.artist_slug) || c.artist_slug}
+                                          {r.artist}{r.album ? ` · ${r.album}` : ""}
                                         </small>
                                       </span>
                                       <span style={{ fontSize: "0.85rem", color: "var(--color-brand-primary)", fontWeight: 700 }}>Selecionar</span>
@@ -10930,23 +10683,34 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                               </div>
                             ) : null}
 
-                            {worshipCifraClubResult?.name && worshipCifraClubResult.artist ? (
+                            {worshipSongSearchSelected ? (
                               <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 10, padding: 12 }}>
-                                <strong>{worshipCifraClubResult.name}</strong>
+                                <strong>{worshipSongSearchSelected.title}</strong>
                                 <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
-                                  {worshipCifraClubResult.artist}
-                                  {Array.isArray(worshipCifraClubResult.cifra) && worshipCifraClubResult.cifra.length ? ` · ${worshipCifraClubResult.cifra.length} linhas` : ""}
+                                  {worshipSongSearchSelected.artist}
                                 </div>
                                 <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
                                   <Button
                                     type="button"
                                     icon={<Plus size={18} />}
-                                    onClick={handleWorshipImportCifraClubToCatalog}
+                                    onClick={handleWorshipImportSongSearchToCatalog}
                                     disabled={worshipSongCatalogStatus === "loading"}
                                   >
                                     {worshipSongCatalogStatus === "loading" ? "Importando..." : "Importar e adicionar"}
                                   </Button>
                                 </div>
+                                {Array.isArray(worshipSongSearchSelected.lyrics) && worshipSongSearchSelected.lyrics.length ? (
+                                  <details style={{ marginTop: 10 }}>
+                                    <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+                                      Ver letra ({worshipSongSearchSelected.lyrics.length} linhas)
+                                    </summary>
+                                    <div style={{ marginTop: 8, maxHeight: 260, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: 8, padding: 10 }}>
+                                      <div style={{ whiteSpace: "pre-wrap", fontSize: "0.9rem", lineHeight: 1.35 }}>
+                                        {worshipSongSearchSelected.lyrics.join("\n")}
+                                      </div>
+                                    </div>
+                                  </details>
+                                ) : null}
                               </div>
                             ) : null}
 
@@ -16069,7 +15833,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="modal-section">
                 <div className="modal-section-header">
                   <strong>Repertório (opcional)</strong>
-                  <small>Monte a lista de músicas do evento usando o catálogo global, o seu catálogo ou importando do Cifra Club.</small>
+                  <small>Monte a lista de músicas do evento usando o catálogo global, o seu catálogo ou busca automática.</small>
                 </div>
 
                 <div className="catalog-list">
@@ -16344,8 +16108,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
                   <div className="modal-section-header">
-                    <strong>Cifra Club</strong>
-                    <small>Busca via API.</small>
+                    <strong>Busca automática</strong>
+                    <small>Busca música (iTunes), letra (lyrics.ovh) e gera links.</small>
                   </div>
 
                   <div className="modal-grid">
@@ -16354,8 +16118,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <input
                         className="catalog-input"
                         placeholder="Ex.: Gabriela Rocha"
-                        value={cifraClubArtistInput}
-                        onChange={(e) => setCifraClubArtistInput(e.target.value)}
+                        value={songSearchArtistInput}
+                        onChange={(e) => setSongSearchArtistInput(e.target.value)}
                       />
                     </label>
                     <label>
@@ -16363,8 +16127,8 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <input
                         className="catalog-input"
                         placeholder="Ex.: Lugar Secreto"
-                        value={cifraClubSongInput}
-                        onChange={(e) => setCifraClubSongInput(e.target.value)}
+                        value={songSearchTitleInput}
+                        onChange={(e) => setSongSearchTitleInput(e.target.value)}
                       />
                     </label>
                   </div>
@@ -16373,43 +16137,43 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={handleCifraClubSearch}
-                      disabled={cifraClubStatus === "loading" || (!cifraClubArtistInput.trim() && !cifraClubSongInput.trim())}
+                      onClick={handleSongSearch}
+                      disabled={songSearchStatus === "loading" || (!songSearchArtistInput.trim() && !songSearchTitleInput.trim())}
                     >
-                      {cifraClubStatus === "loading" ? "Buscando..." : "Buscar no Cifra Club"}
+                      {songSearchStatus === "loading" ? "Buscando..." : "Buscar música"}
                     </Button>
-                    {cifraClubResult?.cifraclub_url ? (
-                      <a href={cifraClubResult.cifraclub_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
-                        Abrir no Cifra Club
+                    {songSearchSelected?.cifraclub_url ? (
+                      <a href={songSearchSelected.cifraclub_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                        Cifra Club
                       </a>
                     ) : null}
-                    {cifraClubResult?.youtube_url ? (
-                      <a href={cifraClubResult.youtube_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
+                    {songSearchSelected?.youtube_url ? (
+                      <a href={songSearchSelected.youtube_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
                         YouTube
                       </a>
                     ) : null}
                   </div>
 
-                  {cifraClubMessage ? (
-                    <p className={`login-feedback ${cifraClubStatus === "error" ? "error" : "idle"}`} style={{ marginTop: 10 }}>
-                      {cifraClubMessage}
+                  {songSearchMessage ? (
+                    <p className={`login-feedback ${songSearchStatus === "error" ? "error" : "idle"}`} style={{ marginTop: 10 }}>
+                      {songSearchMessage}
                     </p>
                   ) : null}
 
-                  {cifraClubCandidates.length > 0 ? (
+                  {songSearchResults.length > 0 ? (
                     <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 10, overflow: "hidden" }}>
                       <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", background: "rgba(0, 126, 124, 0.06)" }}>
                         <strong style={{ fontSize: "0.95rem" }}>Resultados</strong>
                         <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
-                          Selecione uma música para carregar a cifra.
+                          Selecione uma música para preparar a importação.
                         </div>
                       </div>
                       <div>
-                        {cifraClubCandidates.slice(0, 20).map((c) => (
+                        {songSearchResults.slice(0, 20).map((r) => (
                           <button
-                            key={`${c.artist_slug}/${c.song_slug}`}
+                            key={r.id}
                             type="button"
-                            onClick={() => handleCifraClubSelectCandidate(c)}
+                            onClick={() => void handleSongSearchSelect(r)}
                             style={{
                               width: "100%",
                               textAlign: "left",
@@ -16426,10 +16190,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           >
                             <span style={{ minWidth: 0, display: "block" }}>
                               <strong style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {c.song_name ?? c.song_slug}
+                                {r.title}
                               </strong>
                               <small style={{ display: "block", color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {(c.artist_name ?? c.artist_slug) || c.artist_slug}
+                                {r.artist}{r.album ? ` · ${r.album}` : ""}
                               </small>
                             </span>
                             <span style={{ fontSize: "0.85rem", color: "var(--color-brand-primary)", fontWeight: 700 }}>Selecionar</span>
@@ -16439,23 +16203,34 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                     </div>
                   ) : null}
 
-                  {cifraClubResult?.name && cifraClubResult.artist ? (
+                  {songSearchSelected ? (
                     <div style={{ marginTop: 12, border: "1px solid var(--color-border)", borderRadius: 10, padding: 12 }}>
-                      <strong>{cifraClubResult.name}</strong>
+                      <strong>{songSearchSelected.title}</strong>
                       <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginTop: 2 }}>
-                        {cifraClubResult.artist}
-                        {Array.isArray(cifraClubResult.cifra) && cifraClubResult.cifra.length ? ` · ${cifraClubResult.cifra.length} linhas` : ""}
+                        {songSearchSelected.artist}
                       </div>
                       <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
                         <Button
                           type="button"
                           icon={<Plus size={18} />}
-                          onClick={handleImportCifraClubToCatalog}
+                          onClick={handleImportSongSearchToCatalog}
                           disabled={songCatalogStatus === "loading"}
                         >
                           {songCatalogStatus === "loading" ? "Importando..." : "Importar e adicionar ao repertório"}
                         </Button>
                       </div>
+                      {Array.isArray(songSearchSelected.lyrics) && songSearchSelected.lyrics.length ? (
+                        <details style={{ marginTop: 10 }}>
+                          <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+                            Ver letra ({songSearchSelected.lyrics.length} linhas)
+                          </summary>
+                          <div style={{ marginTop: 8, maxHeight: 260, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: 8, padding: 10 }}>
+                            <div style={{ whiteSpace: "pre-wrap", fontSize: "0.9rem", lineHeight: 1.35 }}>
+                              {songSearchSelected.lyrics.join("\n")}
+                            </div>
+                          </div>
+                        </details>
+                      ) : null}
                     </div>
                   ) : null}
 

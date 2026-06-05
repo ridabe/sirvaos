@@ -1,7 +1,5 @@
 {
   "routes": [
-    { "src": "/api/cifraclub/artists/([^/]+)/songs/([^/]+)", "dest": "/api/cifraclub/artists/[artist]/songs/[song].js?artist=$1&song=$2" },
-    { "src": "/api/cifraclub/search", "dest": "/api/cifraclub/search.js" },
     { "handle": "filesystem" },
     { "src": "/.*", "dest": "/index.html" }
   ]
