@@ -12,10 +12,12 @@ import {
   Clock3,
   DollarSign,
   Edit3,
+  ExternalLink,
   Eye,
   Heart,
   FileCheck2,
   FileText,
+  GraduationCap,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
@@ -174,6 +176,26 @@ type IntercessorMember = {
   id: string;
   name: string;
   profile_id: string | null;
+};
+
+type TutorialPdfRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  file_url: string;
+  file_name: string;
+  file_size: number | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+type YouTubeVideo = {
+  videoId: string;
+  title: string;
+  published: string;
+  thumbnail: string;
+  description: string;
 };
 
 type WorshipRoleRecord = {
@@ -1378,6 +1400,7 @@ const clientTabs = [
   { key: "notices", label: "Comunicados", icon: Bell },
   { key: "social-media", label: "Mídias Sociais", icon: Play },
   { key: "intercession", label: "Intercessão", icon: Heart },
+  { key: "tutorials", label: "Tutoriais", icon: GraduationCap },
   { key: "lists", label: "Cargos/Ministérios", icon: Edit3 },
   { key: "theme", label: "Identidade", icon: Palette },
   { key: "users", label: "Usuários", icon: ShieldCheck },
@@ -1401,7 +1424,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   intercession: "intercession",
 };
 
-const tenantAdminOnlyTabs = new Set<ClientTab>(["lists", "theme", "users", "policies"]);
+const tenantAdminOnlyTabs = new Set<ClientTab>(["tutorials", "lists", "theme", "users", "policies"]);
 
 type ClientAdminProps = {
   demoMode?: boolean;
@@ -2078,6 +2101,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
   const [socialMediaFormDescription, setSocialMediaFormDescription] = useState("");
   const [socialMediaSaveStatus, setSocialMediaSaveStatus] = useState<LoginStatus>("idle");
   const [socialMediaSaveMessage, setSocialMediaSaveMessage] = useState("");
+
+  // Tutorials state
+  const [tutorialPdfs, setTutorialPdfs] = useState<TutorialPdfRecord[]>([]);
+  const [tutorialPdfsStatus, setTutorialPdfsStatus] = useState<LoadStatus>("idle");
+  const [tutorialVideos, setTutorialVideos] = useState<YouTubeVideo[]>([]);
+  const [tutorialVideosStatus, setTutorialVideosStatus] = useState<LoadStatus>("idle");
+  const [tutorialVideoModal, setTutorialVideoModal] = useState<YouTubeVideo | null>(null);
 
   // Intercession state
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequestRecord[]>([]);
@@ -3218,6 +3248,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     void loadIntercessionData(profile.tenant_id);
   }, [activeTab, demoMode, profile?.tenant_id]);
 
+  // ── useEffect: carrega tutoriais ao abrir a tab ────────────────────────
+  useEffect(() => {
+    if (activeTab !== "tutorials" || demoMode) return;
+    if (tutorialPdfsStatus === "idle") void loadTutorialPdfs();
+    if (tutorialVideosStatus === "idle") void loadTutorialVideos();
+  }, [activeTab, demoMode]);
+
   async function loadPolicies(tenantId: string) {
     const [policyResult, consentsResult, acceptancesResult] = await Promise.all([
       supabase
@@ -3320,6 +3357,40 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
 
     setIntercessionLoadStatus("ready");
+  }
+
+  async function loadTutorialPdfs() {
+    setTutorialPdfsStatus("loading");
+    const { data, error } = await supabase
+      .from("tutorial_pdfs")
+      .select("id, title, description, file_url, file_name, file_size, is_active, sort_order, created_at")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false })
+      .returns<TutorialPdfRecord[]>();
+    if (error) {
+      setTutorialPdfsStatus("error");
+      return;
+    }
+    setTutorialPdfs(data ?? []);
+    setTutorialPdfsStatus("ready");
+  }
+
+  async function loadTutorialVideos() {
+    setTutorialVideosStatus("loading");
+    try {
+      const { data, error } = await supabase.functions.invoke("fetch-youtube-feed", {
+        body: { channel_id: "PLMvSxKtW8pAQ", channel_type: "playlist" },
+      });
+      if (error || !data?.videos) {
+        setTutorialVideosStatus("error");
+        return;
+      }
+      setTutorialVideos(data.videos as YouTubeVideo[]);
+      setTutorialVideosStatus("ready");
+    } catch {
+      setTutorialVideosStatus("error");
+    }
   }
 
   async function handleModerationAction(
@@ -14629,6 +14700,206 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           {assignStatus === "loading" ? "Atribuindo..." : assignStatus === "success" ? "Atribuído!" : "Atribuir"}
                         </Button>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          {activeTab === "tutorials" ? (
+            <>
+              {/* ── Vídeos do YouTube ───────────────────────────────── */}
+              <article className="panel full-width">
+                <div className="panel-heading">
+                  <div>
+                    <span>Tutoriais em vídeo</span>
+                    <h4>Playlist oficial SirvaOS no YouTube</h4>
+                  </div>
+                  <a
+                    href="https://www.youtube.com/playlist?list=PLMvSxKtW8pAQ"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.82rem", color: "var(--color-accent)", fontWeight: 600 }}
+                  >
+                    <ExternalLink size={14} />
+                    Abrir no YouTube
+                  </a>
+                </div>
+
+                {tutorialVideosStatus === "idle" || tutorialVideosStatus === "loading" ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                    <Play size={28} style={{ opacity: 0.4 }} />
+                    <strong>Carregando vídeos...</strong>
+                  </div>
+                ) : tutorialVideosStatus === "error" ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                    <Play size={28} style={{ opacity: 0.4 }} />
+                    <strong>Não foi possível carregar os vídeos</strong>
+                    <span>Verifique sua conexão ou tente novamente mais tarde.</span>
+                    <button type="button" style={{ marginTop: 8, color: "var(--color-accent)", fontSize: "0.82rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }} onClick={() => { setTutorialVideosStatus("idle"); void loadTutorialVideos(); }}>
+                      Tentar novamente
+                    </button>
+                  </div>
+                ) : tutorialVideos.length === 0 ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                    <Play size={28} style={{ opacity: 0.4 }} />
+                    <strong>Nenhum vídeo encontrado</strong>
+                    <span>A playlist ainda não possui vídeos publicados.</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16, padding: "16px 0 4px" }}>
+                    {tutorialVideos.map((video) => (
+                      <div
+                        key={video.videoId}
+                        style={{ background: "var(--color-bg-subtle, #f8fafc)", borderRadius: 10, overflow: "hidden", border: "1px solid var(--color-border)", cursor: "pointer", transition: "box-shadow 0.15s" }}
+                        onClick={() => setTutorialVideoModal(video)}
+                        title={video.title}
+                      >
+                        <div style={{ position: "relative", paddingBottom: "56.25%", background: "#000" }}>
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title}
+                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.92 }}
+                          />
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ background: "rgba(0,0,0,0.55)", borderRadius: "50%", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Play size={22} style={{ color: "#fff", marginLeft: 3 }} />
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ padding: "10px 12px 12px" }}>
+                          <strong style={{ fontSize: "0.85rem", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+                            {video.title}
+                          </strong>
+                          {video.published ? (
+                            <p style={{ margin: "4px 0 0", fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
+                              {new Date(video.published).toLocaleDateString("pt-BR")}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              {/* ── PDFs para download ──────────────────────────────── */}
+              <article className="panel full-width">
+                <div className="panel-heading">
+                  <div>
+                    <span>Materiais de apoio</span>
+                    <h4>PDFs para download</h4>
+                  </div>
+                </div>
+
+                {tutorialPdfsStatus === "idle" || tutorialPdfsStatus === "loading" ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                    <FileText size={28} style={{ opacity: 0.4 }} />
+                    <strong>Carregando materiais...</strong>
+                  </div>
+                ) : tutorialPdfsStatus === "error" ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                    <FileText size={28} style={{ opacity: 0.4 }} />
+                    <strong>Não foi possível carregar os materiais</strong>
+                  </div>
+                ) : tutorialPdfs.length === 0 ? (
+                  <div className="member-portal-empty state-card" style={{ margin: "24px 0" }}>
+                    <FileText size={28} style={{ opacity: 0.4 }} />
+                    <strong>Nenhum material disponível ainda</strong>
+                    <span>Em breve novos PDFs serão publicados pela equipe SirvaOS.</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+                    {tutorialPdfs.map((pdf) => (
+                      <div
+                        key={pdf.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "12px 16px",
+                          background: "var(--color-neutral-50, #f8fafc)",
+                          border: "1px solid var(--color-neutral-200, #e2e8f0)",
+                          borderRadius: 10,
+                        }}
+                      >
+                        <FileText size={22} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ fontSize: "0.88rem", display: "block", wordBreak: "break-word" }}>
+                            {pdf.title}
+                          </strong>
+                          {pdf.description ? (
+                            <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", lineHeight: 1.4, display: "block", marginTop: 2 }}>
+                              {pdf.description}
+                            </span>
+                          ) : null}
+                          {pdf.file_size && pdf.file_size > 0 ? (
+                            <span style={{ fontSize: "0.7rem", color: "var(--color-text-secondary)", display: "block", marginTop: 2 }}>
+                              {pdf.file_size >= 1024 * 1024
+                                ? `${(pdf.file_size / 1024 / 1024).toFixed(1)} MB`
+                                : `${Math.round(pdf.file_size / 1024)} KB`}
+                            </span>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => window.open(pdf.file_url, "_blank", "noopener,noreferrer")}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            minHeight: 36,
+                            padding: "0 14px",
+                            fontWeight: 800,
+                            fontSize: "0.82rem",
+                            color: "var(--color-brand-primary)",
+                            background: "var(--color-brand-primary-soft)",
+                            border: "1px solid rgba(var(--color-brand-primary-rgb), 0.18)",
+                            borderRadius: 10,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                          }}
+                        >
+                          📥 Baixar PDF
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              {/* ── Modal: Player YouTube ───────────────────────────── */}
+              {tutorialVideoModal ? (
+                <div className="modal-overlay" onClick={() => setTutorialVideoModal(null)}>
+                  <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: "95vw" }}>
+                    <div className="modal-header">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span>Tutorial</span>
+                        <h2 style={{ fontSize: "1rem", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {tutorialVideoModal.title}
+                        </h2>
+                      </div>
+                      <button className="modal-close" type="button" onClick={() => setTutorialVideoModal(null)}>
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <div className="modal-body" style={{ padding: 0 }}>
+                      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+                        <iframe
+                          src={`https://www.youtube.com/embed/${tutorialVideoModal.videoId}?autoplay=1`}
+                          title={tutorialVideoModal.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                        />
+                      </div>
+                      {tutorialVideoModal.description ? (
+                        <p style={{ margin: 0, padding: "12px 18px", fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                          {tutorialVideoModal.description}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </div>

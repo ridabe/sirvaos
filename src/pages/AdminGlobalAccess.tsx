@@ -12,6 +12,8 @@ import {
   Edit3,
   ExternalLink,
   Eye,
+  FileText,
+  GraduationCap,
   Heart,
   LayoutDashboard,
   LockKeyhole,
@@ -28,6 +30,8 @@ import {
   Settings2,
   ShieldCheck,
   Smartphone,
+  Trash2,
+  Upload,
   UserCog,
   UserPlus,
   UsersRound,
@@ -207,7 +211,24 @@ type AdminDashboardData = {
   };
 };
 
-type AdminSection = "dashboard" | "clients" | "plans" | "modules" | "admins" | "app";
+type AdminSection = "dashboard" | "clients" | "plans" | "modules" | "admins" | "app" | "tutorials";
+
+type TutorialPdfRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  file_url: string;
+  file_name: string;
+  file_size: number | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+type TutorialPdfFormState = {
+  title: string;
+  description: string;
+};
 
 type AppConfigRecord = {
   key: string;
@@ -425,6 +446,14 @@ export function AdminGlobalAccess() {
   const [appConfigSaveStatus, setAppConfigSaveStatus] = useState<LoginStatus>("idle");
   const [appConfigSaveMessage, setAppConfigSaveMessage] = useState("");
 
+  const [tutorialPdfs, setTutorialPdfs] = useState<TutorialPdfRecord[]>([]);
+  const [tutorialPdfsStatus, setTutorialPdfsStatus] = useState<LoadStatus>("idle");
+  const [isTutorialFormOpen, setIsTutorialFormOpen] = useState(false);
+  const [tutorialForm, setTutorialForm] = useState<TutorialPdfFormState>({ title: "", description: "" });
+  const [tutorialFile, setTutorialFile] = useState<File | null>(null);
+  const [tutorialSaveStatus, setTutorialSaveStatus] = useState<LoginStatus>("idle");
+  const [tutorialSaveMessage, setTutorialSaveMessage] = useState("");
+
   const [tenantLogoUploadStatus, setTenantLogoUploadStatus] = useState<LoginStatus>("idle");
   const [tenantLogoUploadMessage, setTenantLogoUploadMessage] = useState("");
 
@@ -559,6 +588,9 @@ export function AdminGlobalAccess() {
   useEffect(() => {
     if (activeSection === "app" && appConfigStatus === "idle") {
       void loadAppConfig();
+    }
+    if (activeSection === "tutorials" && tutorialPdfsStatus === "idle") {
+      void loadTutorialPdfs();
     }
   }, [activeSection]);
 
@@ -937,6 +969,97 @@ export function AdminGlobalAccess() {
     setAppConfigSaveStatus("success");
     setAppConfigSaveMessage("Configurações do app atualizadas com sucesso.");
     await loadAppConfig();
+  }
+
+  async function loadTutorialPdfs() {
+    setTutorialPdfsStatus("loading");
+    const { data, error } = await supabase
+      .from("tutorial_pdfs")
+      .select("id, title, description, file_url, file_name, file_size, is_active, sort_order, created_at")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false })
+      .returns<TutorialPdfRecord[]>();
+    if (error) {
+      setTutorialPdfsStatus("error");
+      return;
+    }
+    setTutorialPdfs(data ?? []);
+    setTutorialPdfsStatus("ready");
+  }
+
+  async function handleSaveTutorialPdf(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!tutorialFile) {
+      setTutorialSaveStatus("error");
+      setTutorialSaveMessage("Selecione um arquivo PDF.");
+      return;
+    }
+    if (!tutorialForm.title.trim()) {
+      setTutorialSaveStatus("error");
+      setTutorialSaveMessage("Informe o título do material.");
+      return;
+    }
+    setTutorialSaveStatus("loading");
+    setTutorialSaveMessage("");
+
+    const ext = tutorialFile.name.split(".").pop() ?? "pdf";
+    const fileName = `${Date.now()}-${tutorialForm.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("tutorial-materials")
+      .upload(fileName, tutorialFile, { upsert: false, contentType: "application/pdf" });
+
+    if (uploadError) {
+      setTutorialSaveStatus("error");
+      setTutorialSaveMessage("Erro ao fazer upload do arquivo. Tente novamente.");
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage.from("tutorial-materials").getPublicUrl(fileName);
+
+    const { error: insertError } = await supabase.from("tutorial_pdfs").insert({
+      title: tutorialForm.title.trim(),
+      description: tutorialForm.description.trim() || null,
+      file_url: publicUrlData.publicUrl,
+      file_name: tutorialFile.name,
+      file_size: tutorialFile.size,
+    });
+
+    if (insertError) {
+      setTutorialSaveStatus("error");
+      setTutorialSaveMessage("Erro ao registrar o PDF no banco de dados.");
+      return;
+    }
+
+    setTutorialSaveStatus("success");
+    setTutorialSaveMessage("PDF publicado com sucesso!");
+    setIsTutorialFormOpen(false);
+    setTutorialForm({ title: "", description: "" });
+    setTutorialFile(null);
+    setTutorialPdfsStatus("idle");
+    await loadTutorialPdfs();
+  }
+
+  async function handleToggleTutorialPdf(pdf: TutorialPdfRecord) {
+    const { error } = await supabase
+      .from("tutorial_pdfs")
+      .update({ is_active: !pdf.is_active, updated_at: new Date().toISOString() })
+      .eq("id", pdf.id);
+    if (!error) {
+      setTutorialPdfs((prev) => prev.map((p) => p.id === pdf.id ? { ...p, is_active: !pdf.is_active } : p));
+    }
+  }
+
+  async function handleDeleteTutorialPdf(pdf: TutorialPdfRecord) {
+    if (!confirm(`Excluir o PDF "${pdf.title}"? Esta ação não pode ser desfeita.`)) return;
+    const storagePath = pdf.file_url.split("/tutorial-materials/").pop();
+    if (storagePath) {
+      await supabase.storage.from("tutorial-materials").remove([storagePath]);
+    }
+    const { error } = await supabase.from("tutorial_pdfs").delete().eq("id", pdf.id);
+    if (!error) {
+      setTutorialPdfs((prev) => prev.filter((p) => p.id !== pdf.id));
+    }
   }
 
   function openCreateTenantForm() {
@@ -1848,6 +1971,17 @@ export function AdminGlobalAccess() {
               <Smartphone size={18} />
               <span className="sidebar-label">App Mobile</span>
             </button>
+            <button
+              className={activeSection === "tutorials" ? "active" : undefined}
+              type="button"
+              onClick={() => {
+                setActiveSection("tutorials");
+                setIsMobileSidebarOpen(false);
+              }}
+            >
+              <GraduationCap size={18} />
+              <span className="sidebar-label">Tutoriais</span>
+            </button>
           </nav>
 
           <button className="global-admin-logout" type="button" onClick={handleSignOut}>
@@ -1867,6 +2001,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "modules" && "Catálogo global de módulos"}
                 {activeSection === "admins" && "Admins Globais"}
                 {activeSection === "app" && "App Mobile — Versões"}
+                {activeSection === "tutorials" && "Tutoriais — Materiais de apoio"}
               </h1>
               <p>
                 {activeSection === "dashboard" && "Acompanhe saúde do SaaS, auditoria e métricas do Admin Global."}
@@ -1875,6 +2010,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "modules" && "Configure o catálogo global de módulos e seus metadados."}
                 {activeSection === "admins" && "Gerencie os usuários com acesso ao painel Admin Global do SirvaOS."}
                 {activeSection === "app" && "Controle qual versão mínima do app Android é exigida ou recomendada para os usuários."}
+                {activeSection === "tutorials" && "Publique PDFs e disponibilize vídeos do YouTube para todos os admins de clientes."}
               </p>
             </div>
             <Button
@@ -1892,6 +2028,12 @@ export function AdminGlobalAccess() {
                   setIsAdminFormOpen(true);
                 } else if (activeSection === "app") {
                   void loadAppConfig();
+                } else if (activeSection === "tutorials") {
+                  setTutorialForm({ title: "", description: "" });
+                  setTutorialFile(null);
+                  setTutorialSaveStatus("idle");
+                  setTutorialSaveMessage("");
+                  setIsTutorialFormOpen(true);
                 } else {
                   setActiveSection("clients");
                 }
@@ -1907,6 +2049,8 @@ export function AdminGlobalAccess() {
                 ? "Novo admin global"
                 : activeSection === "app"
                 ? "Recarregar"
+                : activeSection === "tutorials"
+                ? "Enviar PDF"
                 : "Ver clientes"}
             </Button>
           </header>
@@ -2455,6 +2599,194 @@ export function AdminGlobalAccess() {
                       </form>
                     </>
                   )}
+                </section>
+              ) : null}
+
+              {activeSection === "tutorials" ? (
+                <section className="global-panel" aria-label="Tutoriais — Materiais de apoio">
+                  {/* ── Vídeos do YouTube ────────────────────────────────── */}
+                  <div className="global-panel-heading" style={{ marginBottom: 8 }}>
+                    <div>
+                      <span>Playlist oficial</span>
+                      <h2>Vídeos tutoriais no YouTube</h2>
+                    </div>
+                    <a
+                      href="https://www.youtube.com/playlist?list=PLMvSxKtW8pAQ"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: "0.82rem", color: "var(--color-accent)", display: "flex", alignItems: "center", gap: 4 }}
+                    >
+                      <ExternalLink size={14} />
+                      Abrir playlist
+                    </a>
+                  </div>
+                  <p style={{ margin: "0 0 20px", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+                    Os vídeos abaixo são exibidos automaticamente para todos os admins de clientes na aba Tutoriais.
+                    A playlist é <strong>https://www.youtube.com/playlist?list=PLMvSxKtW8pAQ</strong>.
+                  </p>
+
+                  {/* ── PDFs ─────────────────────────────────────────────── */}
+                  <div className="global-panel-heading" style={{ marginBottom: 8 }}>
+                    <div>
+                      <span>Materiais disponíveis</span>
+                      <h2>PDFs para download</h2>
+                    </div>
+                  </div>
+
+                  {tutorialPdfsStatus === "loading" ? (
+                    <div className="admin-state-panel">
+                      <CircleDashed size={20} />
+                      <strong>Carregando PDFs...</strong>
+                    </div>
+                  ) : tutorialPdfsStatus === "error" ? (
+                    <div className="admin-state-panel error">
+                      <Bell size={20} />
+                      <strong>Erro ao carregar PDFs. Verifique as permissões.</strong>
+                    </div>
+                  ) : tutorialPdfs.length === 0 ? (
+                    <div className="admin-state-panel" style={{ marginBottom: 0 }}>
+                      <FileText size={28} />
+                      <strong>Nenhum PDF publicado ainda</strong>
+                      <span>Clique em "Enviar PDF" para publicar o primeiro material.</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+                      {tutorialPdfs.map((pdf) => (
+                        <div
+                          key={pdf.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "12px 16px",
+                            background: "var(--color-neutral-50, #f8fafc)",
+                            border: "1px solid var(--color-neutral-200, #e2e8f0)",
+                            borderRadius: 10,
+                          }}
+                        >
+                          <FileText size={22} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <strong style={{ fontSize: "0.88rem", wordBreak: "break-word" }}>{pdf.title}</strong>
+                              <em style={{
+                                fontSize: "0.68rem", fontStyle: "normal", fontWeight: 600,
+                                background: pdf.is_active ? "rgba(34,197,94,0.12)" : "var(--color-bg-subtle)",
+                                color: pdf.is_active ? "var(--color-success)" : "var(--color-text-secondary)",
+                                padding: "1px 7px", borderRadius: 4, flexShrink: 0,
+                              }}>
+                                {pdf.is_active ? "Publicado" : "Inativo"}
+                              </em>
+                            </div>
+                            {pdf.description ? (
+                              <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", lineHeight: 1.4, display: "block", marginTop: 2 }}>
+                                {pdf.description}
+                              </span>
+                            ) : null}
+                            <span style={{ fontSize: "0.7rem", color: "var(--color-text-secondary)", display: "block", marginTop: 2 }}>
+                              {pdf.file_name}
+                              {pdf.file_size && pdf.file_size > 0
+                                ? ` · ${pdf.file_size >= 1024 * 1024 ? `${(pdf.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.round(pdf.file_size / 1024)} KB`}`
+                                : ""}
+                              {" · "}Publicado em {new Date(pdf.created_at).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                            <a
+                              href={pdf.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir PDF"
+                              style={{ color: "var(--color-accent)", display: "flex", alignItems: "center", padding: 4 }}
+                            >
+                              <ExternalLink size={16} />
+                            </a>
+                            <button
+                              type="button"
+                              title={pdf.is_active ? "Desativar" : "Ativar"}
+                              style={{ color: pdf.is_active ? "var(--color-success)" : "var(--color-text-secondary)", display: "flex", alignItems: "center", padding: 4, background: "none", border: "none", cursor: "pointer" }}
+                              onClick={() => void handleToggleTutorialPdf(pdf)}
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Excluir"
+                              style={{ color: "var(--color-error, #dc2626)", display: "flex", alignItems: "center", padding: 4, background: "none", border: "none", cursor: "pointer" }}
+                              onClick={() => void handleDeleteTutorialPdf(pdf)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Modal: Upload de PDF ──────────────────────────────── */}
+                  {isTutorialFormOpen ? (
+                    <div className="modal-overlay" onClick={() => setIsTutorialFormOpen(false)}>
+                      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                        <div className="modal-header">
+                          <div>
+                            <span>Novo material</span>
+                            <h2 style={{ fontSize: "1.15rem", margin: 0 }}>Publicar PDF para os clientes</h2>
+                          </div>
+                          <button className="modal-close" type="button" onClick={() => setIsTutorialFormOpen(false)}>
+                            <X size={18} />
+                          </button>
+                        </div>
+                        <div className="modal-body">
+                          <form onSubmit={(e) => void handleSaveTutorialPdf(e)}>
+                            <label>
+                              <span>Título do material *</span>
+                              <input
+                                type="text"
+                                value={tutorialForm.title}
+                                onChange={(e) => setTutorialForm((f) => ({ ...f, title: e.target.value }))}
+                                placeholder="Ex.: Manual de primeiros passos"
+                                required
+                              />
+                            </label>
+                            <label>
+                              <span>Descrição (opcional)</span>
+                              <textarea
+                                rows={2}
+                                value={tutorialForm.description}
+                                onChange={(e) => setTutorialForm((f) => ({ ...f, description: e.target.value }))}
+                                placeholder="Breve descrição do conteúdo do material"
+                              />
+                            </label>
+                            <label>
+                              <span>Arquivo PDF *</span>
+                              <input
+                                type="file"
+                                accept="application/pdf"
+                                onChange={(e) => setTutorialFile(e.target.files?.[0] ?? null)}
+                                required
+                              />
+                              <small style={{ color: "var(--color-text-secondary)", marginTop: 4, display: "block" }}>
+                                Apenas arquivos PDF. Tamanho máximo: 50 MB.
+                              </small>
+                            </label>
+                            {tutorialSaveStatus === "error" ? (
+                              <p className="login-feedback error">{tutorialSaveMessage}</p>
+                            ) : null}
+                            {tutorialSaveStatus === "success" ? (
+                              <p className="login-feedback success">{tutorialSaveMessage}</p>
+                            ) : null}
+                            <div className="modal-actions">
+                              <button type="button" className="secondary-action" onClick={() => setIsTutorialFormOpen(false)}>
+                                Cancelar
+                              </button>
+                              <Button type="submit" disabled={tutorialSaveStatus === "loading"} icon={<Upload size={16} />}>
+                                {tutorialSaveStatus === "loading" ? "Enviando..." : "Publicar PDF"}
+                              </Button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
