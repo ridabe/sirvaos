@@ -1587,7 +1587,7 @@ export function AdminGlobalAccess() {
     await loadDashboardData();
   }
 
-  async function handleProvisionTenantAdmin(action: "create" | "reset") {
+  async function handleProvisionTenantAdmin(action: "create" | "reset" | "resend") {
     if (!selectedTenantId) {
       return;
     }
@@ -1613,21 +1613,50 @@ export function AdminGlobalAccess() {
       },
     });
 
-    if (error || !data?.temporary_password) {
+    if (error || !data || data.error) {
       setTenantAdminProvisionStatus("error");
       const functionErrorMessage = error?.message ? ` Detalhes: ${error.message}` : "";
       const apiErrorMessage =
         !error && data?.error ? ` Detalhes: ${String(data.error)}` : "";
       setTenantAdminProvisionMessage(
-        `Não foi possível provisionar o acesso. Verifique permissões, e-mail e configuração da função.${functionErrorMessage}${apiErrorMessage}`,
+        `Não foi possível concluir a operação. Verifique permissões, e-mail e configuração da função.${functionErrorMessage}${apiErrorMessage}`,
       );
       return;
     }
 
+    // Reenvio manual: não há senha temporária; sucesso depende do envio do e-mail.
+    if (action === "resend") {
+      const resent = data?.email_sent === true;
+      setTenantAdminProvisionStatus(resent ? "success" : "error");
+      setTenantAdminProvisionMessage(
+        resent
+          ? "E-mail de boas-vindas reenviado ao cliente com os dados de acesso (a senha atual não foi alterada)."
+          : `Não foi possível reenviar o e-mail${
+              data?.email_error ? ` (${String(data.email_error)})` : ""
+            }.`,
+      );
+      setTenantAdminTemporaryPassword(null);
+      return;
+    }
+
+    if (!data?.temporary_password) {
+      setTenantAdminProvisionStatus("error");
+      setTenantAdminProvisionMessage("Não foi possível provisionar o acesso. Tente novamente.");
+      return;
+    }
+
     setTenantAdminProvisionStatus("success");
-    setTenantAdminProvisionMessage(
-      action === "reset" ? "Senha resetada. Envie a senha temporária ao cliente." : "Acesso criado. Envie a senha temporária ao cliente.",
-    );
+    const emailSent = data?.email_sent === true;
+    const baseMessage =
+      action === "reset"
+        ? "Senha redefinida com sucesso."
+        : "Acesso criado com sucesso.";
+    const emailMessage = emailSent
+      ? " O e-mail com os dados de acesso foi enviado automaticamente ao cliente."
+      : ` Não foi possível enviar o e-mail automático${
+          data?.email_error ? ` (${String(data.email_error)})` : ""
+        }. Envie a senha temporária ao cliente manualmente.`;
+    setTenantAdminProvisionMessage(`${baseMessage}${emailMessage}`);
     setTenantAdminTemporaryPassword(String(data.temporary_password));
   }
 
@@ -3261,6 +3290,15 @@ export function AdminGlobalAccess() {
                                   disabled={tenantAdminProvisionStatus === "loading"}
                                 >
                                   Resetar senha
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => handleProvisionTenantAdmin("resend")}
+                                  disabled={tenantAdminProvisionStatus === "loading"}
+                                  icon={<Mail size={18} />}
+                                >
+                                  Reenviar boas-vindas
                                 </Button>
                               </div>
 
