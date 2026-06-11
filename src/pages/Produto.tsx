@@ -254,13 +254,13 @@ export function Produto() {
     const membros = fd.get("membros") as string;
 
     const body = {
-      to: "ridabe@uol.com.br",
+      to: "suporte@sirvaos.com.br",
       subject: `[SirvaOS] Solicitação de teste grátis — ${igreja}`,
       text: `Nome: ${nome}\nE-mail: ${email}\nIgreja/Ministério: ${igreja}\nTelefone: ${telefone}\nNº aprox. de membros: ${membros}`,
     };
 
     try {
-      const res = await fetch("https://formsubmit.co/ajax/ridabe@uol.com.br", {
+      const res = await fetch("https://formsubmit.co/ajax/suporte@sirvaos.com.br", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
@@ -283,7 +283,7 @@ export function Produto() {
       }
     } catch {
       setFormState("error");
-      setFormMsg("Erro ao enviar. Tente novamente ou envie um e-mail para contato@sirvos.com.br");
+      setFormMsg("Erro ao enviar. Tente novamente ou envie um e-mail para suporte@sirvaos.com.br");
     }
   }
 
@@ -859,7 +859,7 @@ export function Produto() {
       <footer className="pd-footer">
         <div className="pd-footer-inner">
           <img src="/img/logo-horizontal-sirvaos.svg" alt="SirvaOS" height={28} />
-          <p>© {new Date().getFullYear()} SirvaOS · <a href="https://sirvos.com.br">sirvos.com.br</a></p>
+          <p>© {new Date().getFullYear()} SirvaOS · <a href="https://sirvaos.com.br">sirvos.com.br</a></p>
           <p className="pd-footer-sub">Plataforma operacional para igrejas e ministérios</p>
         </div>
       </footer>
