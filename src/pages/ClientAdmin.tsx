@@ -81,6 +81,9 @@ type TenantRecord = {
   header_color: string;
   sidebar_color: string;
   footer_color: string;
+  trial_enabled?: boolean;
+  trial_started_at?: string | null;
+  trial_ends_at?: string | null;
 };
 
 type MemberRecord = {
@@ -3866,7 +3869,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         supabase
           .from("tenants")
           .select(
-            "id, name, slug, logo_url, primary_color, accent_color, header_color, sidebar_color, footer_color",
+            "id, name, slug, logo_url, primary_color, accent_color, header_color, sidebar_color, footer_color, trial_enabled, trial_started_at, trial_ends_at",
           )
           .eq("id", tenantId)
           .single<TenantRecord>(),
@@ -8985,6 +8988,51 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
             </div>
           </div>
         </header>
+
+        {tenant.trial_enabled && tenant.trial_ends_at ? (
+          (() => {
+            const daysLeft = Math.ceil(
+              (new Date(tenant.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+            );
+            const expired = daysLeft <= 0;
+            const endsAtLabel = new Date(tenant.trial_ends_at).toLocaleDateString("pt-BR");
+            return (
+              <div
+                role="status"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                  margin: "0.75rem 1.5rem 0",
+                  padding: "0.7rem 1rem",
+                  borderRadius: 12,
+                  border: `1px solid ${expired ? "#F0B4B4" : "#F0DCA8"}`,
+                  background: expired ? "#FDF1F1" : "#FDF8EC",
+                  color: expired ? "#8A2C2C" : "#7A5B16",
+                  fontSize: "0.9rem",
+                }}
+              >
+                <Bell size={16} style={{ flexShrink: 0 }} />
+                <span>
+                  {expired ? (
+                    <>
+                      <strong>Seu período de teste gratuito terminou em {endsAtLabel}.</strong> Entre em
+                      contato com o administrador do SirvaOS para continuar usando o sistema.
+                    </>
+                  ) : (
+                    <>
+                      <strong>
+                        Período de teste gratuito: {daysLeft} dia{daysLeft === 1 ? "" : "s"} restante
+                        {daysLeft === 1 ? "" : "s"}
+                      </strong>{" "}
+                      (termina em {endsAtLabel}).
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })()
+        ) : null}
 
         <div className="client-stats">
           <article>

@@ -68,6 +68,10 @@ type TenantRecord = {
   sidebar_color: string;
   footer_color: string;
   created_at: string;
+  trial_enabled: boolean;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  trial_dismissed_at: string | null;
   plans: {
     name: string;
     code: string;
@@ -82,6 +86,17 @@ type TenantRecord = {
   }>;
   members_total?: number;
   members_active?: number;
+};
+
+type TrialTenantRecord = {
+  id: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  trial_enabled: boolean;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  trial_dismissed_at: string | null;
 };
 
 type TenantMemberMetric = {
@@ -156,6 +171,10 @@ type TenantFormState = {
   header_color: string;
   sidebar_color: string;
   footer_color: string;
+  trial_enabled: boolean;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  trial_dismissed_at: string | null;
 };
 
 type ModuleConfigState = Record<string, TenantModuleStatus>;
@@ -282,6 +301,10 @@ const emptyTenantForm: TenantFormState = {
   contact_phone: "",
   plan_id: "",
   status: "configuring",
+  trial_enabled: false,
+  trial_started_at: null,
+  trial_ends_at: null,
+  trial_dismissed_at: null,
   primary_color: "#087C7A",
   accent_color: "#00A7C4",
   header_color: "#087C7A",
@@ -310,6 +333,19 @@ const emptyModuleForm: PlatformModuleFormState = {
   icon_name: "",
   sort_order: "0",
 };
+
+const TRIAL_DAYS = 30;
+
+function trialDaysLeft(trialEndsAt: string | null): number | null {
+  if (!trialEndsAt) return null;
+  const diff = new Date(trialEndsAt).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function formatDateBR(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("pt-BR");
+}
 
 function createSlug(value: string) {
   return value
@@ -408,6 +444,32 @@ export function AdminGlobalAccess() {
   const [tenantAdminTemporaryPassword, setTenantAdminTemporaryPassword] = useState<string | null>(null);
 
   const [resolvedTenantLogoUrl, setResolvedTenantLogoUrl] = useState<string | null>(null);
+
+  const [trialTenants, setTrialTenants] = useState<TrialTenantRecord[]>([]);
+  const [trialActionStatus, setTrialActionStatus] = useState<LoginStatus>("idle");
+
+  const expiredTrials = useMemo(
+    () =>
+      trialTenants.filter(
+        (tenant) =>
+          tenant.trial_enabled &&
+          !tenant.trial_dismissed_at &&
+          tenant.status !== "suspended" &&
+          tenant.trial_ends_at &&
+          new Date(tenant.trial_ends_at).getTime() <= Date.now(),
+      ),
+    [trialTenants],
+  );
+
+  const expiringSoonTrials = useMemo(
+    () =>
+      trialTenants.filter((tenant) => {
+        if (!tenant.trial_enabled || !tenant.trial_ends_at || tenant.status === "suspended") return false;
+        const daysLeft = trialDaysLeft(tenant.trial_ends_at);
+        return daysLeft !== null && daysLeft > 0 && daysLeft <= 5;
+      }),
+    [trialTenants],
+  );
 
   const selectedModulesTenant = useMemo(() => {
     if (!dashboardData || !selectedModulesTenantId) {
@@ -652,6 +714,10 @@ export function AdminGlobalAccess() {
             sidebar_color,
             footer_color,
             created_at,
+            trial_enabled,
+            trial_started_at,
+            trial_ends_at,
+            trial_dismissed_at,
             plans (name, code),
             tenant_modules (
               module_id,
@@ -694,6 +760,15 @@ export function AdminGlobalAccess() {
       getTableCount("plans"),
       getTableCount("platform_modules"),
     ]);
+
+    const trialTenantsResult = await supabase
+      .from("tenants")
+      .select("id, name, slug, status, trial_enabled, trial_started_at, trial_ends_at, trial_dismissed_at")
+      .eq("trial_enabled", true)
+      .order("trial_ends_at", { ascending: true })
+      .returns<TrialTenantRecord[]>();
+
+    setTrialTenants(trialTenantsResult.data ?? []);
 
     if (tenantsResult.error || auditLogsResult.error || plansResult.error || modulesResult.error) {
       setDataStatus("error");
@@ -885,6 +960,10 @@ export function AdminGlobalAccess() {
       contact_phone: tenant.contact_phone ?? "",
       plan_id: tenant.plan_id ?? "",
       status: tenant.status,
+      trial_enabled: tenant.trial_enabled,
+      trial_started_at: tenant.trial_started_at,
+      trial_ends_at: tenant.trial_ends_at,
+      trial_dismissed_at: tenant.trial_dismissed_at,
       primary_color: tenant.primary_color,
       accent_color: tenant.accent_color,
       header_color: tenant.header_color || tenant.primary_color,
@@ -1134,7 +1213,25 @@ export function AdminGlobalAccess() {
     setTenantSaveStatus("loading");
     setTenantSaveMessage("");
 
+    const hasTrialWindow = Boolean(tenantForm.trial_started_at && tenantForm.trial_ends_at);
+    const trialPayload: {
+      trial_enabled: boolean;
+      trial_started_at: string | null;
+      trial_ends_at: string | null;
+      trial_dismissed_at: string | null;
+    } = tenantForm.trial_enabled
+      ? {
+          trial_enabled: true,
+          trial_started_at: hasTrialWindow ? tenantForm.trial_started_at : new Date().toISOString(),
+          trial_ends_at: hasTrialWindow
+            ? tenantForm.trial_ends_at
+            : new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+          trial_dismissed_at: hasTrialWindow ? tenantForm.trial_dismissed_at : null,
+        }
+      : { trial_enabled: false, trial_started_at: null, trial_ends_at: null, trial_dismissed_at: null };
+
     const payload = {
+      ...trialPayload,
       name: tenantForm.name.trim(),
       slug: createSlug(tenantForm.slug || tenantForm.name),
       legal_name: tenantForm.legal_name.trim() || null,
@@ -1175,6 +1272,7 @@ export function AdminGlobalAccess() {
       metadata: {
         name: payload.name,
         status: payload.status,
+        trial_enabled: tenantForm.trial_enabled,
       },
     });
 
@@ -1182,6 +1280,56 @@ export function AdminGlobalAccess() {
     setTenantSaveMessage(tenantForm.id ? "Cliente atualizado." : "Cliente criado.");
     setIsTenantFormOpen(false);
     setTenantForm(emptyTenantForm);
+    await loadDashboardData();
+  }
+
+  async function handleTrialBlockTenant(tenant: TrialTenantRecord) {
+    setTrialActionStatus("loading");
+
+    const { error } = await supabase
+      .from("tenants")
+      .update({ status: "suspended" })
+      .eq("id", tenant.id);
+
+    if (error) {
+      setTrialActionStatus("error");
+      return;
+    }
+
+    await supabase.rpc("audit_log", {
+      tenant_id: tenant.id,
+      action: "Cliente · Bloqueado após teste de 30 dias",
+      entity_type: "Cliente",
+      entity_id: tenant.id,
+      metadata: { name: tenant.name, trial_ends_at: tenant.trial_ends_at },
+    });
+
+    setTrialActionStatus("success");
+    await loadDashboardData();
+  }
+
+  async function handleTrialKeepTenant(tenant: TrialTenantRecord) {
+    setTrialActionStatus("loading");
+
+    const { error } = await supabase
+      .from("tenants")
+      .update({ trial_dismissed_at: new Date().toISOString() })
+      .eq("id", tenant.id);
+
+    if (error) {
+      setTrialActionStatus("error");
+      return;
+    }
+
+    await supabase.rpc("audit_log", {
+      tenant_id: tenant.id,
+      action: "Cliente · Acesso mantido após teste de 30 dias",
+      entity_type: "Cliente",
+      entity_id: tenant.id,
+      metadata: { name: tenant.name, trial_ends_at: tenant.trial_ends_at },
+    });
+
+    setTrialActionStatus("success");
     await loadDashboardData();
   }
 
@@ -1857,6 +2005,55 @@ export function AdminGlobalAccess() {
                         <option value="suspended">Suspenso</option>
                       </select>
                     </label>
+                    <label style={{ gridColumn: "1 / -1" }}>
+                      <span>Teste grátis por 30 dias</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={tenantForm.trial_enabled}
+                          onClick={() =>
+                            setTenantForm((current) => ({ ...current, trial_enabled: !current.trial_enabled }))
+                          }
+                          style={{
+                            width: 46,
+                            height: 26,
+                            borderRadius: 13,
+                            border: "none",
+                            cursor: "pointer",
+                            position: "relative",
+                            transition: "background 0.2s",
+                            background: tenantForm.trial_enabled ? "#087C7A" : "#C7CDD4",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: 3,
+                              left: tenantForm.trial_enabled ? 23 : 3,
+                              width: 20,
+                              height: 20,
+                              borderRadius: "50%",
+                              background: "#fff",
+                              transition: "left 0.2s",
+                            }}
+                          />
+                        </button>
+                        <small style={{ color: "#5A6572" }}>
+                          {tenantForm.trial_enabled
+                            ? tenantForm.trial_started_at && tenantForm.trial_ends_at
+                              ? (() => {
+                                  const daysLeft = trialDaysLeft(tenantForm.trial_ends_at);
+                                  return daysLeft !== null && daysLeft > 0
+                                    ? `Teste ativo · iniciou em ${formatDateBR(tenantForm.trial_started_at)} · termina em ${formatDateBR(tenantForm.trial_ends_at)} (${daysLeft} dia${daysLeft === 1 ? "" : "s"} restante${daysLeft === 1 ? "" : "s"})`
+                                    : `Teste expirado em ${formatDateBR(tenantForm.trial_ends_at)}`;
+                                })()
+                              : "O prazo de 30 dias começa a contar ao salvar."
+                            : "Desativado. Ao desligar, o período de teste é cancelado."}
+                        </small>
+                      </div>
+                    </label>
                     <label>
                       <span>Cor primária</span>
                       <input
@@ -2390,6 +2587,99 @@ export function AdminGlobalAccess() {
                 </div>
               ) : null}
 
+              {(activeSection === "dashboard" || activeSection === "clients") &&
+              (expiredTrials.length > 0 || expiringSoonTrials.length > 0) ? (
+                <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1rem" }}>
+                  {expiredTrials.map((tenant) => (
+                    <div
+                      key={tenant.id}
+                      role="alert"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: "0.75rem",
+                        padding: "0.85rem 1rem",
+                        borderRadius: 12,
+                        border: "1px solid #F0B4B4",
+                        background: "#FDF1F1",
+                        color: "#8A2C2C",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                        <Bell size={18} />
+                        <div>
+                          <strong>Teste de 30 dias expirado: {tenant.name}</strong>
+                          <div style={{ fontSize: "0.85rem" }}>
+                            Expirou em {formatDateBR(tenant.trial_ends_at)}. Decida se o cliente continua com acesso.
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          disabled={trialActionStatus === "loading"}
+                          onClick={() => void handleTrialBlockTenant(tenant)}
+                          style={{
+                            padding: "0.45rem 0.9rem",
+                            borderRadius: 8,
+                            border: "none",
+                            cursor: "pointer",
+                            background: "#B43A3A",
+                            color: "#fff",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Bloquear acesso
+                        </button>
+                        <button
+                          type="button"
+                          disabled={trialActionStatus === "loading"}
+                          onClick={() => void handleTrialKeepTenant(tenant)}
+                          style={{
+                            padding: "0.45rem 0.9rem",
+                            borderRadius: 8,
+                            border: "1px solid #B43A3A",
+                            cursor: "pointer",
+                            background: "transparent",
+                            color: "#B43A3A",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Manter acesso
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {expiringSoonTrials.map((tenant) => {
+                    const daysLeft = trialDaysLeft(tenant.trial_ends_at);
+                    return (
+                      <div
+                        key={tenant.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.6rem",
+                          padding: "0.85rem 1rem",
+                          borderRadius: 12,
+                          border: "1px solid #F0DCA8",
+                          background: "#FDF8EC",
+                          color: "#7A5B16",
+                        }}
+                      >
+                        <Bell size={18} />
+                        <span>
+                          <strong>{tenant.name}</strong>: teste de 30 dias termina em{" "}
+                          {formatDateBR(tenant.trial_ends_at)} ({daysLeft} dia{daysLeft === 1 ? "" : "s"} restante
+                          {daysLeft === 1 ? "" : "s"}).
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               <div className="global-stats">
                 <article>
                   <Building2 size={20} />
@@ -2613,6 +2903,30 @@ export function AdminGlobalAccess() {
                             <div>
                               <strong>{tenant.name}</strong>
                               <small>{tenant.slug}</small>
+                              {tenant.trial_enabled && tenant.trial_ends_at ? (
+                                (() => {
+                                  const daysLeft = trialDaysLeft(tenant.trial_ends_at);
+                                  const expired = daysLeft !== null && daysLeft <= 0;
+                                  return (
+                                    <small
+                                      style={{
+                                        display: "inline-block",
+                                        marginTop: 2,
+                                        padding: "1px 8px",
+                                        borderRadius: 999,
+                                        fontWeight: 600,
+                                        background: expired ? "#FDF1F1" : "#ECF7F4",
+                                        color: expired ? "#B43A3A" : "#0B6B5D",
+                                        border: `1px solid ${expired ? "#F0B4B4" : "#BFE3D9"}`,
+                                      }}
+                                    >
+                                      {expired
+                                        ? "Teste 30d expirado"
+                                        : `Teste 30d · ${daysLeft} dia${daysLeft === 1 ? "" : "s"}`}
+                                    </small>
+                                  );
+                                })()
+                              ) : null}
                             </div>
                             <span>{tenant.plans?.name ?? "Sem plano"}</span>
                             <span>

@@ -1,3 +1,4 @@
+// Roteamento pós-login: define o destino do usuário e bloqueia acessos suspensos.
 import { supabase } from "./supabase";
 
 type AccessProfile = {
@@ -30,6 +31,17 @@ export async function resolvePostLoginPath(userId: string) {
   if (!profileData.tenant_id) {
     await supabase.auth.signOut();
     throw new Error("Usuário autenticado, mas sem Igreja associada.");
+  }
+
+  const { data: tenantData } = await supabase
+    .from("tenants")
+    .select("status")
+    .eq("id", profileData.tenant_id)
+    .single<{ status: "active" | "suspended" | "configuring" }>();
+
+  if (tenantData?.status === "suspended") {
+    await supabase.auth.signOut();
+    throw new Error("O acesso da sua igreja está suspenso. Entre em contato com o administrador do SirvaOS.");
   }
 
   if (profileData.tenant_role === "owner" || profileData.tenant_role === "admin") {
