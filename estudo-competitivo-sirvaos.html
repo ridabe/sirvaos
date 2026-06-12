@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SirvaOS — Estudo Competitivo & Plano de Diferenciação</title>
+<style>
+  :root{
+    --azul:#1A2744; --azul2:#243456; --ouro:#F5C842;
+    --ouro2:#d9ab22; --bg:#0f1626; --card:#ffffff; --texto:#2b2f3a;
+    --muted:#6b7280; --linha:#e6e8ee; --verde:#1f9d6b; --vermelho:#d4543a;
+    --azulclaro:#eef1f8;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    color:var(--texto);background:#f4f6fb;line-height:1.6;}
+  a{color:#2b56c4;text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* Layout */
+  .wrap{display:flex;max-width:1280px;margin:0 auto;}
+  nav.toc{position:sticky;top:0;align-self:flex-start;width:280px;height:100vh;overflow-y:auto;
+    background:var(--azul);color:#cdd5e6;padding:28px 20px;flex-shrink:0;}
+  nav.toc .brand{font-size:22px;font-weight:800;color:#fff;letter-spacing:.5px;}
+  nav.toc .brand b{color:var(--ouro)}
+  nav.toc .sub{font-size:12px;color:#8b97b5;margin:4px 0 22px;text-transform:uppercase;letter-spacing:1px}
+  nav.toc a{display:block;color:#cdd5e6;padding:8px 10px;border-radius:8px;font-size:14px;margin-bottom:2px}
+  nav.toc a:hover{background:var(--azul2);color:#fff;text-decoration:none}
+  nav.toc .grp{font-size:11px;color:#6f7da6;text-transform:uppercase;letter-spacing:1px;margin:18px 0 6px;padding-left:10px}
+  main{flex:1;min-width:0;padding:0 0 80px}
+
+  header.hero{background:linear-gradient(135deg,var(--azul),var(--azul2));color:#fff;padding:60px 50px 50px;}
+  header.hero h1{margin:0;font-size:34px;line-height:1.2}
+  header.hero h1 b{color:var(--ouro)}
+  header.hero p{color:#b9c3db;max-width:680px;font-size:16px}
+  .pill{display:inline-block;background:rgba(245,200,66,.15);color:var(--ouro);border:1px solid rgba(245,200,66,.4);
+    padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:18px}
+
+  section{padding:42px 50px;border-bottom:1px solid var(--linha)}
+  section h2{font-size:25px;color:var(--azul);margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  section h2 .n{background:var(--ouro);color:var(--azul);font-size:14px;font-weight:800;width:30px;height:30px;
+    display:inline-flex;align-items:center;justify-content:center;border-radius:8px;flex-shrink:0}
+  section h3{color:var(--azul2);font-size:18px;margin:26px 0 8px}
+  section .lead{color:var(--muted);font-size:15px;margin-top:0}
+
+  .card{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:22px 24px;margin:16px 0;
+    box-shadow:0 1px 3px rgba(16,22,38,.04)}
+  .grid{display:grid;gap:16px}
+  .grid.c2{grid-template-columns:1fr 1fr}
+  .grid.c3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:900px){.grid.c2,.grid.c3{grid-template-columns:1fr}}
+
+  .comp{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+  .comp .logo{font-weight:800;color:var(--azul);font-size:17px}
+  .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;white-space:nowrap}
+  .tag.lider{background:#fdeccd;color:#9a6b00}
+  .tag.gestao{background:#dcebff;color:#5a2da6;background:#e7ddff;color:#5a2da6}
+  .tag.app{background:#d7f0e4;color:#13724c}
+  ul.f{margin:10px 0 0;padding-left:18px}
+  ul.f li{margin-bottom:3px;font-size:14px}
+
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:10px;background:#fff;border-radius:10px;overflow:hidden}
+  th,td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--linha);vertical-align:top}
+  thead th{background:var(--azul);color:#fff;font-weight:600;font-size:12.5px}
+  thead th.me{background:var(--ouro);color:var(--azul)}
+  tbody tr:nth-child(even){background:#f7f9fd}
+  td.me{background:#fffbe9}
+  .yes{color:var(--verde);font-weight:700}
+  .no{color:var(--vermelho);font-weight:700}
+  .part{color:#c98a00;font-weight:700}
+
+  .sw{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.sw{grid-template-columns:1fr}}
+  .sw .box{border-radius:14px;padding:20px 22px}
+  .sw .forte{background:#eafaf2;border:1px solid #b9e6cf}
+  .sw .fraco{background:#fdeee9;border:1px solid #f3c9bc}
+  .sw h4{margin:0 0 10px;font-size:16px}
+  .sw .forte h4{color:var(--verde)}
+  .sw .fraco h4{color:var(--vermelho)}
+  .sw ul{margin:0;padding-left:18px}
+  .sw li{margin-bottom:7px;font-size:14px}
+
+  .idea{border-left:4px solid var(--ouro);background:#fffdf5;border-radius:0 12px 12px 0;padding:16px 20px;margin:14px 0}
+  .idea h4{margin:0 0 4px;color:var(--azul);font-size:16px}
+  .idea .why{font-size:13px;color:var(--muted);margin-top:6px}
+  .idea .why b{color:var(--azul2)}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px;margin-left:8px;vertical-align:middle}
+  .b-alto{background:#d7f0e4;color:#13724c}
+  .b-medio{background:#fdeccd;color:#9a6b00}
+  .b-wow{background:#e7ddff;color:#5a2da6}
+
+  .step{display:flex;gap:16px;margin-bottom:8px}
+  .step .num{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:var(--azul);color:var(--ouro);
+    font-weight:800;display:flex;align-items:center;justify-content:center}
+  .step .ct{background:#fff;border:1px solid var(--linha);border-radius:12px;padding:12px 18px;flex:1}
+  .step .ct b{color:var(--azul)}
+
+  blockquote{border-left:4px solid var(--azul);background:var(--azulclaro);margin:16px 0;padding:14px 20px;border-radius:0 10px 10px 0;font-size:15px}
+  .src{font-size:13px;color:var(--muted)}
+  .src a{font-size:13px}
+  footer{padding:30px 50px;color:var(--muted);font-size:13px}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0}
+  .kpi .k{background:#fff;border:1px solid var(--linha);border-radius:12px;padding:14px 18px;flex:1;min-width:150px}
+  .kpi .k b{display:block;font-size:24px;color:var(--azul)}
+  .kpi .k span{font-size:12.5px;color:var(--muted)}
+  @media(max-width:860px){nav.toc{display:none}section,header.hero,footer{padding-left:24px;padding-right:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <div class="brand">Sirva<b>OS</b></div>
+  <div class="sub">Estudo Competitivo</div>
+  <a href="#resumo">Resumo executivo</a>
+  <div class="grp">Diagnóstico</div>
+  <a href="#hoje">1. O SirvaOS hoje</a>
+  <a href="#padrao">2. O "padrão" do segmento</a>
+  <a href="#concorrentes">3. Concorrentes mapeados</a>
+  <a href="#comparativo">4. Comparativo lado a lado</a>
+  <a href="#swot">5. Forças e fraquezas</a>
+  <div class="grp">Estratégia</div>
+  <a href="#func">6. Funcionalidades fora da caixinha</a>
+  <a href="#ux">7. Layout, UX e marca</a>
+  <a href="#mkt">8. Marketing e vendas</a>
+  <a href="#preco">9. Preço e modelo</a>
+  <a href="#plano">10. Plano de alavancagem</a>
+  <a href="#fontes">Fontes</a>
+</nav>
+
+<main>
+<header class="hero">
+  <span class="pill">Análise estratégica • Junho 2026</span>
+  <h1>Como tirar o <b>SirvaOS</b> do padrão e<br>transformá-lo em referência</h1>
+  <p>Diagnóstico das funcionalidades atuais, comparação com os principais sistemas de gestão eclesiástica do Brasil e um plano concreto para diferenciação em produto, marca, vendas e preço — com foco em igrejas médias e grandes.</p>
+</header>
+
+<!-- RESUMO -->
+<section id="resumo">
+  <h2><span class="n">★</span>Resumo executivo</h2>
+  <p class="lead">O que o feedback "está muito padrão" realmente significa — e onde está a oportunidade.</p>
+  <div class="card">
+    <p>O feedback do cliente é, na verdade, uma boa notícia disfarçada: o SirvaOS já entrega o <b>essencial</b> que o mercado entrega — por isso "parece padrão". O problema não é falta de função, é <b>falta de uma tese clara de diferenciação</b>. Hoje os líderes do segmento (inChurch, InPeace, Igreja Digital) competem quase todos no mesmo terreno: <i>app da igreja + site + doação online + comunicação</i>. É um oceano vermelho.</p>
+    <p>A boa notícia é que o SirvaOS nasceu com uma <b>arquitetura diferente</b> da maioria: multi-tenant real, modular de verdade, white-label, com motor de escalas operacional (herdado do ToNaEscala) e papéis/permissões granulares. Isso é uma base de <i>plataforma</i>, não de "mais um app". A virada está em parar de se vender como "app de igreja" e assumir a identidade de <b>"o sistema operacional da igreja"</b>: a camada de gestão que liberta a liderança para pastorear pessoas — e não planilhas.</p>
+    <blockquote><b>Tese central:</b> os concorrentes são fortes na ponta do membro (app, conteúdo, doação). O SirvaOS pode vencer na <b>gestão profunda e inteligente</b> de igrejas com muitos ministérios — somando a isso 3 alavancas que ninguém domina bem no Brasil: <b>WhatsApp-first</b>, <b>jornada/cuidado pastoral com IA</b> e <b>escala inteligente</b>.</p></blockquote>
+  </div>
+  <div class="kpi">
+    <div class="k"><b>46 mil</b><span>igrejas usam a líder inChurch (32 países)</span></div>
+    <div class="k"><b>+10 mil</b><span>igrejas na InPeace (20 países)</span></div>
+    <div class="k"><b>R$150–397</b><span>faixa mensal típica praticada no mercado</span></div>
+    <div class="k"><b>3,78%</b><span>taxa de doação cobrada pela líder — brecha de preço</span></div>
+  </div>
+</section>
+
+<!-- HOJE -->
+<section id="hoje">
+  <h2><span class="n">1</span>O SirvaOS hoje</h2>
+  <p class="lead">Mapeamento das funcionalidades a partir da documentação e do código do produto.</p>
+  <div class="grid c2">
+    <div class="card">
+      <h3 style="margin-top:0">Arquitetura &amp; plataforma</h3>
+      <ul class="f">
+        <li><b>SaaS multi-tenant</b> — cada igreja é um tenant isolado, com dados, usuários e permissões próprios.</li>
+        <li><b>White-label</b> — logo, cores, favicon, nome público e domínio/subdomínio por igreja.</li>
+        <li><b>Modularidade real</b> — módulos ativáveis por cliente (feature flags por tenant).</li>
+        <li><b>RBAC com escopo</b> — Admin Global, Admin do tenant, Admin de módulo, Membro.</li>
+        <li><b>Catálogo de listas</b> sistema + tenant (cargos, ministérios) editável pela igreja.</li>
+        <li><b>App do membro</b> (React Native/Expo) e Admin Global da plataforma.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Módulos funcionais</h3>
+      <ul class="f">
+        <li><b>Membresia</b> — cadastro, status (ativo/inativo/visitante/em processo), família, cargos, histórico.</li>
+        <li><b>Louvor / Escalas</b> — eventos, funções, escala, confirmação/recusa, calendário (base ToNaEscala).</li>
+        <li><b>Financeiro</b> — dízimos/ofertas, receitas/despesas, orçamento por ministério, relatórios.</li>
+        <li><b>Kids</b> — crianças + responsáveis, frequência, turmas, comunicados aos pais.</li>
+        <li><b>Escola Bíblica</b> — turmas, professores, frequência, materiais.</li>
+        <li><b>Ação Social/ONG</b> — beneficiários, doações, voluntários, relatórios de impacto.</li>
+        <li>Exportação CSV/PDF, auditoria/logs, dashboards iniciais.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card" style="border-left:4px solid var(--azul)">
+    <b>Leitura honesta do estágio:</b> o SirvaOS está em <b>MVP avançado</b> — a fundação de plataforma é forte e acima da média do mercado, mas há lacunas de monetização (sem gateway de doação online próprio), de conteúdo no app do membro e de marca/distribuição. Há pendências conhecidas (comprovantes no portal, e-mail/WhatsApp de comunicados do Kids) ainda abertas.
+  </div>
+</section>
+
+<!-- PADRAO -->
+<section id="padrao">
+  <h2><span class="n">2</span>O "padrão" do segmento</h2>
+  <p class="lead">Para sair do padrão, primeiro é preciso nomeá-lo. Eis o "kit básico" que todo concorrente repete.</p>
+  <div class="card">
+    <p>Analisando inChurch, InPeace, Igreja Digital, Eklesia, Sigloc e afins, o <b>pacote padrão</b> do mercado brasileiro é quase idêntico em todos:</p>
+    <div class="grid c3">
+      <div><ul class="f"><li>App e/ou site da igreja com a marca</li><li>Cadastro/gestão de membros</li><li>Gestão de células / pequenos grupos</li></ul></div>
+      <div><ul class="f"><li>Eventos e agenda</li><li>Doação/dízimo online</li><li>Transmissão de culto ao vivo</li></ul></div>
+      <div><ul class="f"><li>Mural de oração, devocional, Bíblia no app</li><li>Notificações push / comunicados</li><li>Relatórios e financeiro básico</li></ul></div>
+    </div>
+    <p style="margin-bottom:0">Repare no padrão de <b>posicionamento</b>: quase todos se vendem como <i>"app para sua igreja"</i> — a competição é pela experiência do <b>membro</b> (engajamento, doação, conteúdo). A gestão administrativa é tratada como acessório. <b>É exatamente aí que existe espaço em branco.</b></p>
+  </div>
+  <blockquote>O maior incômodo relatado por pastores não é "falta de app" — é <b>fragmentação</b> (um sistema para cada coisa + planilhas), <b>sobrecarga administrativa</b> da liderança e <b>falta de indicadores</b> para decidir e para cuidar de quem se afastou.</blockquote>
+</section>
+
+<!-- CONCORRENTES -->
+<section id="concorrentes">
+  <h2><span class="n">3</span>Concorrentes mapeados</h2>
+  <p class="lead">Os principais players do Brasil, seu foco e onde são fortes/fracos. Clique para visitar.</p>
+  <div class="grid c2">
+
+    <div class="card">
+      <div class="comp"><span class="logo"><a href="https://inchurch.com.br/" target="_blank">inChurch</a></span><span class="tag lider">Líder de mercado</span></div>
+      <ul class="f">
+        <li><b>Foco:</b> app + site da igreja, comunicação e doação. "Igreja híbrida".</li>
+        <li><b>Forte em:</b> escala (46 mil igrejas/32 países), marca, conteúdo, Bíblia no app, live, doação 2 cliques, push ilimitado.</li>
+        <li><b>Fraco em:</b> contrato de 12 meses, taxa de doação ~3,78%, gestão profunda de ministérios é secundária; modelo "pacote".</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="comp"><span class="logo"><a href="https://inpeaceapp.com/" target="_blank">InPeace</a></span><span class="tag app">App + gestão</span></div>
+      <ul class="f">
+        <li><b>Foco:</b> "tudo em um" — app, site e software de gestão.</li>
+        <li><b>Forte em:</b> +10 mil igrejas, +20 funções, células, doação, mural de oração, plano gratuito (GIVE), CS/treinamento.</li>
+        <li><b>Fraco em:</b> também app-cêntrico; profundidade operacional de escalas/multi-ministério limitada.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="comp"><span class="logo"><a href="https://www.igreja.digital/" target="_blank">Igreja Digital</a></span><span class="tag gestao">Gestão / células</span></div>
+      <ul class="f">
+        <li><b>Foco:</b> gestão administrativa — secretaria, células, finanças, departamentos, filiais.</li>
+        <li><b>Forte em:</b> autocadastro/autoedição, multi-congregação, app gratuito, gestão de membresia robusta.</li>
+        <li><b>Fraco em:</b> experiência/design mais "sistema"; menos apelo de marca e conteúdo ao membro.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="comp"><span class="logo">Outros relevantes</span><span class="tag gestao">Cauda longa</span></div>
+      <ul class="f">
+        <li><a href="https://eklesia.com.br/" target="_blank">Eklesia</a>, <a href="https://www.sigloc.com.br/" target="_blank">Sigloc</a>, <a href="https://adm-igrejas.com.br/" target="_blank">Adm Igrejas</a>, <a href="https://hosana.digital/" target="_blank">Hosana</a>, Atos6, GabrielSoft.</li>
+        <li><b>Forte em:</b> preço e gestão básica; atendem igrejas pequenas/médias.</li>
+        <li><b>Fraco em:</b> pouca inovação, design datado, sem plataforma extensível.</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- COMPARATIVO -->
+<section id="comparativo">
+  <h2><span class="n">4</span>Comparativo lado a lado</h2>
+  <p class="lead">SirvaOS vs. os três principais. <span class="yes">●</span> tem &nbsp; <span class="part">◐</span> parcial/em construção &nbsp; <span class="no">○</span> não tem. Valores de preço são públicos aproximados e mudam.</p>
+  <div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Critério</th>
+        <th class="me">SirvaOS</th>
+        <th>inChurch</th>
+        <th>InPeace</th>
+        <th>Igreja Digital</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Arquitetura multi-tenant white-label real</td><td class="me"><span class="yes">●</span> Forte</td><td><span class="part">◐</span></td><td><span class="part">◐</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Modularidade ativável por igreja</td><td class="me"><span class="yes">●</span> Forte</td><td><span class="part">◐</span></td><td><span class="part">◐</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Gestão de membresia</td><td class="me"><span class="yes">●</span></td><td><span class="yes">●</span></td><td><span class="yes">●</span></td><td><span class="yes">●</span></td></tr>
+      <tr><td>Escala/louvor operacional (confirma/recusa, calendário)</td><td class="me"><span class="yes">●</span> Forte</td><td><span class="part">◐</span></td><td><span class="part">◐</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Módulo Kids com responsáveis</td><td class="me"><span class="yes">●</span></td><td><span class="part">◐</span></td><td><span class="part">◐</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Células / pequenos grupos</td><td class="me"><span class="part">◐</span> Fase 2</td><td><span class="yes">●</span></td><td><span class="yes">●</span></td><td><span class="yes">●</span></td></tr>
+      <tr><td>App do membro rico (timeline, conteúdo, Bíblia)</td><td class="me"><span class="part">◐</span></td><td><span class="yes">●</span> Forte</td><td><span class="yes">●</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Doação/dízimo online (gateway próprio)</td><td class="me"><span class="no">○</span> Lacuna</td><td><span class="yes">●</span></td><td><span class="yes">●</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Transmissão ao vivo / conteúdo devocional</td><td class="me"><span class="no">○</span></td><td><span class="yes">●</span></td><td><span class="yes">●</span></td><td><span class="no">○</span></td></tr>
+      <tr><td>Automação WhatsApp nativa</td><td class="me"><span class="part">◐</span> Planejado</td><td><span class="no">○</span></td><td><span class="no">○</span></td><td><span class="no">○</span></td></tr>
+      <tr><td>IA / copiloto de gestão e cuidado pastoral</td><td class="me"><span class="no">○</span> Oportunidade</td><td><span class="no">○</span></td><td><span class="no">○</span></td><td><span class="no">○</span></td></tr>
+      <tr><td>Jornada do membro / discipulado em trilhas</td><td class="me"><span class="no">○</span> Oportunidade</td><td><span class="part">◐</span></td><td><span class="part">◐</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Marca, conteúdo e presença social</td><td class="me"><span class="no">○</span> Inicial</td><td><span class="yes">●</span> Forte</td><td><span class="yes">●</span></td><td><span class="part">◐</span></td></tr>
+      <tr><td>Base instalada / prova social</td><td class="me"><span class="no">○</span></td><td><span class="yes">●</span> 46k</td><td><span class="yes">●</span> 10k</td><td><span class="part">◐</span></td></tr>
+      <tr><td>Preço mensal típico</td><td class="me">a definir</td><td>R$150–397+</td><td>tem plano grátis</td><td>sob consulta</td></tr>
+      <tr><td>Fidelidade/contrato</td><td class="me"><b>flexível (vantagem)</b></td><td>12 meses</td><td>variável</td><td>variável</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="src">Leitura: o SirvaOS já <b>ganha em fundação de plataforma e operação de escalas</b>, empata em membresia/Kids, e <b>perde em app do membro, doação online, conteúdo e marca</b>. As linhas em branco no mercado inteiro (WhatsApp, IA, jornada) são o seu campo livre.</p>
+</section>
+
+<!-- SWOT -->
+<section id="swot">
+  <h2><span class="n">5</span>Forças e fraquezas do SirvaOS</h2>
+  <div class="sw">
+    <div class="box forte">
+      <h4>✔ Pontos fortes</h4>
+      <ul>
+        <li><b>Plataforma de verdade:</b> multi-tenant, white-label e modular acima do padrão do mercado.</li>
+        <li><b>Motor de escalas maduro</b> (ToNaEscala) — fluxo operacional real que os "app-first" tratam de forma rasa.</li>
+        <li><b>Gestão profunda por ministério</b> com papéis/permissões granulares — feito para igreja grande e complexa.</li>
+        <li><b>Kids com responsáveis e comunicados</b> — apelo de segurança infantil, tema sensível e valorizado.</li>
+        <li><b>Folha em branco estratégica:</b> sem dívida de legado, pode adotar IA e WhatsApp nativamente.</li>
+        <li><b>Narrativa de marca pronta:</b> "SirvaOS = o sistema operacional da igreja" é forte e ownable.</li>
+      </ul>
+    </div>
+    <div class="box fraco">
+      <h4>✘ Pontos fracos</h4>
+      <ul>
+        <li><b>Sem doação online própria</b> — é como concorrentes monetizam e fidelizam. Lacuna crítica.</li>
+        <li><b>App do membro ainda pobre</b> em conteúdo/engajamento (timeline, devocional, Bíblia, live).</li>
+        <li><b>Marca, conteúdo e prova social ~zero</b> — concorrentes têm milhares de cases e máquina de Instagram.</li>
+        <li><b>Sem pricing/empacotamento definido</b> nem motor de aquisição (trial, onboarding, CS).</li>
+        <li><b>Estágio MVP</b> com pendências abertas; risco de se espalhar em 40 módulos antes de vencer em poucos.</li>
+        <li><b>"Parece padrão"</b> hoje porque a comunicação e a UX ainda não traduzem o diferencial técnico.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- FUNCIONALIDADES -->
+<section id="func">
+  <h2><span class="n">6</span>Funcionalidades fora da caixinha</h2>
+  <p class="lead">O que igrejas médias/grandes precisam e <b>ninguém entrega bem no Brasil</b>. Priorizadas por impacto x diferenciação.</p>
+
+  <div class="idea">
+    <h4>1. Cuidado Pastoral inteligente — "nenhuma ovelha se perde" <span class="badge b-wow">Wow</span></h4>
+    Um radar que cruza frequência, participação em escalas, células e eventos e gera um <b>score de saúde/engajamento por membro</b>. Quando alguém "esfria" (some por X semanas), o sistema dispara um alerta e cria automaticamente uma <b>tarefa de cuidado</b> para o líder/diácono responsável — com sugestão de mensagem.
+    <div class="why"><b>Por quê:</b> a dor nº1 relatada por pastores é perder o contato individual quando a igreja cresce. Os concorrentes mostram dados; ninguém transforma dados em <b>ação de cuidado</b>.</div>
+  </div>
+
+  <div class="idea">
+    <h4>2. Copiloto de IA da liderança <span class="badge b-wow">Wow</span></h4>
+    Um assistente que responde em linguagem natural: <i>"quais membros faltaram 3 domingos seguidos?"</i>, <i>"monte a escala do louvor de julho equilibrando quem serviu menos"</i>, <i>"resuma as finanças do mês para a reunião de diretoria"</i>. Mais: transcreve o sermão e gera <b>devocional, posts e estudo da célula</b> automaticamente.
+    <div class="why"><b>Por quê:</b> espaço 100% em branco no Brasil. Vira o argumento de venda e de conteúdo. Aproveita os dados que o SirvaOS já tem.</div>
+  </div>
+
+  <div class="idea">
+    <h4>3. WhatsApp-first (não app-first) <span class="badge b-alto">Alto impacto</span></h4>
+    Escalas, lembretes, confirmações, comunicados do Kids, comprovante de doação e avisos de evento <b>via WhatsApp</b> — o canal que o brasileiro realmente abre. Confirmação de escala respondendo a própria mensagem; lembrete automático 24h antes.
+    <div class="why"><b>Por quê:</b> os líderes empurram notificação de app que ninguém vê. Quem dominar o WhatsApp ganha engajamento real — e isso já está no roadmap do SirvaOS.</div>
+  </div>
+
+  <div class="idea">
+    <h4>4. Jornada do Membro / Trilhas de discipulado <span class="badge b-alto">Alto impacto</span></h4>
+    Um "CRM espiritual": visitante → novo convertido → batismo → discipulado → escola de líderes → liderança. Cada etapa com checklist, responsável e prazo. A liderança vê o <b>funil de crescimento espiritual</b> da igreja inteira.
+    <div class="why"><b>Por quê:</b> todos têm "membresia" plana (uma ficha). Transformar membresia em <b>jornada</b> com etapas é o pulo para discipulado — exatamente o propósito da igreja.</div>
+  </div>
+
+  <div class="idea">
+    <h4>5. Escala inteligente (auto-sugestão) <span class="badge b-alto">Alto impacto</span></h4>
+    O sistema sugere a escala equilibrando disponibilidade, frequência de serviço, conflitos (mesma pessoa em 2 ministérios no mesmo culto) e tempo de descanso. O líder só ajusta e publica.
+    <div class="why"><b>Por quê:</b> você já tem o motor de escalas — adicionar inteligência aqui é barato e vira demo "uau". Ninguém faz bem isso.</div>
+  </div>
+
+  <div class="idea">
+    <h4>6. Transparência financeira e campanhas com meta <span class="badge b-medio">Médio</span></h4>
+    Painel público de prestação de contas para a igreja + campanhas visuais (missões, reforma, "vaquinha") com barra de meta em tempo real no app e no telão. Comprovante de doação automático.
+    <div class="why"><b>Por quê:</b> transparência é dor de confiança recorrente. Campanhas com meta geram doação e engajamento — e justificam um gateway próprio com taxa menor que os 3,78% da líder.</div>
+  </div>
+
+  <div class="idea">
+    <h4>7. Marketplace de módulos — "a App Store da igreja" <span class="badge b-medio">Médio / visão</span></h4>
+    Sua arquitetura modular permite uma loja interna onde a igreja ativa módulos (e, no futuro, terceiros desenvolvem). Posiciona o SirvaOS como <b>plataforma extensível</b>, não produto fechado.
+    <div class="why"><b>Por quê:</b> é o seu diferencial arquitetural virando narrativa. Cria efeito de rede e barreira competitiva de longo prazo.</div>
+  </div>
+
+  <div class="idea">
+    <h4>8. Modo Rede/Denominação (multi-congregação) <span class="badge b-medio">Médio</span></h4>
+    Sede enxerga e consolida várias congregações; cada filial opera isolada. Relatórios consolidados para o líder denominacional.
+    <div class="why"><b>Por quê:</b> igrejas médias viram redes — e denominações compram em volume. Canal de vendas B2B de alto ticket.</div>
+  </div>
+</section>
+
+<!-- UX -->
+<section id="ux">
+  <h2><span class="n">7</span>Layout, UX e marca</h2>
+  <p class="lead">Por que "parece padrão" também é uma questão de <b>aparência e narrativa</b> — e como resolver.</p>
+  <div class="grid c2">
+    <div class="card">
+      <h3 style="margin-top:0">Experiência (UX)</h3>
+      <ul class="f">
+        <li><b>Dashboard por papel:</b> o pastor abre e vê a <i>saúde da igreja</i> (crescimento, evasão, finanças, alertas de cuidado); o líder vê só o seu ministério; o membro vê <i>sua jornada</i>. Nada de tela genérica para todos.</li>
+        <li><b>Fugir do "cara de planilha":</b> design caloroso e humano (pessoas, não tabelas frias), mobile-first, com hierarquia visual clara.</li>
+        <li><b>Onboarding em minutos:</b> assistente que configura a igreja por <i>template</i> (ex.: "igreja em células", "igreja tradicional") já com ministérios e cargos sugeridos.</li>
+        <li><b>Modo Telão/Recepção</b> para escalas e campanhas no culto.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Marca &amp; identidade</h3>
+      <ul class="f">
+        <li><b>Posicionamento ownable:</b> "<b>SirvaOS — o sistema operacional da sua igreja</b>". A metáfora "OS" diferencia de "mais um app".</li>
+        <li><b>Promessa central:</b> <i>"para a liderança pastorear pessoas, não planilhas."</i></li>
+        <li>Identidade visual consistente (azul <b>#1A2744</b> + ouro <b>#F5C842</b> já definidos) aplicada do produto ao Instagram.</li>
+        <li>Tom de voz: servir, cuidado, excelência — não "techie frio" nem "religioso engessado".</li>
+      </ul>
+    </div>
+  </div>
+  <blockquote>Regra prática: cada tela deve responder <b>"o que eu faço agora?"</b> com 1 ação clara. Sistema padrão joga dados na tela; sistema referência sugere a próxima ação.</blockquote>
+</section>
+
+<!-- MKT -->
+<section id="mkt">
+  <h2><span class="n">8</span>Marketing e vendas</h2>
+  <p class="lead">Como construir tração partindo do zero de marca contra players com milhares de cases.</p>
+  <div class="grid c2">
+    <div class="card">
+      <h3 style="margin-top:0">Posicionamento &amp; aquisição</h3>
+      <ul class="f">
+        <li><b>Não brigue de frente</b> com a inChurch no "app da igreja". Posicione-se para <b>igrejas médias/grandes com muitos ministérios</b> que sofrem com gestão e escalas — seu sweet spot.</li>
+        <li><b>Land &amp; expand:</b> ofereça o <b>módulo de escala/louvor grátis</b> como porta de entrada (você tem o melhor motor disso). Depois expande para membresia, financeiro, Kids.</li>
+        <li><b>Máquina de conteúdo</b> (Instagram + YouTube — você já tem banner/perfil YT): diagnósticos, tutoriais de gestão, IA aplicada à igreja, bastidores. Conteúdo de <b>gestão e liderança</b>, não só "como postar stories".</li>
+        <li><b>Iscas (lead magnets):</b> planilha de escala, "diagnóstico de maturidade digital da igreja", checklist de LGPD para igrejas.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Canais &amp; prova social</h3>
+      <ul class="f">
+        <li><b>Igrejas-referência / embaixadores:</b> 3–5 igrejas-modelo com case em vídeo. Vale dar gratuidade em troca de depoimento e indicação.</li>
+        <li><b>Programa de indicação</b> (pastor indica pastor — rede confiável e barata).</li>
+        <li><b>Parcerias</b> com convenções, denominações e seminários — venda B2B em volume.</li>
+        <li><b>Demo guiada</b> com dados reais da igreja (não genérica) — o "copiloto de IA" respondendo perguntas da própria igreja fecha venda.</li>
+        <li><b>SEO/Comparativos:</b> páginas "SirvaOS vs inChurch", "alternativa à inChurch sem fidelidade".</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- PRECO -->
+<section id="preco">
+  <h2><span class="n">9</span>Preço e modelo</h2>
+  <p class="lead">Empacotamento que vira argumento de venda contra os "pacotes fechados" do mercado.</p>
+  <div class="grid c3">
+    <div class="card">
+      <h3 style="margin-top:0">Freemium de entrada</h3>
+      <p style="font-size:14px">Módulo de <b>escala/louvor grátis para sempre</b> (porta de entrada). A igreja entra pela dor operacional e expande.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Planos por porte + módulos</h3>
+      <p style="font-size:14px">Mensalidade por faixa de membros, com <b>módulos à la carte</b> (Kids, Financeiro, IA, Jornada). Flexível, diferente do pacote único.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Plano Rede/Denominação</h3>
+      <p style="font-size:14px">Ticket alto, multi-congregação, consolidação. Vendido para sedes e convenções.</p>
+    </div>
+  </div>
+  <div class="card" style="border-left:4px solid var(--ouro)">
+    <b>Dois argumentos de preço que viram marketing:</b>
+    <ul class="f">
+      <li><b>Sem fidelidade de 12 meses</b> — a líder exige contrato anual. "Fique porque ama, não porque assinou." Forte gatilho.</li>
+      <li><b>Doação com taxa justa</b> — quando lançar o gateway, posicione abaixo dos ~3,78% praticados. Para uma igreja que recebe muito online, isso é dinheiro real de volta ao Reino.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- PLANO -->
+<section id="plano">
+  <h2><span class="n">10</span>Plano de alavancagem — próximos passos</h2>
+  <p class="lead">Sequência sugerida. Foco: poucos golpes certeiros antes de espalhar em 40 módulos.</p>
+
+  <h3>Horizonte 1 — 0 a 60 dias: afiar o que já existe</h3>
+  <div class="step"><div class="num">1</div><div class="ct"><b>Fechar as pendências críticas</b> (comprovante no portal, comunicado Kids por e-mail/WhatsApp) e estabilizar membresia + escala como base sólida.</div></div>
+  <div class="step"><div class="num">2</div><div class="ct"><b>Redesenho do dashboard por papel</b> e narrativa "sistema operacional da igreja" aplicada na UI e no site/landing.</div></div>
+  <div class="step"><div class="num">3</div><div class="ct"><b>WhatsApp-first</b> nas escalas e comunicados — o ganho de engajamento mais rápido e barato.</div></div>
+
+  <h3>Horizonte 2 — 60 a 120 dias: criar o "uau"</h3>
+  <div class="step"><div class="num">4</div><div class="ct"><b>Cuidado Pastoral inteligente</b> (score de engajamento + alertas + tarefa de cuidado). Primeiro grande diferencial.</div></div>
+  <div class="step"><div class="num">5</div><div class="ct"><b>Copiloto de IA</b> v1 (perguntas em linguagem natural sobre os dados + geração de escala/relatório). Vira a demo de vendas.</div></div>
+  <div class="step"><div class="num">6</div><div class="ct"><b>Jornada do Membro</b> v1 e <b>escala inteligente</b>. Empacotar tudo na narrativa de produto.</div></div>
+
+  <h3>Horizonte 3 — 120+ dias: monetizar e distribuir</h3>
+  <div class="step"><div class="num">7</div><div class="ct"><b>Gateway de doação próprio</b> com taxa competitiva + campanhas com meta. Fecha a maior lacuna vs. concorrentes.</div></div>
+  <div class="step"><div class="num">8</div><div class="ct"><b>Pricing + freemium de escala</b> publicados e <b>máquina de conteúdo</b> rodando (Instagram/YouTube + igrejas-referência).</div></div>
+  <div class="step"><div class="num">9</div><div class="ct"><b>Plano Rede/Denominação</b> e parcerias com convenções para venda B2B de alto ticket.</div></div>
+
+  <div class="card" style="background:var(--azul);color:#dfe5f2;border:none;margin-top:24px">
+    <b style="color:var(--ouro)">Próxima etapa (combinada):</b> a partir deste estudo, montar o <b>planejamento detalhado das melhorias</b> — escopo, priorização e especificação técnica de cada diferencial (começando por dashboard por papel, WhatsApp-first e Cuidado Pastoral). É só me dizer por qual quer começar.
+  </div>
+</section>
+
+<!-- FONTES -->
+<section id="fontes">
+  <h2><span class="n">⌕</span>Fontes</h2>
+  <p class="src">Pesquisa de mercado realizada em junho/2026. Dados de concorrentes conforme divulgação pública (preços e números mudam — confirmar antes de citar comercialmente).</p>
+  <ul class="src">
+    <li><a href="https://inchurch.com.br/funcionalidades/" target="_blank">inChurch — Funcionalidades</a> e <a href="https://inchurch.com.br/" target="_blank">site oficial</a></li>
+    <li><a href="https://inpeaceapp.com/" target="_blank">InPeace — site</a> e <a href="https://www.inpeaceapp.me/funcionalidades" target="_blank">funcionalidades</a></li>
+    <li><a href="https://www.igreja.digital/" target="_blank">Igreja Digital</a> · <a href="https://eklesia.com.br/" target="_blank">Eklesia</a> · <a href="https://www.sigloc.com.br/" target="_blank">Sigloc</a> · <a href="https://adm-igrejas.com.br/" target="_blank">Adm Igrejas</a></li>
+    <li><a href="https://www.capterra.com.br/directory/20046/church-management/pricing/free/software" target="_blank">Capterra — Sistemas para Igrejas</a> · <a href="https://www.getapp.com.br/directory/166/church-management/" target="_blank">GetApp</a></li>
+    <li><a href="https://www.gestaosinai.com.br/2023/09/18/6-maiores-desafios-na-gestao-de-igrejas-evangelicas/" target="_blank">GestãoSinai — desafios na gestão de igrejas</a> · <a href="https://hosana.digital/site/erros-comuns-na-gestao-de-igrejas/" target="_blank">Hosana — erros comuns</a></li>
+    <li><a href="https://www.idealwaychurch.com/sete-areas-da-vida/profissional/ferramentas-para-igrejas-2026-inovacoes-que-transformam-a-vida-congregacional/" target="_blank">IdealWay — tendências 2026</a> · <a href="https://www.projetodraft.com/a-inchurch-ajuda-igrejas-a-se-digitalizarem/" target="_blank">Projeto Draft — história da inChurch</a></li>
+    <li>Documentação interna do produto: <code>docs/visao-geral.md</code>, <code>docs/modulos.md</code>, <code>docs/spec-sirvaos.md</code>, <code>docs/roadmap-etapas.md</code>, <code>docs/pendencias.md</code></li>
+  </ul>
+</section>
+
+<footer>
+  Estudo competitivo e plano de diferenciação do SirvaOS — preparado para Ricardo · Junho/2026.<br>
+  Documento de trabalho. Próxima etapa: planejamento detalhado das melhorias.
+</footer>
+</main>
+</div>
+</body>
+</html>

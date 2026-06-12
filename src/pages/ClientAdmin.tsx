@@ -45,6 +45,7 @@ import {
 import { MaterialReactTable, type MRT_ColumnDef } from "material-react-table";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DashboardSaudeIgreja } from "../components/DashboardSaudeIgreja";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { htmlToPlainText, renderEventCardHtml, sanitizeRichHtml } from "../lib/eventCardTemplate";
@@ -9131,6 +9132,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         <div className="dashboard-grid">
           {activeTab === "overview" ? (
             <>
+              {(clientData.profile.tenant_role === "owner" || clientData.profile.tenant_role === "admin") ? (
+                <DashboardSaudeIgreja tenantId={clientData.tenant.id} />
+              ) : null}
+
               <article className="panel members-panel">
                 <div className="panel-heading">
                   <div>
