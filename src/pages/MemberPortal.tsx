@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Compass,
   FileCheck2,
   Heart,
   LockKeyhole,
@@ -2308,6 +2309,29 @@ export function MemberPortal() {
               Abrir painel administrativo
             </a>
           ) : null}
+        </section>
+
+        {/* Etapa 2 / A6 — gancho "Minha Jornada" (discipulado, Frente E) */}
+        <section
+          aria-label="Minha Jornada"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            background: "#fffdf5",
+            border: "1px solid rgba(245,200,66,.5)",
+            borderRadius: 14,
+            padding: "14px 18px",
+            margin: "4px 0 8px",
+          }}
+        >
+          <Compass size={22} color="#F5C842" style={{ flexShrink: 0 }} />
+          <div>
+            <strong style={{ color: "#1A2744" }}>Em breve: Minha Jornada</strong>
+            <div style={{ fontSize: 13, color: "#6b7280" }}>
+              Acompanhe seus passos na igreja — batismo, discipulado, cursos e próximos passos.
+            </div>
+          </div>
         </section>
 
         <nav className="member-portal-tabbar" aria-label="Navegação do portal">

@@ -72,7 +72,7 @@ begin
   v_finance_on := exists (
     select 1 from public.tenant_modules tm
     join public.platform_modules pm on pm.id = tm.module_id
-    where tm.tenant_id = p_tenant_id and pm.code = 'finance' and tm.status = 'active'
+    where tm.tenant_id = p_tenant_id and pm.code = 'financial' and tm.status = 'active'
   );
   v_worship_on := exists (
     select 1 from public.tenant_modules tm

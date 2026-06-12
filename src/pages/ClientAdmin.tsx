@@ -45,11 +45,13 @@ import {
 import { MaterialReactTable, type MRT_ColumnDef } from "material-react-table";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DashboardMeuMinisterio } from "../components/DashboardMeuMinisterio";
 import { DashboardSaudeIgreja } from "../components/DashboardSaudeIgreja";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { htmlToPlainText, renderEventCardHtml, sanitizeRichHtml } from "../lib/eventCardTemplate";
 import { supabase, supabaseUrl } from "../lib/supabase";
+import { sendWhatsapp } from "../lib/whatsappService";
 import {
   createWorshipEmailCampaign,
   emailErrorMessage,
@@ -7585,6 +7587,59 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     }
   }
 
+  async function handleAnnouncementSendWhatsapp() {
+    if (!announcementNotifyTarget || !profile || !clientData) return;
+    setAnnouncementNotifyStatus("loading");
+    setAnnouncementNotifyMessage("");
+    try {
+      const { data: members, error: membersError } = await supabase
+        .from("members")
+        .select("id, name, phone")
+        .eq("tenant_id", clientData.tenant.id)
+        .eq("status_v2", "active")
+        .eq("whatsapp_opt_in", true)
+        .not("phone", "is", null)
+        .returns<Array<{ id: string; name: string; phone: string | null }>>();
+
+      if (membersError) throw new Error(membersError.message);
+
+      const recipients = (members ?? [])
+        .filter((m) => (m.phone ?? "").trim().length > 0)
+        .map((m) => ({
+          phone: m.phone as string,
+          message: `📢 *${announcementNotifyTarget.title}*\n\n${announcementNotifyTarget.message}\n\nEste comunicado foi enviado pela gestão da igreja.`,
+        }));
+
+      if (recipients.length === 0) {
+        setAnnouncementNotifyStatus("error");
+        setAnnouncementNotifyMessage("Nenhum membro ativo com WhatsApp autorizado e telefone cadastrado.");
+        return;
+      }
+
+      const result = await sendWhatsapp({
+        tenantId: clientData.tenant.id,
+        recipients,
+        context: "announcement",
+        contextId: announcementNotifyTarget.id,
+      });
+
+      await supabase.from("announcement_notifications_log").insert({
+        tenant_id: clientData.tenant.id,
+        announcement_id: announcementNotifyTarget.id,
+        channel: "whatsapp",
+        recipient_count: result.sent,
+        sent_by: profile.id,
+        notes: `${result.sent} enviados, ${result.failed} falhos`,
+      });
+
+      setAnnouncementNotifyStatus("success");
+      setAnnouncementNotifyMessage(`WhatsApp enviados: ${result.sent}. Falhos: ${result.failed}.`);
+    } catch (err) {
+      setAnnouncementNotifyStatus("error");
+      setAnnouncementNotifyMessage(err instanceof Error ? err.message : "Erro ao enviar WhatsApp.");
+    }
+  }
+
   function extractYouTubeInfo(url: string): { channelType: "channel" | "playlist"; channelId: string } | null {
     // /channel/UCxxxxx
     const channelMatch = url.match(/youtube\.com\/channel\/(UC[a-zA-Z0-9_-]+)/);
@@ -8698,20 +8753,75 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const { error } = await supabase.from("kids_communications").insert({
-      tenant_id: tenantId,
-      child_id: form.child_id || null,
-      title: form.title,
-      message: form.message,
-      sent_via: form.sent_via,
-      created_by: profile.id,
-    });
+    const { data: inserted, error } = await supabase
+      .from("kids_communications")
+      .insert({
+        tenant_id: tenantId,
+        child_id: form.child_id || null,
+        title: form.title,
+        message: form.message,
+        sent_via: form.sent_via,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single<{ id: string }>();
 
-    if (error) {
+    if (error || !inserted) {
       setKidsSaveStatus("error");
       setKidsSaveMessage("Não foi possível enviar o comunicado.");
       return;
     }
+
+    // Envio real via WhatsApp (Edge Function) para os responsáveis.
+    if (form.sent_via === "whatsapp") {
+      const guardians = form.child_id
+        ? clientData.kidsGuardiansByChildId[form.child_id] ?? []
+        : Object.values(clientData.kidsGuardiansByChildId).flat();
+
+      const text = `👶 *Kids • ${form.title}*\n\n${form.message}\n\nMensagem da equipe Kids da igreja.`;
+      const seen = new Set<string>();
+      const recipients: Array<{ phone: string; message: string }> = [];
+      for (const g of guardians) {
+        const phone =
+          g.phone && g.phone.trim().length > 0
+            ? g.phone
+            : g.member_id
+              ? clientData.members.find((m) => m.id === g.member_id)?.phone ?? ""
+              : "";
+        const key = (phone ?? "").replace(/\D/g, "");
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        recipients.push({ phone, message: text });
+      }
+
+      if (recipients.length === 0) {
+        setKidsSaveStatus("error");
+        setKidsSaveMessage("Comunicado salvo, mas nenhum responsável com telefone cadastrado foi encontrado.");
+        setKidsCommunicationForm(emptyKidsCommunicationForm);
+        setIsKidsCommunicationFormOpen(false);
+        await loadClientData(profile.id);
+        return;
+      }
+
+      try {
+        const result = await sendWhatsapp({
+          tenantId,
+          recipients,
+          context: "kids_communication",
+          contextId: inserted.id,
+        });
+        setKidsSaveStatus("success");
+        setKidsSaveMessage(`Comunicado enviado. WhatsApp: ${result.sent} enviados, ${result.failed} falhos.`);
+      } catch (e) {
+        setKidsSaveStatus("error");
+        setKidsSaveMessage(e instanceof Error ? e.message : "Comunicado salvo, mas houve falha no envio por WhatsApp.");
+      }
+      setKidsCommunicationForm(emptyKidsCommunicationForm);
+      setIsKidsCommunicationFormOpen(false);
+      await loadClientData(profile.id);
+      return;
+    }
+
     setKidsSaveStatus("success");
     setKidsSaveMessage("Comunicado enviado.");
     setKidsCommunicationForm(emptyKidsCommunicationForm);
@@ -9135,6 +9245,20 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               {(clientData.profile.tenant_role === "owner" || clientData.profile.tenant_role === "admin") ? (
                 <DashboardSaudeIgreja tenantId={clientData.tenant.id} />
               ) : null}
+
+              {(() => {
+                const role = clientData.profile.tenant_role;
+                const isTenantAdmin = role === "owner" || role === "admin";
+                const worshipModule = clientData.modules.find((m) => m.code === "worship");
+                const profileId = clientData.profile.id;
+                const memberId = clientData.profile.member_id ?? null;
+                const adminModuleIds = [
+                  ...(clientData.moduleAdminModuleIdsByProfileId[profileId] ?? []),
+                  ...(memberId ? clientData.moduleAdminModuleIdsByMemberId[memberId] ?? [] : []),
+                ];
+                const isWorshipLeader = !!worshipModule && adminModuleIds.includes(worshipModule.id);
+                return !isTenantAdmin && isWorshipLeader ? <DashboardMeuMinisterio /> : null;
+              })()}
 
               <article className="panel members-panel">
                 <div className="panel-heading">
@@ -17401,24 +17525,33 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       <MessageCircle size={18} style={{ color: "#25d366" }} />
                       <strong style={{ fontSize: "0.9rem" }}>WhatsApp</strong>
                     </div>
-                    <a
-                      href={`https://wa.me/?text=${encodeURIComponent(
-                        `📢 *${announcementNotifyTarget.title}*\n\n${announcementNotifyTarget.message}\n\nEste comunicado foi enviado pela gestão da igreja.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        background: "#25d366", color: "#fff", borderRadius: 6,
-                        padding: "6px 14px", fontSize: "0.85rem", fontWeight: 600,
-                        textDecoration: "none",
-                      }}
-                    >
-                      Abrir WhatsApp
-                    </a>
+                    <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                      <Button
+                        type="button"
+                        disabled={announcementNotifyStatus === "loading"}
+                        onClick={handleAnnouncementSendWhatsapp}
+                      >
+                        {announcementNotifyStatus === "loading" ? "Enviando..." : "Enviar automático"}
+                      </Button>
+                      <a
+                        href={`https://wa.me/?text=${encodeURIComponent(
+                          `📢 *${announcementNotifyTarget.title}*\n\n${announcementNotifyTarget.message}\n\nEste comunicado foi enviado pela gestão da igreja.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          background: "#25d366", color: "#fff", borderRadius: 6,
+                          padding: "6px 14px", fontSize: "0.85rem", fontWeight: 600,
+                          textDecoration: "none",
+                        }}
+                      >
+                        Abrir manual
+                      </a>
+                    </div>
                   </div>
                   <small style={{ color: "var(--color-text-secondary)" }}>
-                    Abre o WhatsApp com mensagem pré-preenchida para envio manual.
+                    <strong>Enviar automático</strong>: dispara via Z-API para todos os membros ativos com WhatsApp autorizado e telefone cadastrado. <strong>Abrir manual</strong>: abre o WhatsApp com a mensagem pronta.
                   </small>
                 </div>
 
