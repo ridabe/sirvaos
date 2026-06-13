@@ -47,6 +47,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardMeuMinisterio } from "../components/DashboardMeuMinisterio";
 import { DashboardSaudeIgreja } from "../components/DashboardSaudeIgreja";
+import { WhatsappLogs } from "../components/WhatsappLogs";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
 import { htmlToPlainText, renderEventCardHtml, sanitizeRichHtml } from "../lib/eventCardTemplate";
@@ -1401,6 +1402,7 @@ const clientTabs = [
   { key: "kids", label: "Kids", icon: Baby },
   { key: "bible-school", label: "Escola Bíblica", icon: BookOpen },
   { key: "notices", label: "Comunicados", icon: Bell },
+  { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { key: "social-media", label: "Mídias Sociais", icon: Play },
   { key: "intercession", label: "Intercessão", icon: Heart },
   { key: "tutorials", label: "Tutoriais", icon: GraduationCap },
@@ -1427,7 +1429,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   intercession: "intercession",
 };
 
-const tenantAdminOnlyTabs = new Set<ClientTab>(["tutorials", "lists", "theme", "users", "policies"]);
+const tenantAdminOnlyTabs = new Set<ClientTab>(["whatsapp", "tutorials", "lists", "theme", "users", "policies"]);
 
 type ClientAdminProps = {
   demoMode?: boolean;
@@ -7312,20 +7314,90 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     await loadClientData(profile.id);
   }
 
-  function buildWhatsAppLink(assignment: WorshipAssignmentRecord, worshipEvent: WorshipEventRecord) {
+  function buildWorshipWhatsAppMessage(assignment: WorshipAssignmentRecord, worshipEvent: WorshipEventRecord) {
     const name = assignment.members?.name ?? "Membro";
     const role = assignment.worship_roles?.name ?? assignment.role_name ?? "sua função";
     const date = new Date(worshipEvent.starts_at).toLocaleString("pt-BR", {
-      weekday: "long",
-      day: "2-digit",
-      month: "long",
-      hour: "2-digit",
-      minute: "2-digit",
+      weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit",
     });
     const location = worshipEvent.location ? ` em ${worshipEvent.location}` : "";
-    const message = `Olá ${name}, você foi escalado(a) como ${role} para o evento "${worshipEvent.title}" no dia ${date}${location}. Acesse o portal para confirmar sua participação: ${window.location.origin}/membro`;
-    const phone = assignment.members?.email ? "" : "";
-    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    return `🎵 Olá ${name}! Você foi escalado(a) como *${role}* para "${worshipEvent.title}" no dia ${date}${location}.\n\nConfirme sua participação no portal: ${window.location.origin}/membro`;
+  }
+
+  // B5 — Envio automático da escala/confirmação por WhatsApp (Edge Function).
+  async function handleSendWorshipWhatsapp() {
+    const eventId = worshipEmailModalEventId;
+    if (!eventId || worshipEmailSending || !clientData) return;
+    const modalEvent = clientData.worshipEvents.find((e) => e.id === eventId);
+    if (!modalEvent) return;
+    const assignments = clientData.worshipAssignmentsByEventId[eventId] ?? [];
+
+    const seen = new Set<string>();
+    const recipients: Array<{ phone: string; message: string }> = [];
+    for (const a of assignments) {
+      const phone = a.members?.phone ?? "";
+      const key = phone.replace(/\D/g, "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      recipients.push({ phone, message: buildWorshipWhatsAppMessage(a, modalEvent) });
+    }
+
+    if (recipients.length === 0) {
+      setWorshipEmailFeedbackType("error");
+      setWorshipEmailFeedback("Nenhum escalado com telefone cadastrado.");
+      return;
+    }
+
+    setWorshipEmailSending(true);
+    setWorshipEmailFeedback("");
+    try {
+      const result = await sendWhatsapp({
+        tenantId: clientData.tenant.id,
+        recipients,
+        context: "worship_confirmation",
+        contextId: eventId,
+      });
+      setWorshipEmailFeedbackType(result.failed > 0 ? "error" : "success");
+      setWorshipEmailFeedback(`WhatsApp: ${result.sent} enviados, ${result.failed} falhos.`);
+    } catch (err) {
+      setWorshipEmailFeedbackType("error");
+      setWorshipEmailFeedback(err instanceof Error ? err.message : "Falha ao enviar WhatsApp.");
+    } finally {
+      setWorshipEmailSending(false);
+    }
+  }
+
+  // B5 — Envio individual da confirmação por WhatsApp (via API), por escalado.
+  async function handleSendWorshipWhatsappOne(
+    assignment: WorshipAssignmentRecord,
+    worshipEvent: WorshipEventRecord,
+  ) {
+    if (!clientData || worshipEmailSending) return;
+    const phone = assignment.members?.phone ?? "";
+    if (phone.replace(/\D/g, "").length === 0) {
+      setWorshipEmailFeedbackType("error");
+      setWorshipEmailFeedback(`${assignment.members?.name ?? "Escalado"} não tem telefone cadastrado.`);
+      return;
+    }
+    setWorshipEmailSending(true);
+    setWorshipEmailFeedback("");
+    try {
+      const result = await sendWhatsapp({
+        tenantId: clientData.tenant.id,
+        recipients: [{ phone, message: buildWorshipWhatsAppMessage(assignment, worshipEvent) }],
+        context: "worship_confirmation",
+        contextId: worshipEvent.id,
+      });
+      setWorshipEmailFeedbackType(result.failed > 0 ? "error" : "success");
+      setWorshipEmailFeedback(
+        `WhatsApp p/ ${assignment.members?.name ?? "escalado"}: ${result.sent} enviado(s), ${result.failed} falho(s).`,
+      );
+    } catch (err) {
+      setWorshipEmailFeedbackType("error");
+      setWorshipEmailFeedback(err instanceof Error ? err.message : "Falha ao enviar WhatsApp.");
+    } finally {
+      setWorshipEmailSending(false);
+    }
   }
 
   async function handleWorshipAssignmentSubmit(event: FormEvent<HTMLFormElement>) {
@@ -11220,9 +11292,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                                 {worshipStatusLabel(evt.status)}
                               </em>
                               {canManageWorship && assignments.length > 0 ? (
-                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail">
-                                  <Mail size={15} />
-                                  <span>E-mails</span>
+                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail ou WhatsApp">
+                                  <Send size={15} />
+                                  <span>Enviar</span>
                                 </button>
                               ) : null}
                               {canManageWorship ? (
@@ -11341,9 +11413,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                                 {worshipStatusLabel(evt.status)}
                               </em>
                               {canManageWorship && assignments.length > 0 ? (
-                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail">
-                                  <Mail size={15} />
-                                  <span>E-mails</span>
+                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail ou WhatsApp">
+                                  <Send size={15} />
+                                  <span>Enviar</span>
                                 </button>
                               ) : null}
                               {canManageWorship ? (
@@ -14075,6 +14147,10 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               </article>
             );
           })() : null}
+
+          {activeTab === "whatsapp" && clientData ? (
+            <WhatsappLogs tenantId={clientData.tenant.id} />
+          ) : null}
 
           {activeTab === "notices" ? (
             <article className="panel full-width">
@@ -17120,9 +17196,9 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                                 {worshipStatusLabel(evt.status)}
                               </em>
                               {canManageWorship && assignments.length > 0 ? (
-                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail">
-                                  <Mail size={15} />
-                                  <span>E-mails</span>
+                                <button type="button" className="worship-email-btn" onClick={() => openWorshipEmailModal(evt.id)} title="Enviar escala por e-mail ou WhatsApp">
+                                  <Send size={15} />
+                                  <span>Enviar</span>
                                 </button>
                               ) : null}
                               {canManageWorship ? (
@@ -17275,6 +17351,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
         const modalEvent = clientData.worshipEvents.find((e) => e.id === worshipEmailModalEventId);
         const modalAssignments = clientData.worshipAssignmentsByEventId[worshipEmailModalEventId] ?? [];
         const withEmail = modalAssignments.filter((a) => a.members?.email).length;
+        const withPhone = modalAssignments.filter((a) => (a.members?.phone ?? "").replace(/\D/g, "").length > 0).length;
         const lastCampaigns = worshipEmailCampaignsByEventId[worshipEmailModalEventId];
         const lastCampaign = lastCampaigns?.[0];
         return (
@@ -17289,7 +17366,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
               <div className="modal-header">
                 <div>
                   <span>Louvor</span>
-                  <h2 className="modal-title-compact">Enviar escala por e-mail</h2>
+                  <h2 className="modal-title-compact">Enviar escala (e-mail / WhatsApp)</h2>
                 </div>
                 <button className="modal-close" type="button" onClick={() => setWorshipEmailModalEventId(null)}>
                   <X size={18} />
@@ -17300,6 +17377,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                 <div className="worship-email-summary">
                   <div><span>Escalados</span><strong>{modalAssignments.length}</strong></div>
                   <div><span>Com e-mail</span><strong>{withEmail}</strong></div>
+                  <div><span>Com WhatsApp</span><strong>{withPhone}</strong></div>
                   {lastCampaign ? (
                     <div>
                       <span>Último envio</span>
@@ -17317,35 +17395,32 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
                 {modalAssignments.length > 0 && modalEvent ? (
                   <div className="worship-whatsapp-list">
-                    <span className="worship-whatsapp-list-title">Links WhatsApp por escalado</span>
+                    <span className="worship-whatsapp-list-title">Enviar WhatsApp por escalado</span>
                     {modalAssignments.map((a) => {
                       const cleanPhone = (a.members?.phone ?? "").replace(/\D/g, "");
-                      const waLink = buildWhatsAppLink(a, modalEvent);
-                      const waLinkWithPhone = cleanPhone
-                        ? waLink.replace("https://wa.me/?text=", `https://wa.me/55${cleanPhone}?text=`)
-                        : waLink;
                       return (
                         <div key={a.id} className="worship-whatsapp-row">
                           <div>
                             <strong>{a.members?.name ?? "Membro"}</strong>
                             <small>{a.worship_roles?.name ?? a.role_name ?? "Função"}</small>
                           </div>
-                          <a
-                            href={waLinkWithPhone}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
                             className="worship-whatsapp-btn"
+                            onClick={() => handleSendWorshipWhatsappOne(a, modalEvent)}
+                            disabled={worshipEmailSending || cleanPhone.length === 0}
+                            title={cleanPhone.length === 0 ? "Sem telefone cadastrado" : "Enviar por WhatsApp (API)"}
                           >
-                            WhatsApp
-                          </a>
+                            {worshipEmailSending ? "Enviando..." : "WhatsApp"}
+                          </button>
                         </div>
                       );
                     })}
                   </div>
                 ) : null}
 
-                {worshipEmailFeedback && worshipEmailFeedbackType === "error" ? (
-                  <p className="login-feedback error">{worshipEmailFeedback}</p>
+                {worshipEmailFeedback ? (
+                  <p className={`login-feedback ${worshipEmailFeedbackType}`}>{worshipEmailFeedback}</p>
                 ) : null}
 
                 <div className="modal-actions">
@@ -17359,11 +17434,20 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   </Button>
                   <Button
                     type="button"
+                    variant="secondary"
+                    icon={<MessageCircle size={16} />}
+                    onClick={handleSendWorshipWhatsapp}
+                    disabled={worshipEmailSending || withPhone === 0}
+                  >
+                    {worshipEmailSending ? "Enviando..." : "Confirmar via WhatsApp"}
+                  </Button>
+                  <Button
+                    type="button"
                     icon={<Send size={16} />}
                     onClick={handleSendWorshipEmails}
                     disabled={worshipEmailSending || withEmail === 0}
                   >
-                    {worshipEmailSending ? "Enviando..." : "Enviar"}
+                    {worshipEmailSending ? "Enviando..." : "Enviar e-mail"}
                   </Button>
                 </div>
               </div>
