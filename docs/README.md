@@ -1,41 +1,32 @@
-# Documentação - SirvaOS
+# Documentação — SirvaOS
 
-> **Projeto:** SirvaOS  
-> **Igreja:** Primeira Igreja  
-> **Última atualização:** Maio de 2026
+> **Projeto:** SirvaOS — SaaS multi-tenant white-label de gestão eclesiástica
+> **Última atualização:** 2026-06-13
 
----
+Esta pasta foi organizada para ter **uma fonte por assunto** (sem duplicações). Para entender qualquer fluxo de módulo, comece por `fluxos-modulos.md`.
 
-## Índice da Documentação
+## Índice
 
-| Documento | Descrição | Público |
+| Documento | O que é | Status |
 |---|---|---|
-| [Apresentação à Diretoria](./apresentacao-diretoria.md) | Resumo executivo com proposta, benefícios e próximos passos | Diretoria e Liderança |
-| [Visão Geral do Sistema](./visao-geral.md) | Contexto, conceito, sugestões de nome e visão de futuro | Todos |
-| [SPEC do Produto](./spec-sirvaos.md) | Especificação funcional e arquitetura do SaaS SirvaOS | Produto e Equipe Técnica |
-| [Roadmap de Etapas](./roadmap-etapas.md) | Memória oficial da ordem de desenvolvimento e estado atual | Produto e Equipe Técnica |
-| [Supabase](./supabase.md) | Base de dados, migrations, RLS e bootstrap do admin global | Produto e Equipe Técnica |
-| [Identidade Visual](./identidade-visual.md) | Paleta inicial, tokens de cor e direção visual do produto | Produto, Design e Equipe Técnica |
-| [Catálogo de Módulos](./modulos.md) | Lista detalhada de todos os módulos previstos por fase | Líderes e Equipe Técnica |
-| [Arquitetura de Integração](./integracao.md) | Como os módulos se conectam, perfis de acesso e app mobile | Líderes e Equipe Técnica |
+| [fluxos-modulos.md](./fluxos-modulos.md) | **Fonte da verdade dos fluxos** de cada módulo (início→fim, integrações). Consultar e atualizar sempre que um fluxo mudar. | Vivo |
+| [spec-sirvaos.md](./spec-sirvaos.md) | Especificação funcional e arquitetura do produto. | Vivo |
+| [prd-sirvaos.docx](./prd-sirvaos.docx) | PRD — requisitos de produto. | Vivo |
+| [roadmap-etapas.md](./roadmap-etapas.md) | **Roadmap único:** etapas de construção (1–15) + Fase 2 de diferenciação (Frentes A–G) + Apêndice A1. | Vivo |
+| [pendencias.md](./pendencias.md) | Pendências/melhorias por módulo. | Vivo |
+| [identidade-visual.md](./identidade-visual.md) | Guia visual: paleta, tokens de cor, direção. | Referência |
+| [apresentacao-diretoria.md](./apresentacao-diretoria.md) | Resumo executivo (histórico, mai/2026). | Histórico |
+| [Manual-Acesso-SirvaOS.pdf](./Manual-Acesso-SirvaOS.pdf) | Manual de acesso para clientes. | Cliente |
+| [email-boas-vindas-cliente.html](./email-boas-vindas-cliente.html) | Template do e-mail de boas-vindas (onboarding). | Asset |
+| [roteiros/](./roteiros/) | Roteiros de vídeos explicativos (louvor, intercessão). | Asset |
+| [visual/](./visual/) | Logos, paletas e brand boards. | Asset |
 
----
+## Convenções
 
-## Início rápido
+- **Antes de criar/alterar/explicar um fluxo:** consultar `fluxos-modulos.md` (regra também registrada no `CLAUDE.md` da raiz).
+- **Ao mudar um fluxo:** atualizar `fluxos-modulos.md` (e a data no topo dele).
+- Multi-tenant por `tenant_id` + RLS; módulos ativáveis por `tenant_modules`. Detalhes em `fluxos-modulos.md` §0.
 
-Se você está preparando a **apresentação para a diretoria**, comece por:
+## Histórico de organização
 
-1. [Apresentação à Diretoria](./apresentacao-diretoria.md) - resumo executivo
-2. [Visão Geral](./visao-geral.md) - contexto completo e nomes sugeridos
-
-Se você quer entender **o que o sistema fará**, leia:
-
-1. [SPEC do Produto](./spec-sirvaos.md) - estrutura funcional e arquitetura do SaaS
-2. [Roadmap de Etapas](./roadmap-etapas.md) - ordem correta de desenvolvimento
-3. [Supabase](./supabase.md) - base de dados, migrations e segurança
-4. [Catálogo de Módulos](./modulos.md) - todos os módulos detalhados
-5. [Arquitetura de Integração](./integracao.md) - como tudo se conecta
-
----
-
-*Esta documentação é um rascunho inicial, sujeito a revisão e aprovação da diretoria.*
+- 2026-06-13 — Pasta reorganizada: consolidados os arquivos de etapa/fase em `roadmap-etapas.md`; removidos redundantes/defasados (`supabase.md`, `integracao.md`, `modulos.md`, `visao-geral.md`, `apresentacao-diretoria.pdf`, `preview-email-reenvio.html` e os docs por-módulo de Intercessão); roteiros movidos para `roteiros/`.

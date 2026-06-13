@@ -112,6 +112,8 @@ Este é o momento certo para dar esse passo. O módulo de Louvor já existe como
 ---
 
 **Documentos de apoio:**
-- [Visão Geral do Sistema](./visao-geral.md)
-- [Catálogo de Módulos](./modulos.md)
-- [Arquitetura de Integração](./integracao.md)
+- [SPEC do Produto](./spec-sirvaos.md)
+- [Fluxos dos Módulos](./fluxos-modulos.md)
+- [Roadmap](./roadmap-etapas.md)
+
+> Nota (2026-06-13): documento histórico (mai/2026). A visão geral, o catálogo de módulos e a arquitetura de integração foram consolidados no SPEC e em `fluxos-modulos.md`.
