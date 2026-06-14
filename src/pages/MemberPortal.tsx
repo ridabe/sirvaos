@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock3,
   Compass,
+  DollarSign,
   FileCheck2,
   Heart,
   LockKeyhole,
@@ -41,8 +42,20 @@ type PortalTabId =
   | "kids"
   | "escola"
   | "midias"
+  | "financeiro"
   | "admin"
   | "privacidade";
+
+type MemberContribution = {
+  id: string;
+  date: string;
+  type: "income" | "expense";
+  amount: number;
+  description: string;
+  payment_method: string;
+  category_name: string | null;
+  created_at: string;
+};
 
 type MemberAssignment = {
   id: string;
@@ -142,7 +155,7 @@ type SocialMediaChannelPortalRecord = {
   id: string;
   name: string;
   platform: string;
-  channel_type: "channel" | "playlist";
+  channel_type: "channel" | "playlist" | "profile" | "post" | "embed";
   channel_id: string;
   channel_url: string | null;
   description: string | null;
@@ -545,6 +558,8 @@ export function MemberPortal() {
   const [lgpdActionMessage, setLgpdActionMessage] = useState("");
   // Intercession state
   const [activePortalTab, setActivePortalTab] = useState<PortalTabId>("inicio");
+  const [myContributions, setMyContributions] = useState<MemberContribution[]>([]);
+  const [contributionReceipt, setContributionReceipt] = useState<MemberContribution | null>(null);
   const [isInIntercessionMinistry, setIsInIntercessionMinistry] = useState(false);
   const [ownPrayerRequests, setOwnPrayerRequests] = useState<PortalPrayerRequest[]>([]);
   const [myAssignments, setMyAssignments] = useState<PortalPrayerAssignment[]>([]);
@@ -623,6 +638,27 @@ export function MemberPortal() {
       void checkPolicyAcceptance(profile.tenant_id);
     }
   }, [loadStatus, profile?.tenant_id]);
+
+  // P1 — Comprovantes financeiros: carrega as contribuições do próprio membro.
+  useEffect(() => {
+    if (!profile?.member_id) {
+      setMyContributions([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase.rpc("my_financial_contributions");
+      if (!active) return;
+      if (error) {
+        setMyContributions([]);
+        return;
+      }
+      setMyContributions((data ?? []) as MemberContribution[]);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profile?.member_id]);
 
   useEffect(() => {
     if (!profile?.id) {
@@ -978,13 +1014,14 @@ export function MemberPortal() {
       setPortalAnnouncements(announcementsRes.data ?? []);
       const channels = socialMediaRes.data ?? [];
       setSocialMediaChannels(channels);
-      // Busca vídeos de cada canal em background
-      if (channels.length > 0) {
+      // Busca vídeos só dos canais do YouTube (Instagram/Spotify usam embed direto).
+      const youtubeChannels = channels.filter((c) => c.platform === "youtube");
+      if (youtubeChannels.length > 0) {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token ?? "";
-        setSocialMediaLoadingIds(new Set(channels.map((c) => c.id)));
+        setSocialMediaLoadingIds(new Set(youtubeChannels.map((c) => c.id)));
         await Promise.all(
-          channels.map(async (ch) => {
+          youtubeChannels.map(async (ch) => {
             try {
               const res = await fetch(`${supabaseUrl}/functions/v1/fetch-youtube-feed`, {
                 method: "POST",
@@ -2069,6 +2106,7 @@ export function MemberPortal() {
     { id: "kids" as const, label: "Kids", icon: <Baby size={16} />, visible: kidsChildren.length > 0 || isKidsModuleAdmin },
     { id: "escola" as const, label: "Escola Bíblica", icon: <BookOpen size={16} />, visible: bibleSchoolEnabled },
     { id: "midias" as const, label: "Mídias", icon: <Play size={16} />, visible: socialMediaChannels.length > 0 },
+    { id: "financeiro" as const, label: "Minhas Contribuições", icon: <DollarSign size={16} />, visible: myContributions.length > 0 },
     { id: "admin" as const, label: "Admin", icon: <Check size={16} />, visible: canOpenAdminPortal || highlightedAdminModules.length > 0 },
     { id: "privacidade" as const, label: "Privacidade", icon: <ShieldCheck size={16} />, visible: true },
   ];
@@ -2663,7 +2701,10 @@ export function MemberPortal() {
               {socialMediaChannels.map((ch) => {
                 const videos = socialMediaVideos[ch.id] ?? [];
                 const isLoading = socialMediaLoadingIds.has(ch.id);
-                const channelLabel = ch.channel_type === "playlist" ? "Playlist" : "Canal";
+                const channelLabel =
+                  ch.platform === "instagram" ? "Instagram"
+                  : ch.platform === "spotify" ? "Spotify"
+                  : ch.channel_type === "playlist" ? "Playlist" : "Canal";
                 const description = ch.description ? `${channelLabel} · ${ch.description}` : channelLabel;
                 return (
                   <AccordionPanel
@@ -2676,7 +2717,26 @@ export function MemberPortal() {
                     defaultOpen={false}
                     className="member-portal-accordion-compact"
                   >
-                    {isLoading ? (
+                    {ch.platform === "spotify" ? (
+                      <iframe
+                        title={ch.name}
+                        src={`https://open.spotify.com/embed/${ch.channel_id}`}
+                        width="100%"
+                        height={ch.channel_id.startsWith("episode") || ch.channel_id.startsWith("track") ? 152 : 352}
+                        style={{ border: 0, borderRadius: 12 }}
+                        loading="lazy"
+                        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                      />
+                    ) : ch.platform === "instagram" ? (
+                      <a
+                        href={ch.channel_url ?? `https://instagram.com/${ch.channel_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1A2744", color: "#fff", borderRadius: 10, padding: "10px 16px", textDecoration: "none", fontWeight: 600, fontSize: "0.85rem" }}
+                      >
+                        Abrir no Instagram (@{ch.channel_id})
+                      </a>
+                    ) : isLoading ? (
                       <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", margin: 0 }}>Carregando vídeos…</p>
                     ) : videos.length === 0 ? (
                       <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", margin: 0 }}>Nenhum vídeo disponível no momento.</p>
@@ -3568,6 +3628,88 @@ export function MemberPortal() {
         ) : null}
 
         {/* ── Seção LGPD ──────────────────────────────────────────────── */}
+        {/* ── P1: Minhas Contribuições (comprovantes) ──────────────────── */}
+        {activePortalTab === "financeiro" ? (
+          <section className="member-portal-now" aria-label="Minhas contribuições" style={{ marginTop: 12 }}>
+            <div className="member-portal-section-head">
+              <div>
+                <h2>Minhas Contribuições</h2>
+                <p>Seus dízimos e ofertas registrados pela igreja. Toque em um item para ver o comprovante.</p>
+              </div>
+            </div>
+            {myContributions.length === 0 ? (
+              <p style={{ color: "#6b7280", fontSize: 14 }}>Nenhuma contribuição registrada para você.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {myContributions.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setContributionReceipt(c)}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+                      background: "#fff", border: "1px solid #e6e8ee", borderRadius: 12, padding: "12px 14px",
+                      cursor: "pointer", textAlign: "left", width: "100%",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ color: "#1A2744" }}>{c.category_name ?? c.description}</strong>
+                      <div style={{ fontSize: 12.5, color: "#6b7280" }}>
+                        {new Date(c.date + "T12:00:00").toLocaleDateString("pt-BR")} · {c.payment_method}
+                      </div>
+                    </div>
+                    <span style={{ fontWeight: 800, color: c.type === "income" ? "#1f9d6b" : "#d4543a", whiteSpace: "nowrap" }}>
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(c.amount)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {contributionReceipt ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Comprovante" onClick={() => setContributionReceipt(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+              <div className="modal-header">
+                <div>
+                  <DollarSign size={18} />
+                  <strong>Comprovante de contribuição</strong>
+                </div>
+                <button className="modal-close" type="button" onClick={() => setContributionReceipt(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="modal-body" id="comprovante-print">
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 14 }}>
+                  <div style={{ textAlign: "center", fontSize: 26, fontWeight: 800, color: contributionReceipt.type === "income" ? "#1f9d6b" : "#d4543a" }}>
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(contributionReceipt.amount)}
+                  </div>
+                  {[
+                    ["Tipo", contributionReceipt.type === "income" ? "Entrada (contribuição)" : "Saída"],
+                    ["Categoria", contributionReceipt.category_name ?? "—"],
+                    ["Descrição", contributionReceipt.description],
+                    ["Forma", contributionReceipt.payment_method],
+                    ["Data", new Date(contributionReceipt.date + "T12:00:00").toLocaleDateString("pt-BR")],
+                  ].map(([k, v]) => (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #eef1f8", paddingBottom: 6 }}>
+                      <span style={{ color: "#6b7280" }}>{k}</span>
+                      <strong style={{ color: "#1A2744", textAlign: "right" }}>{v}</strong>
+                    </div>
+                  ))}
+                  <small style={{ color: "#9ca3af", textAlign: "center", marginTop: 4 }}>
+                    Comprovante gerado pelo SirvaOS · {portalTenantInfo?.name ?? ""}
+                  </small>
+                </div>
+                <div className="modal-actions" style={{ marginTop: 16 }}>
+                  <Button type="button" variant="secondary" onClick={() => setContributionReceipt(null)}>Fechar</Button>
+                  <Button type="button" onClick={() => window.print()}>Imprimir</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {activePortalTab === "privacidade" && lgpdConsentGranted !== null && (
           <AccordionPanel
             id="privacy"

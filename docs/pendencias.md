@@ -7,7 +7,9 @@ Cada item deve ser implementado em ordem de prioridade, marcado como concluído 
 
 ## Prioridade Alta
 
-### [  ] P1 — Comprovantes Financeiros no Portal do Membro
+### [x] P1 — Comprovantes Financeiros no Portal do Membro
+> Feito 2026-06-13: RPC `my_financial_contributions()` (security definer, só as próprias) + aba "Minhas Contribuições" no MemberPortal com lista e modal de comprovante (imprimir). Migration `20260613100000`.
+
 **Módulo:** Financeiro  
 **Problema:** O roadmap (Etapa 7) prevê "Comprovantes para membros", mas o MemberPortal.tsx não tem nenhuma seção financeira. O membro não consegue ver seus registros de dízimo/oferta.  
 **O que fazer:**
@@ -18,7 +20,9 @@ Cada item deve ser implementado em ordem de prioridade, marcado como concluído 
 
 ---
 
-### [  ] P2 — Edge Function de E-mail para Comunicados do Kids
+### [x] P2 — Comunicados do Kids: WhatsApp + E-mail
+> Feito: WhatsApp via `send-whatsapp` (context `kids_communication`). E-mail (2026-06-13): Edge Function `send-kids-communication-emails` (Resend) + opção "E-mail" no `sent_via` (constraint estendido, migration `20260613110000`) + branch no handler.
+
 **Módulo:** Kids  
 **Problema:** A funcionalidade de comunicar pais é o diferencial do módulo Kids descrito no roadmap. O sistema salva o registro em `kids_communications`, mas não existe Edge Function para envio real. Os pais não recebem nada.  
 **O que fazer:**
@@ -72,7 +76,9 @@ Cada item deve ser implementado em ordem de prioridade, marcado como concluído 
 
 ## Prioridade Baixa
 
-### [  ] P6 — WhatsApp Business API (Envio Automático)
+### [x] P6 — WhatsApp Automático (Z-API)
+> Feito: integração Z-API (não Twilio). Edge Function `send-whatsapp` (envio), `whatsapp-webhook` (status de entrega), `send-event-reminders` (lembrete 24h via pg_cron). Usado em Comunicados, Escala de Louvor e Kids. Logs em `whatsapp_messages` + painel (aba WhatsApp). Detalhes na Fase 2 do roadmap (Frente B).
+
 **Módulos:** Louvor, Eventos, Comunicados, Kids  
 **Problema:** Todos os módulos geram link `wa.me` manual. O roadmap prevê envio automático via WhatsApp Business.  
 **O que fazer:**
@@ -83,7 +89,9 @@ Cada item deve ser implementado em ordem de prioridade, marcado como concluído 
 
 ---
 
-### [  ] P7 — Outras Plataformas no Módulo Mídias Sociais
+### [x] P7 — Mídias Sociais multi-plataforma
+> Feito 2026-06-13: suporte a Instagram e Spotify além do YouTube. Detecção de plataforma pela URL no ClientAdmin (`detectSocialChannel`), constraint estendido (migration `20260613120000`), e render por plataforma no MemberPortal (YouTube=feed, Spotify=embed iframe, Instagram=link). *(Instagram usa link direto; embed oficial exige token da Meta — evolução futura.)*
+
 **Módulo:** Mídias Sociais  
 **Problema:** Atualmente só suporta YouTube (canal e playlist). O módulo foi desenhado para ser multi-plataforma.  
 **O que fazer:**

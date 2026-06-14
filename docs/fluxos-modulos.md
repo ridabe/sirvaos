@@ -186,7 +186,7 @@
 
 **Integrações:** `financial_categories`, `financial_transactions`, `members` (dízimo identificado), dashboard.
 
-**Onde termina:** relatório financeiro do período + saldo no painel. *(Pendente P1: comprovantes no Portal do Membro.)*
+**Onde termina:** relatório financeiro do período + saldo no painel. O **membro vê as próprias contribuições** no Portal (aba "Minhas Contribuições") via RPC `my_financial_contributions()` (security definer, só as do próprio `member_id`), com modal de comprovante imprimível (P1).
 
 ---
 
@@ -206,7 +206,9 @@
    - No culto, leitura → RPC **`consume_kids_checkin_pass`** registra presença (`kids_attendance`).
    - Pais veem seus filhos via **`get_my_kids_children`**.
 4. **Atividades/calendário** (`kids_activities`).
-5. **Comunicado aos pais** (modal "Novo comunicado"): registra em `kids_communications`; se "Enviar via WhatsApp", dispara Edge Function **`send-whatsapp`** (context `kids_communication`), resolvendo telefone do responsável (`kids_guardians.phone` → senão telefone do **membro vinculado**).
+5. **Comunicado aos pais** (modal "Novo comunicado"): registra em `kids_communications` (canal `sent_via`: system/whatsapp/email/both); dependendo do canal:
+   - **WhatsApp** → Edge Function **`send-whatsapp`** (context `kids_communication`), telefone do responsável (`kids_guardians.phone` → senão do **membro vinculado**).
+   - **E-mail** → Edge Function **`send-kids-communication-emails`** (Resend), e-mail do membro vinculado ao responsável (P2).
 
 **Integrações:** `kids_groups`, `kids_children`, `kids_guardians`, `kids_attendance`, `kids_activities`, `kids_communications`, `kids_checkin_passes`; RPCs `create_kids_checkin_pass`/`consume_kids_checkin_pass`/`get_my_kids_children`; Edge Function `send-whatsapp`; `whatsapp_messages`.
 
@@ -292,15 +294,18 @@
 
 ## 13. Mídias Sociais
 
-**Propósito:** centralizar canais e conteúdos (ex.: YouTube) da igreja.
+**Propósito:** centralizar canais e conteúdos da igreja em **múltiplas plataformas** (YouTube, Instagram, Spotify).
 
 **Onde inicia:** aba **Mídias Sociais**.
 
-**Passo a passo:** cadastrar canais (`social_media_channels`); Edge Function **`fetch-youtube-feed`** busca os vídeos recentes do canal configurado (`CHANNEL_YOUTUBE`). Conteúdo exibido no Portal/app.
+**Passo a passo:** ao cadastrar um canal, a URL é analisada por `detectSocialChannel` que identifica a **plataforma** e o tipo (`platform` ∈ youtube/instagram/spotify; `channel_type` ∈ channel/playlist/profile/post/embed). Render por plataforma no Portal:
+- **YouTube** → Edge Function **`fetch-youtube-feed`** busca os vídeos recentes; abre em modal.
+- **Spotify** → embed oficial (`iframe open.spotify.com/embed/{tipo}/{id}`).
+- **Instagram** → link direto para o perfil/post (embed oficial exige token da Meta — evolução futura, P7).
 
-**Integrações:** `social_media_channels`, Edge Function `fetch-youtube-feed`.
+**Integrações:** `social_media_channels` (constraints estendidos para 3 plataformas), Edge Function `fetch-youtube-feed`.
 
-**Onde termina:** feed de vídeos disponível aos membros.
+**Onde termina:** conteúdo das redes da igreja disponível aos membros no Portal/app.
 
 ---
 
@@ -391,9 +396,11 @@
 | `send-whatsapp` | Envio WhatsApp (Z-API) — comunicados, escala, Kids |
 | `whatsapp-webhook` | Recebe status de entrega da Z-API |
 | `send-event-reminders` | Lembrete 24h (cron) da escala de louvor |
+| `send-kids-communication-emails` | E-mail de comunicado do Kids (Resend) |
 
 ## Apêndice — Histórico de atualizações deste documento
 
 | Data | O que mudou |
 |------|-------------|
 | 2026-06-13 | Criação. Mapeados todos os módulos atuais + novidades da Etapa 2 (dashboards por papel e integração WhatsApp/Z-API: envio, webhook de status, lembrete 24h, painel de logs). |
+| 2026-06-13 | Pendências P1/P2/P7 concluídas: comprovantes financeiros no Portal do Membro (Financeiro), e-mail de comunicado do Kids (Kids), e Mídias Sociais multi-plataforma (YouTube/Instagram/Spotify). |

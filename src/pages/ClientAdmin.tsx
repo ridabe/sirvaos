@@ -140,7 +140,7 @@ type SocialMediaChannelRecord = {
   tenant_id: string;
   name: string;
   platform: string;
-  channel_type: "channel" | "playlist";
+  channel_type: "channel" | "playlist" | "profile" | "post" | "embed";
   channel_id: string;
   channel_url: string | null;
   description: string | null;
@@ -458,7 +458,7 @@ type KidsCommunicationRecord = {
   child_id: string | null;
   title: string;
   message: string;
-  sent_via: "system" | "whatsapp" | "both";
+  sent_via: "system" | "whatsapp" | "email" | "both";
   sent_at: string;
   created_at: string;
   kids_children: { name: string } | null;
@@ -7728,6 +7728,21 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     return null;
   }
 
+  // P7 — Detecta a plataforma (YouTube, Instagram, Spotify) a partir da URL.
+  function detectSocialChannel(url: string):
+    | { platform: "youtube" | "instagram" | "spotify"; channelType: SocialMediaChannelRecord["channel_type"]; channelId: string }
+    | null {
+    const yt = extractYouTubeInfo(url);
+    if (yt) return { platform: "youtube", channelType: yt.channelType, channelId: yt.channelId };
+    const igPost = url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+    if (igPost) return { platform: "instagram", channelType: "post", channelId: igPost[1] };
+    const igProfile = url.match(/instagram\.com\/([A-Za-z0-9_.]+)/);
+    if (igProfile) return { platform: "instagram", channelType: "profile", channelId: igProfile[1].replace(/\/+$/, "") };
+    const sp = url.match(/open\.spotify\.com\/(playlist|show|episode|track|artist|album)\/([A-Za-z0-9]+)/);
+    if (sp) return { platform: "spotify", channelType: "embed", channelId: `${sp[1]}/${sp[2]}` };
+    return null;
+  }
+
   function openCreateSocialMediaForm() {
     if (!canManageSocialMedia) return;
     setSocialMediaFormMode("create");
@@ -7766,17 +7781,17 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       return;
     }
 
-    const info = extractYouTubeInfo(url);
+    const info = detectSocialChannel(url);
     if (!info) {
       setSocialMediaSaveStatus("error");
-      setSocialMediaSaveMessage("URL inválida. Cole a URL do canal ou playlist do YouTube (ex.: youtube.com/@IgrejaXYZ ou youtube.com/playlist?list=...).");
+      setSocialMediaSaveMessage("URL não reconhecida. Use YouTube (canal/playlist), Instagram (perfil/post) ou Spotify (playlist/podcast/episódio).");
       return;
     }
 
     const payload = {
       tenant_id: clientData.tenant.id,
       name,
-      platform: "youtube" as const,
+      platform: info.platform,
       channel_type: info.channelType,
       channel_id: info.channelId,
       channel_url: url,
@@ -8841,6 +8856,31 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
     if (error || !inserted) {
       setKidsSaveStatus("error");
       setKidsSaveMessage("Não foi possível enviar o comunicado.");
+      return;
+    }
+
+    // P2 — Envio por e-mail (Edge Function Resend) para os responsáveis.
+    if (form.sent_via === "email") {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error("Sessão inválida.");
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-kids-communication-emails`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ communication_id: inserted.id }),
+        });
+        const jsonResp = await res.json();
+        if (!res.ok) throw new Error(jsonResp?.error === "NO_RECIPIENTS" ? "Nenhum responsável com e-mail cadastrado." : (jsonResp?.error ?? "Erro ao enviar e-mail."));
+        setKidsSaveStatus("success");
+        setKidsSaveMessage(`Comunicado enviado. E-mail: ${jsonResp.sent} enviados, ${jsonResp.failed} falhos.`);
+      } catch (e) {
+        setKidsSaveStatus("error");
+        setKidsSaveMessage(e instanceof Error ? e.message : "Comunicado salvo, mas houve falha no envio por e-mail.");
+      }
+      setKidsCommunicationForm(emptyKidsCommunicationForm);
+      setIsKidsCommunicationFormOpen(false);
+      await loadClientData(profile.id);
       return;
     }
 
@@ -13636,6 +13676,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                           <select className="catalog-input" value={kidsCommunicationForm.sent_via} onChange={(e) => setKidsCommunicationForm((c) => ({ ...c, sent_via: e.target.value as KidsCommunicationRecord["sent_via"] }))}>
                             <option value="system">Sistema (app)</option>
                             <option value="whatsapp">WhatsApp</option>
+                            <option value="email">E-mail</option>
                             <option value="both">Sistema + WhatsApp</option>
                           </select>
                         </label>
@@ -14360,7 +14401,7 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                   <div>
                     <span>{socialMediaFormMode === "create" ? "Novo canal" : "Editar canal"}</span>
                     <h2 style={{ fontSize: "1.15rem", margin: 0 }}>
-                      {socialMediaFormMode === "create" ? "Adicionar canal do YouTube" : socialMediaEditTarget?.name}
+                      {socialMediaFormMode === "create" ? "Adicionar canal (YouTube, Instagram ou Spotify)" : socialMediaEditTarget?.name}
                     </h2>
                   </div>
                   <button className="modal-close" type="button" onClick={() => setIsSocialMediaFormOpen(false)}>
@@ -14380,16 +14421,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
                       />
                     </label>
                     <label>
-                      <span>URL do YouTube *</span>
+                      <span>URL do canal/perfil/playlist *</span>
                       <input
                         type="url"
                         value={socialMediaFormUrl}
                         onChange={(e) => setSocialMediaFormUrl(e.target.value)}
-                        placeholder="https://www.youtube.com/channel/UC... ou playlist?list=..."
+                        placeholder="YouTube, Instagram (@perfil) ou Spotify (playlist/podcast)"
                         required
                       />
                       <small style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, marginTop: 2, display: "block" }}>
-                        Suportado: <code>youtube.com/channel/UC...</code> ou <code>youtube.com/playlist?list=...</code>
+                        Suportado: <code>youtube.com/@canal</code> ou <code>playlist?list=...</code> · <code>instagram.com/perfil</code> ou <code>/p/...</code> · <code>open.spotify.com/playlist|show|episode/...</code>
                       </small>
                     </label>
                     <label>
