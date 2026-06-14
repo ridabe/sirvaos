@@ -28,6 +28,8 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
+import { fetchMyCareTasks, updateCareTask, type CareTaskRow } from "../data/careRadar";
+import { openWhatsapp } from "../lib/whatsappService";
 import { renderEventCardHtml } from "../lib/eventCardTemplate";
 import { supabase, supabaseUrl } from "../lib/supabase";
 
@@ -43,6 +45,7 @@ type PortalTabId =
   | "escola"
   | "midias"
   | "financeiro"
+  | "cuidado"
   | "admin"
   | "privacidade";
 
@@ -560,6 +563,7 @@ export function MemberPortal() {
   const [activePortalTab, setActivePortalTab] = useState<PortalTabId>("inicio");
   const [myContributions, setMyContributions] = useState<MemberContribution[]>([]);
   const [contributionReceipt, setContributionReceipt] = useState<MemberContribution | null>(null);
+  const [myCareTasks, setMyCareTasks] = useState<CareTaskRow[]>([]);
   const [isInIntercessionMinistry, setIsInIntercessionMinistry] = useState(false);
   const [ownPrayerRequests, setOwnPrayerRequests] = useState<PortalPrayerRequest[]>([]);
   const [myAssignments, setMyAssignments] = useState<PortalPrayerAssignment[]>([]);
@@ -659,6 +663,26 @@ export function MemberPortal() {
       active = false;
     };
   }, [profile?.member_id]);
+
+  // Frente C — tarefas de cuidado designadas a este usuário (líder/diácono).
+  useEffect(() => {
+    if (!profile?.id) {
+      setMyCareTasks([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const tasks = await fetchMyCareTasks();
+        if (active) setMyCareTasks(tasks);
+      } catch {
+        if (active) setMyCareTasks([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!profile?.id) {
@@ -2107,6 +2131,7 @@ export function MemberPortal() {
     { id: "escola" as const, label: "Escola Bíblica", icon: <BookOpen size={16} />, visible: bibleSchoolEnabled },
     { id: "midias" as const, label: "Mídias", icon: <Play size={16} />, visible: socialMediaChannels.length > 0 },
     { id: "financeiro" as const, label: "Minhas Contribuições", icon: <DollarSign size={16} />, visible: myContributions.length > 0 },
+    { id: "cuidado" as const, label: "Cuidado", icon: <Heart size={16} />, visible: myCareTasks.length > 0, badge: myCareTasks.length || undefined },
     { id: "admin" as const, label: "Admin", icon: <Check size={16} />, visible: canOpenAdminPortal || highlightedAdminModules.length > 0 },
     { id: "privacidade" as const, label: "Privacidade", icon: <ShieldCheck size={16} />, visible: true },
   ];
@@ -3628,6 +3653,44 @@ export function MemberPortal() {
         ) : null}
 
         {/* ── Seção LGPD ──────────────────────────────────────────────── */}
+        {/* ── Frente C: Minhas tarefas de cuidado (líder designado) ────── */}
+        {activePortalTab === "cuidado" ? (
+          <section className="member-portal-now" aria-label="Minhas tarefas de cuidado" style={{ marginTop: 12 }}>
+            <div className="member-portal-section-head">
+              <div>
+                <h2>Tarefas de cuidado</h2>
+                <p>Pessoas que a liderança designou para você acompanhar. Faça contato e marque o andamento.</p>
+              </div>
+            </div>
+            {myCareTasks.length === 0 ? (
+              <p style={{ color: "#6b7280", fontSize: 14 }}>Nenhuma tarefa de cuidado no momento.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {myCareTasks.map((t) => (
+                  <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: "#fffdf5", border: "1px solid #e6e8ee", borderRadius: 12, padding: "12px 14px" }}>
+                    <div>
+                      <strong style={{ color: "#1A2744" }}>{t.members?.name ?? "Membro"}</strong>
+                      <div style={{ fontSize: 12.5, color: "#6b7280" }}>{t.reason ?? "Acompanhar"} · {t.status === "in_progress" ? "em andamento" : "aberta"}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {t.members?.phone ? (
+                        <button type="button" onClick={() => openWhatsapp(t.members!.phone!, `Olá ${t.members?.name ?? ""}, tudo bem? Senti sua falta e queria saber como você está. 🙏`)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#25d366", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>WhatsApp</button>
+                      ) : null}
+                      {t.status === "open" ? (
+                        <button type="button" onClick={async () => { await updateCareTask(t.id, { status: "in_progress" }); setMyCareTasks(await fetchMyCareTasks()); }}
+                          style={{ background: "#1A2744", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Iniciar</button>
+                      ) : null}
+                      <button type="button" onClick={async () => { await updateCareTask(t.id, { status: "done" }); setMyCareTasks(await fetchMyCareTasks()); }}
+                        style={{ background: "#1f9d6b", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Concluir</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {/* ── P1: Minhas Contribuições (comprovantes) ──────────────────── */}
         {activePortalTab === "financeiro" ? (
           <section className="member-portal-now" aria-label="Minhas contribuições" style={{ marginTop: 12 }}>

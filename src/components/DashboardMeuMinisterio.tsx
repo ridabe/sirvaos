@@ -1,6 +1,6 @@
 // Etapa 2 / Frente A (A5) — Painel "Meu Ministério" do líder de Louvor.
 // Consome a RPC dashboard_lider_louvor via fetchLiderLouvorDashboard.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AlertTriangle, CalendarCheck, CheckCircle2, Clock3, Music, RefreshCw, Users2 } from "lucide-react";
 import {
   fetchLiderLouvorDashboard,
@@ -16,7 +16,7 @@ const LINHA = "#e6e8ee";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <div style={{ background: "#fff", border: `1px solid ${LINHA}`, borderRadius: 16, padding: "18px 20px", boxShadow: "0 1px 3px rgba(16,22,38,.04)", ...style }}>
       {children}
@@ -24,7 +24,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
   );
 }
 
-function MiniStat({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
+function MiniStat({ icon, value, label, color }: { icon: ReactNode; value: number; label: string; color: string }) {
   return (
     <Card style={{ flex: 1, minWidth: 150 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, fontSize: 13 }}>

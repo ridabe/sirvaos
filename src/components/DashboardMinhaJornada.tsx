@@ -1,6 +1,6 @@
 // Etapa 2 / Frente A (A6) — Painel "Minha Jornada" do membro (portal/app).
 // Consome a RPC dashboard_membro via fetchMembroDashboard.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock3, Compass, Music, RefreshCw, XCircle } from "lucide-react";
 import { fetchMembroDashboard, type AssignmentStatus, type MembroDashboard } from "../data/dashboardMembro";
 
@@ -13,7 +13,7 @@ const LINHA = "#e6e8ee";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <div style={{ background: "#fff", border: `1px solid ${LINHA}`, borderRadius: 16, padding: "18px 20px", boxShadow: "0 1px 3px rgba(16,22,38,.04)", ...style }}>
       {children}
@@ -21,7 +21,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
   );
 }
 
-function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function SectionTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, color: AZUL, marginBottom: 10 }}>
       {icon}
@@ -31,7 +31,7 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
 }
 
 function statusBadge(status: AssignmentStatus) {
-  const map: Record<AssignmentStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  const map: Record<AssignmentStatus, { label: string; color: string; bg: string; icon: ReactNode }> = {
     confirmed: { label: "Confirmado", color: VERDE, bg: "#eafaf2", icon: <CheckCircle2 size={13} /> },
     pending: { label: "Pendente", color: "#c98a00", bg: "#fff7e6", icon: <Clock3 size={13} /> },
     declined: { label: "Recusado", color: VERMELHO, bg: "#fdeee9", icon: <XCircle size={13} /> },

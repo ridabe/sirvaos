@@ -381,6 +381,31 @@
 
 ---
 
+## 18. Cuidado Pastoral *(Frente C — NOVO)*
+
+**Propósito:** transformar dados em ação de cuidado — detectar membros que estão se afastando e gerar tarefas para a liderança agir (com 1 clique no WhatsApp).
+
+**Quem usa:** owner/admin (radar + gestão de tarefas) e **líderes designados** (veem/resolvem suas tarefas no Portal).
+
+**Onde inicia:** aba **Cuidado** do Admin Cliente (e card "Radar de Cuidado Pastoral" no painel do Pastor).
+
+**Passo a passo:**
+1. **Radar (score de engajamento):** RPC **`member_care_radar(tenant_id, weeks=4)`** cruza sinais de participação de cada membro ativo: último culto servido (Louvor `confirmed`), última presença na EBD (`present`), última vez que trouxe o filho (Kids), último pedido de oração (Intercessão) e último marco (`member_history`).
+   - **last_activity** = data do sinal mais recente; **score 0–100** = recência (0–60) + amplitude de canais nos últimos 90 dias (0–40); faixa 🟢≥60 / 🟡30–59 / 🔴<30.
+   - **Afastado** = membro ativo sem nenhum sinal há mais de N semanas (padrão 4). Recém-cadastrados não entram.
+2. **Tarefa de cuidado:** o admin cria uma `care_tasks` para o membro afastado e **designa um responsável** (líder/diácono).
+3. **Ação:** botão **WhatsApp** abre conversa com mensagem de cuidado pronta (`wa.me`, toque pessoal). O responsável marca **em andamento → concluída**.
+4. **Visão do líder:** o responsável vê "Tarefas de cuidado" no **Portal do Membro** (RLS entrega só as designadas a ele) e resolve por lá.
+5. O **painel do Pastor** mostra o número real de afastados, linkando para a aba Cuidado.
+
+**Integrações:** RPC `member_care_radar`; tabela `care_tasks` (RLS: admin gerencia, designado vê/atualiza a sua); sinais de `worship_assignments`/`worship_events`, `bible_school_attendance`, `kids_attendance`/`kids_guardians`, `prayer_requests`, `member_history`; WhatsApp (`wa.me`).
+
+**Onde termina:** membro contatado, tarefa concluída; menos "ovelhas" se perdem.
+
+> **Limitação atual:** não há registro de presença em **culto geral** — o score mede os 5 canais acima. Um check-in de culto (futuro) tornaria o radar muito mais preciso.
+
+---
+
 ## Apêndice — Edge Functions (resumo)
 
 | Função | Papel no fluxo |
@@ -404,3 +429,4 @@
 |------|-------------|
 | 2026-06-13 | Criação. Mapeados todos os módulos atuais + novidades da Etapa 2 (dashboards por papel e integração WhatsApp/Z-API: envio, webhook de status, lembrete 24h, painel de logs). |
 | 2026-06-13 | Pendências P1/P2/P7 concluídas: comprovantes financeiros no Portal do Membro (Financeiro), e-mail de comunicado do Kids (Kids), e Mídias Sociais multi-plataforma (YouTube/Instagram/Spotify). |
+| 2026-06-13 | **Frente C — Cuidado Pastoral** entregue (MVP): radar de afastamento (RPC `member_care_radar`), tabela `care_tasks`, aba Cuidado no admin, tarefas do líder no portal, e card real no painel do Pastor. Nova seção 18. |

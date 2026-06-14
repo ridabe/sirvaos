@@ -421,7 +421,7 @@ supabase secrets set ZAPI_CLIENT_TOKEN="<token de seguranca da conta>"
 
 | # | Frente | Por que importa | Pré-requisito |
 |---|--------|-----------------|----------------|
-| C | Cuidado Pastoral inteligente | Score de engajamento + alerta de quem "esfriou" + tarefa de cuidado. Diferencial nº1. | Dados de frequência/escala consolidados |
+| C | ✅ **Cuidado Pastoral inteligente — MVP entregue (2026-06-13)** | Radar de afastamento (RPC `member_care_radar`, score 0–100, limiar 4 sem.), tabela `care_tasks`, aba Cuidado (admin) + tarefas do líder no portal + WhatsApp + card real no painel do Pastor. Detalhe em `fluxos-modulos.md` §18. | — |
 | D | Copiloto de IA da liderança | Perguntas em linguagem natural + geração de escala/relatório/devocional. Espaço 100% em branco. | Modelo de dados maduro |
 | E | Jornada do Membro / discipulado | Membresia plana → funil espiritual com etapas. | Membresia estável |
 | F | Escala inteligente | Auto-sugestão equilibrando frequência/conflitos. Aproveita motor ToNaEscala. | Módulo Louvor consolidado |

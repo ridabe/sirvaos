@@ -1,7 +1,7 @@
 // Etapa 2 / Frente A — Painel inicial do Pastor / Admin Geral ("Saúde da Igreja").
 // Consome a RPC dashboard_admin_geral via fetchAdminGeralDashboard.
 // Spec: docs/etapa-2-A1-dashboard-pastor-contratos.md
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
   CalendarCheck,
@@ -18,6 +18,7 @@ import {
   formatBRL,
   type AdminGeralDashboard,
 } from "../data/dashboardAdminGeral";
+import { fetchCareRadar } from "../data/careRadar";
 
 const AZUL = "#1A2744";
 const OURO = "#F5C842";
@@ -28,7 +29,7 @@ const LINHA = "#e6e8ee";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <div
       style={{
@@ -52,7 +53,7 @@ function KpiTile({
   trendLabel,
   trendDir,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   value: number;
   label: string;
   trendLabel?: string;
@@ -89,7 +90,7 @@ function KpiTile({
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: MUTED, fontWeight: 700, marginBottom: 10 }}>
       {children}
@@ -97,7 +98,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function EmptyHint({ children }: { children: React.ReactNode }) {
+function EmptyHint({ children }: { children: ReactNode }) {
   return <div style={{ fontSize: 13.5, color: MUTED, padding: "6px 0" }}>{children}</div>;
 }
 
@@ -105,6 +106,7 @@ export function DashboardSaudeIgreja({ tenantId }: { tenantId: string }) {
   const [state, setState] = useState<LoadState>("idle");
   const [data, setData] = useState<AdminGeralDashboard | null>(null);
   const [error, setError] = useState<string>("");
+  const [coldCount, setColdCount] = useState<number | null>(null);
 
   async function load() {
     setState("loading");
@@ -112,6 +114,12 @@ export function DashboardSaudeIgreja({ tenantId }: { tenantId: string }) {
     try {
       const result = await fetchAdminGeralDashboard(tenantId);
       setData(result);
+      try {
+        const radar = await fetchCareRadar(tenantId, 4);
+        setColdCount(radar.length);
+      } catch {
+        setColdCount(null);
+      }
       setState("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar o painel.");
@@ -152,7 +160,7 @@ export function DashboardSaudeIgreja({ tenantId }: { tenantId: string }) {
 
   if (!data) return null;
 
-  const { kpis, finance, upcomingEvents, pendingAssignments, careAlerts } = data;
+  const { kpis, finance, upcomingEvents, pendingAssignments } = data;
 
   return (
     <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -265,20 +273,30 @@ export function DashboardSaudeIgreja({ tenantId }: { tenantId: string }) {
         )}
       </Card>
 
-      {/* Cuidado pastoral (teaser — Frente C) */}
-      {!careAlerts.enabled ? (
-        <Card style={{ background: "#fffdf5", borderColor: "rgba(245,200,66,.5)" }}>
+      {/* Cuidado pastoral (Frente C) */}
+      <Card style={coldCount && coldCount > 0
+        ? { background: "#fdeee9", borderColor: "rgba(212,84,58,.4)" }
+        : { background: "#fffdf5", borderColor: "rgba(245,200,66,.5)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: AZUL }}>
-            <HeartPulse size={18} color={OURO} />
-            <strong>Em breve: Radar de Cuidado Pastoral</strong>
+            <HeartPulse size={18} color={coldCount && coldCount > 0 ? VERMELHO : OURO} />
+            <strong>Radar de Cuidado Pastoral</strong>
           </div>
-          <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
-            Vamos identificar automaticamente membros que estão se afastando e sugerir uma ação de cuidado ao líder responsável.
-          </div>
-        </Card>
-      ) : null}
+          {coldCount !== null ? (
+            <span style={{ fontSize: 22, fontWeight: 800, color: coldCount > 0 ? VERMELHO : VERDE }}>{coldCount}</span>
+          ) : null}
+        </div>
+        <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
+          {coldCount === null
+            ? "Membros que estão se afastando aparecem aqui."
+            : coldCount > 0
+              ? `${coldCount} membro(s) ativo(s) sem participação há mais de 4 semanas. Abra a aba "Cuidado" para agir.`
+              : "Ninguém afastado no momento. 🎉"}
+        </div>
+      </Card>
     </div>
   );
 }
 
 export default DashboardSaudeIgreja;
+      

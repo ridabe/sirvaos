@@ -46,6 +46,7 @@ import { MaterialReactTable, type MRT_ColumnDef } from "material-react-table";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardMeuMinisterio } from "../components/DashboardMeuMinisterio";
+import { CuidadoPastoral } from "../components/CuidadoPastoral";
 import { DashboardSaudeIgreja } from "../components/DashboardSaudeIgreja";
 import { WhatsappLogs } from "../components/WhatsappLogs";
 import { PolicyFooter } from "../components/PolicyFooter";
@@ -1402,6 +1403,7 @@ const clientTabs = [
   { key: "kids", label: "Kids", icon: Baby },
   { key: "bible-school", label: "Escola Bíblica", icon: BookOpen },
   { key: "notices", label: "Comunicados", icon: Bell },
+  { key: "cuidado", label: "Cuidado", icon: Heart },
   { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { key: "social-media", label: "Mídias Sociais", icon: Play },
   { key: "intercession", label: "Intercessão", icon: Heart },
@@ -1429,7 +1431,7 @@ const clientTabModuleCode: Partial<Record<ClientTab, string>> = {
   intercession: "intercession",
 };
 
-const tenantAdminOnlyTabs = new Set<ClientTab>(["whatsapp", "tutorials", "lists", "theme", "users", "policies"]);
+const tenantAdminOnlyTabs = new Set<ClientTab>(["cuidado", "whatsapp", "tutorials", "lists", "theme", "users", "policies"]);
 
 type ClientAdminProps = {
   demoMode?: boolean;
@@ -14191,6 +14193,13 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
           {activeTab === "whatsapp" && clientData ? (
             <WhatsappLogs tenantId={clientData.tenant.id} />
+          ) : null}
+
+          {activeTab === "cuidado" && clientData ? (
+            <CuidadoPastoral
+              tenantId={clientData.tenant.id}
+              users={clientData.users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }))}
+            />
           ) : null}
 
           {activeTab === "notices" ? (

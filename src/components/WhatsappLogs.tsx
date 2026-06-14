@@ -1,5 +1,5 @@
 // Etapa 2 / Frente B (B8) — Painel de logs de WhatsApp por tenant.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import {
   fetchWhatsappLogs,
@@ -76,7 +76,7 @@ export function WhatsappLogs({ tenantId }: { tenantId: string }) {
     return { total: rows.length, sent, delivered, failed };
   }, [rows]);
 
-  const inputStyle: React.CSSProperties = { border: `1px solid ${LINHA}`, borderRadius: 8, padding: "6px 10px", fontSize: 13, color: AZUL, background: "#fff" };
+  const inputStyle: CSSProperties = { border: `1px solid ${LINHA}`, borderRadius: 8, padding: "6px 10px", fontSize: 13, color: AZUL, background: "#fff" };
 
   return (
     <article className="panel full-width">
