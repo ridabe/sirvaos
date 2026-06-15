@@ -87,40 +87,49 @@ serve(async (req) => {
     );
   }
 
-  const authorization = req.headers.get("Authorization") ?? "";
+  // Caminho interno: chamadas servidor-a-servidor (ex.: abacatepay-webhook) usam
+  // um secret compartilhado e dispensam o login de admin global.
+  const internalSecret = req.headers.get("x-internal-secret") ?? "";
+  const expectedInternalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "";
+  const isInternalCall =
+    expectedInternalSecret.length > 0 && internalSecret === expectedInternalSecret;
 
-  const userClient = createClient(supabaseUrl, publishableKey, {
-    global: {
-      headers: {
-        Authorization: authorization,
+  if (!isInternalCall) {
+    const authorization = req.headers.get("Authorization") ?? "";
+
+    const userClient = createClient(supabaseUrl, publishableKey, {
+      global: {
+        headers: {
+          Authorization: authorization,
+        },
       },
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
 
-  const { data: authData, error: authError } = await userClient.auth.getUser();
-  if (authError || !authData.user) {
-    return jsonResponse(401, { error: "unauthorized" }, corsHeaders);
-  }
+    const { data: authData, error: authError } = await userClient.auth.getUser();
+    if (authError || !authData.user) {
+      return jsonResponse(401, { error: "unauthorized" }, corsHeaders);
+    }
 
-  const { data: profile, error: profileError } = await userClient
-    .from("profiles")
-    .select("global_role, status")
-    .eq("id", authData.user.id)
-    .maybeSingle<{ global_role: string | null; status: string }>();
+    const { data: profile, error: profileError } = await userClient
+      .from("profiles")
+      .select("global_role, status")
+      .eq("id", authData.user.id)
+      .maybeSingle<{ global_role: string | null; status: string }>();
 
-  if (
-    profileError ||
-    !profile ||
-    profile.status !== "active" ||
-    !profile.global_role ||
-    !new Set(["super_admin", "operations"]).has(profile.global_role)
-  ) {
-    return jsonResponse(403, { error: "forbidden" }, corsHeaders);
+    if (
+      profileError ||
+      !profile ||
+      profile.status !== "active" ||
+      !profile.global_role ||
+      !new Set(["super_admin", "operations"]).has(profile.global_role)
+    ) {
+      return jsonResponse(403, { error: "forbidden" }, corsHeaders);
+    }
   }
 
   let payload: ProvisionRequest;
