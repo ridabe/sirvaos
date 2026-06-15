@@ -78,15 +78,14 @@ export async function createCustomer(input: {
   taxId?: string | null;
   metadata?: Record<string, unknown>;
 }): Promise<AbacateResponse<AbacateCustomer>> {
-  const data: Record<string, unknown> = { email: input.email };
-  if (input.name) data.name = input.name;
-  if (input.cellphone) data.cellphone = input.cellphone;
-  if (input.taxId) data.taxId = input.taxId;
+  // Campos no nível raiz (o endpoint /customers/create NÃO usa wrapper "data").
+  const body: Record<string, unknown> = { email: input.email };
+  if (input.name) body.name = input.name;
+  if (input.cellphone) body.cellphone = input.cellphone;
+  if (input.taxId) body.taxId = input.taxId;
+  if (input.metadata) body.metadata = input.metadata;
   // Cliente é único por taxId: a API devolve o registro existente se já houver.
-  return await request<AbacateCustomer>("/customers/create", {
-    data,
-    ...(input.metadata ? { metadata: input.metadata } : {}),
-  });
+  return await request<AbacateCustomer>("/customers/create", body);
 }
 
 // ── Assinaturas (Checkout de assinatura) ─────────────────────────────────────
