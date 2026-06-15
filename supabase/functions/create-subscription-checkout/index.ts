@@ -18,6 +18,7 @@ type CheckoutRequest = {
   contact_phone?: string | null;
   plan_code?: string;
   slug?: string | null;
+  coupons?: string[] | null;
 };
 
 function getDefaultKeyFromJsonEnv(raw: string | undefined) {
@@ -220,6 +221,7 @@ serve(async (req) => {
     externalId: requestId,
     completionUrl: `${appUrl}/assinatura/sucesso?req=${requestId}`,
     returnUrl: `${appUrl}/planos`,
+    coupons: Array.isArray(payload.coupons) ? payload.coupons : null,
     metadata: { signup_request_id: requestId, plan_code: plan.code, slug },
   });
   if (!checkoutRes.success || !checkoutRes.data?.url) {
@@ -237,7 +239,17 @@ serve(async (req) => {
 
   return jsonResponse(
     200,
-    { mode: "checkout", request_id: requestId, url: checkoutRes.data.url },
+    {
+      mode: "checkout",
+      request_id: requestId,
+      url: checkoutRes.data.url,
+      // DEBUG temporário: devMode revela se a chave é de produção ou de testes.
+      debug: {
+        customer_devmode: (customerRes.data as Record<string, unknown>)?.devMode ?? null,
+        billing_devmode: (checkoutRes.data as Record<string, unknown>)?.devMode ?? null,
+        billing_status: checkoutRes.data.status ?? null,
+      },
+    },
     corsHeaders,
   );
 });

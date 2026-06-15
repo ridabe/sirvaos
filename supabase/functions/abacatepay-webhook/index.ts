@@ -36,19 +36,24 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
-async function verifyHmac(rawBody: string, signature: string): Promise<boolean> {
-  if (!signature) return false;
+async function verifyHmac(rawBody: string, signature: string, secret: string): Promise<boolean> {
+  if (!signature || !secret) return false;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(ABACATEPAY_PUBLIC_KEY),
+    enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
   const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
   const expectedB64 = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-  return timingSafeEqual(enc.encode(expectedB64), enc.encode(signature));
+  // Compara contra base64 e contra hex (AbacatePay pode enviar em qualquer formato).
+  const expectedHex = Array.from(new Uint8Array(sigBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return (
+    timingSafeEqual(enc.encode(expectedB64), enc.encode(signature)) ||
+    timingSafeEqual(enc.encode(expectedHex), enc.encode(signature))
+  );
 }
 
 function addMonthsIso(from: Date, frequency: string | null | undefined): string {
@@ -73,19 +78,25 @@ serve(async (req) => {
     null;
   if (!supabaseUrl || !secretKey) return jsonResponse(500, { error: "missing_env" });
 
-  // 1) Secret na query string.
+  // Autenticação flexível: passa se QUALQUER uma validar —
+  //  (a) secret na query (?webhookSecret=)
+  //  (b) HMAC assinado com o secret configurado
+  //  (c) HMAC assinado com a chave pública da AbacatePay
   const expectedSecret = Deno.env.get("ABACATEPAY_WEBHOOK_SECRET") ?? "";
   const url = new URL(req.url);
   const providedSecret = url.searchParams.get("webhookSecret") ?? "";
-  if (!expectedSecret || providedSecret !== expectedSecret) {
-    return jsonResponse(401, { error: "unauthorized_secret" });
-  }
-
-  // 2) Assinatura HMAC sobre o corpo raw.
   const rawBody = await req.text();
   const signature = req.headers.get("X-Webhook-Signature") ?? "";
-  const hmacOk = await verifyHmac(rawBody, signature);
-  if (!hmacOk) return jsonResponse(401, { error: "invalid_signature" });
+
+  const secretOk = expectedSecret.length > 0 && providedSecret === expectedSecret;
+  const hmacSecretOk = await verifyHmac(rawBody, signature, expectedSecret);
+  const hmacPublicOk = await verifyHmac(rawBody, signature, ABACATEPAY_PUBLIC_KEY);
+  if (!secretOk && !hmacSecretOk && !hmacPublicOk) {
+    return jsonResponse(401, {
+      error: "unauthorized",
+      debug: { has_query_secret: providedSecret.length > 0, has_signature: signature.length > 0 },
+    });
+  }
 
   let event: {
     id?: string;

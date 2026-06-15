@@ -42,6 +42,8 @@ import { AdminGlobalAccess } from "./pages/AdminGlobalAccess";
 import { ClientAdmin } from "./pages/ClientAdmin";
 import { MemberPortal } from "./pages/MemberPortal";
 import { Produto } from "./pages/Produto";
+import { Planos } from "./pages/Planos";
+import { AssinaturaSucesso } from "./pages/AssinaturaSucesso";
 
 type LandingLoginStatus = "idle" | "loading" | "success" | "error";
 type LoginMode = "login" | "first-access";
@@ -201,16 +203,20 @@ export function App() {
     return <ClientAdmin />;
   }
 
-  if (window.location.pathname === "/admin-cliente-demo") {
-    return <ClientAdmin demoMode />;
-  }
-
   if (window.location.pathname === "/membro") {
     return <MemberPortal />;
   }
 
   if (window.location.pathname === "/produto") {
     return <Produto />;
+  }
+
+  if (window.location.pathname === "/planos") {
+    return <Planos />;
+  }
+
+  if (window.location.pathname === "/assinatura/sucesso") {
+    return <AssinaturaSucesso />;
   }
 
   /* Faz login pelo Supabase sem enviar credenciais via query string. */
@@ -437,9 +443,9 @@ export function App() {
                 <Eye size={17} />
                 Por dentro
               </a>
-              <a className="ghost-link" href="/admin-cliente-demo">
+              <a className="ghost-link" href="/planos">
                 <Sparkles size={17} />
-                Demonstração
+                Planos
               </a>
               <IconButton ariaLabel="Selecionar idioma">
                 PT
@@ -468,9 +474,9 @@ export function App() {
                   <ArrowRight size={18} />
                   Entrar no painel
                 </a>
-                <a className="secondary-button" href="/admin-cliente-demo">
+                <a className="secondary-button" href="/planos">
                   <Sparkles size={18} />
-                  Ver demonstração
+                  Ver planos
                 </a>
               </div>
 

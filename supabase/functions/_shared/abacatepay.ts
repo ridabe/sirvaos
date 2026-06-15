@@ -104,6 +104,7 @@ export async function createSubscriptionCheckout(input: {
   externalId?: string | null;
   completionUrl?: string | null;
   returnUrl?: string | null;
+  coupons?: string[] | null;
   metadata?: Record<string, unknown>;
 }): Promise<AbacateResponse<AbacateBilling>> {
   const body: Record<string, unknown> = {
@@ -114,6 +115,7 @@ export async function createSubscriptionCheckout(input: {
   if (input.externalId) body.externalId = input.externalId;
   if (input.completionUrl) body.completionUrl = input.completionUrl;
   if (input.returnUrl) body.returnUrl = input.returnUrl;
+  if (input.coupons && input.coupons.length > 0) body.coupons = input.coupons;
   if (input.metadata) body.metadata = input.metadata;
   return await request<AbacateBilling>("/subscriptions/create", body);
 }
