@@ -104,6 +104,25 @@ const CATEDRAL = {
   ],
 };
 
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "O aplicativo está incluído em todos os planos?",
+    a: "Sim. O app SirvaOS para membros (Android, na Google Play) acompanha todos os planos, do Básico ao Catedral, sem custo adicional.",
+  },
+  {
+    q: "Posso trocar de plano depois?",
+    a: "Pode, a qualquer momento. Ao subir de plano, sua igreja passa a ter acesso imediato aos módulos e limites do novo plano.",
+  },
+  {
+    q: "Como funciona o pagamento?",
+    a: "A assinatura é mensal e processada em ambiente seguro pelo AbacatePay. O plano Catedral é liberado de forma assistida pela nossa equipe.",
+  },
+  {
+    q: "Existe fidelidade ou multa?",
+    a: "Não há fidelidade. Você pode cancelar quando quiser e mantém o acesso até o fim do período já pago.",
+  },
+];
+
 type SelectedPlan = { code: string; name: string; price: string; manual: boolean };
 type SubmitState = "idle" | "loading" | "manual_done" | "error";
 
@@ -188,13 +207,28 @@ export function Planos() {
 
   return (
     <div className="planos-page">
-      <header className="planos-header">
-        <div className="planos-brand">
+      <header className="planos-nav">
+        <a className="planos-brand" href="/" aria-label="SirvaOS - página inicial">
           Sirva<span>OS</span>
-        </div>
-        <h1>Escolha o plano da sua igreja</h1>
-        <p>Gestão completa de membros, ministérios, escalas, eventos, finanças e comunicação — em um só lugar.</p>
+        </a>
+        <a className="planos-nav-login" href="/">
+          Entrar
+        </a>
       </header>
+
+      <section className="planos-hero">
+        <span className="planos-eyebrow">Planos e preços</span>
+        <h1>Escolha o plano da sua igreja</h1>
+        <p>
+          Gestão completa de membros, ministérios, escalas, eventos, finanças e
+          comunicação — em um só lugar. Sem fidelidade, cancele quando quiser.
+        </p>
+        <div className="planos-pills" aria-label="Garantias">
+          <span>✓ App incluso em todos os planos</span>
+          <span>✓ Cobrança mensal segura</span>
+          <span>✓ Suporte humano</span>
+        </div>
+      </section>
 
       {/* Faixa do app */}
       <section className="planos-appbar">
@@ -220,9 +254,18 @@ export function Planos() {
             <div className="plan-price">
               {plan.price} <span>/mês</span>
             </div>
+            <button
+              type="button"
+              className={`plan-cta${plan.highlight ? " plan-cta--highlight" : ""}`}
+              onClick={() => openForm({ code: plan.code, name: plan.name, price: plan.price, manual: false })}
+            >
+              {plan.cta} →
+            </button>
             {plan.inheritsFrom ? (
               <div className="plan-inherits">Tudo do {plan.inheritsFrom}, mais:</div>
-            ) : null}
+            ) : (
+              <div className="plan-inherits">Inclui:</div>
+            )}
             <ul className="plan-features">
               {plan.features.map((f) => (
                 <li key={f}>
@@ -231,13 +274,6 @@ export function Planos() {
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              className={`plan-cta${plan.highlight ? " plan-cta--highlight" : ""}`}
-              onClick={() => openForm({ code: plan.code, name: plan.name, price: plan.price, manual: false })}
-            >
-              {plan.cta} →
-            </button>
           </article>
         ))}
       </section>
@@ -267,6 +303,19 @@ export function Planos() {
         >
           Falar com o time →
         </button>
+      </section>
+
+      {/* FAQ */}
+      <section className="planos-faq">
+        <h2>Perguntas frequentes</h2>
+        <div className="planos-faq-grid">
+          {FAQ.map((item) => (
+            <article key={item.q} className="planos-faq-item">
+              <h3>{item.q}</h3>
+              <p>{item.a}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       {/* Modal de cadastro */}

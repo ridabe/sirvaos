@@ -1,400 +1,606 @@
+/* ============================================================
+   Planos — página pública de preços (redesign)
+   Identidade: teal/petróleo SirvaOS, layout claro e profissional.
+   ============================================================ */
+
 .planos-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--color-neutral-50) 0%, #ffffff 40%);
+  background:
+    radial-gradient(1100px 460px at 50% -160px, rgba(var(--color-brand-accent-rgb), 0.1), transparent 70%),
+    linear-gradient(180deg, var(--color-brand-primary-soft) 0%, var(--color-neutral-50) 220px);
   font-family: var(--font-sans);
   color: var(--color-neutral-950);
-  padding: 0 20px 60px;
 }
 
-/* Header */
-.planos-header {
-  max-width: 980px;
-  margin: 0 auto;
-  text-align: center;
-  padding: 48px 0 28px;
-}
-.planos-brand {
-  font-weight: 800;
-  font-size: 22px;
-  color: var(--color-brand-primary-dark);
-  margin-bottom: 18px;
-}
-.planos-brand span {
-  color: var(--color-brand-accent);
-}
-.planos-header h1 {
-  font-size: clamp(28px, 4vw, 40px);
-  margin: 0 0 12px;
-  letter-spacing: -0.02em;
-}
-.planos-header p {
-  color: var(--color-neutral-500);
-  font-size: 17px;
-  max-width: 620px;
-  margin: 0 auto;
-  line-height: 1.6;
-}
-
-/* App bar */
-.planos-appbar {
-  max-width: 1080px;
-  margin: 0 auto 36px;
+/* ── Nav ───────────────────────────────────────────────────── */
+.planos-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 20px;
   justify-content: space-between;
-  background: var(--color-brand-primary-soft);
-  border: 1px solid var(--color-brand-accent-soft);
-  border-radius: var(--radius-lg);
-  padding: 18px 24px;
+  padding: 16px clamp(18px, 5vw, 48px);
+  background: rgba(250, 252, 252, 0.82);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
+
+.planos-brand {
+  font-size: 1.4rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-neutral-950);
+  text-decoration: none;
+}
+
+.planos-brand span {
+  color: var(--color-brand-primary);
+}
+
+.planos-nav-login {
+  padding: 9px 18px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-brand-primary-dark);
+  text-decoration: none;
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  transition: background 0.16s, border-color 0.16s, transform 0.15s;
+}
+
+.planos-nav-login:hover {
+  background: var(--color-brand-primary-soft);
+  border-color: rgba(var(--color-brand-primary-rgb), 0.26);
+  transform: translateY(-1px);
+}
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.planos-hero {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 56px 24px 28px;
+  text-align: center;
+}
+
+.planos-eyebrow {
+  display: inline-block;
+  margin-bottom: 18px;
+  padding: 8px 16px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--color-brand-primary-dark);
+  background: var(--color-brand-primary-soft);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.14);
+  border-radius: 999px;
+}
+
+.planos-hero h1 {
+  margin: 0;
+  font-size: clamp(2.1rem, 4.6vw, 3.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.planos-hero p {
+  max-width: 600px;
+  margin: 18px auto 0;
+  font-size: 1.08rem;
+  line-height: 1.6;
+  color: var(--color-neutral-700);
+}
+
+.planos-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.planos-pills span {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  font-weight: 760;
+  color: var(--color-brand-primary-dark);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 999px;
+}
+
+/* ── Faixa do app ──────────────────────────────────────────── */
+.planos-appbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1120px;
+  margin: 18px auto 8px;
+  padding: 22px 28px;
+  color: var(--color-white);
+  background: linear-gradient(120deg, var(--color-brand-primary-dark), var(--color-brand-primary));
+  border-radius: 20px;
+  box-shadow: 0 18px 44px rgba(var(--color-brand-primary-rgb), 0.26);
+}
+
 .planos-appbar-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-.planos-appbar-text strong {
-  font-size: 16px;
-  color: var(--color-brand-primary-dark);
-}
-.planos-appbar-text span {
-  font-size: 14px;
-  color: var(--color-neutral-700);
-  line-height: 1.5;
-}
-.planos-appbar-cta {
-  flex-shrink: 0;
-  background: var(--color-brand-primary-dark);
-  color: #fff;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 11px 18px;
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-}
-.planos-appbar-cta:hover {
-  background: var(--color-brand-primary);
+  gap: 6px;
 }
 
-/* Grid de cards */
+.planos-appbar-text strong {
+  font-size: 1.12rem;
+  font-weight: 850;
+}
+
+.planos-appbar-text span {
+  max-width: 720px;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.planos-appbar-cta {
+  flex-shrink: 0;
+  padding: 13px 22px;
+  font-weight: 850;
+  white-space: nowrap;
+  color: var(--color-brand-primary-dark);
+  text-decoration: none;
+  background: var(--color-white);
+  border-radius: 12px;
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+
+.planos-appbar-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(8, 36, 35, 0.28);
+}
+
+/* ── Grid de planos ────────────────────────────────────────── */
 .planos-grid {
-  max-width: 1080px;
-  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
-  align-items: start;
+  gap: 20px;
+  align-items: stretch;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px;
 }
+
 .plan-card {
   position: relative;
-  background: #fff;
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-xl);
-  padding: 28px 24px;
-  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
+  padding: 28px 26px;
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.2s, box-shadow 0.22s, border-color 0.2s;
 }
+
+.plan-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(var(--color-brand-primary-rgb), 0.28);
+  box-shadow: 0 24px 56px rgba(22, 36, 35, 0.12);
+}
+
 .plan-card--highlight {
-  background: var(--color-brand-primary-dark);
-  border-color: var(--color-brand-primary-dark);
-  color: #fff;
-  box-shadow: var(--shadow-soft);
-  transform: translateY(-8px);
+  border: 2px solid var(--color-brand-primary);
+  box-shadow: 0 26px 60px rgba(var(--color-brand-primary-rgb), 0.22);
 }
+
 .plan-badge {
   position: absolute;
   top: -14px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-brand-accent);
-  color: #04282c;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
+  padding: 7px 16px;
+  font-size: 0.8rem;
+  font-weight: 850;
   white-space: nowrap;
-}
-.plan-card h2 {
-  margin: 0 0 6px;
-  font-size: 22px;
-}
-.plan-tagline {
-  margin: 0 0 18px;
-  font-size: 14px;
-  color: var(--color-neutral-500);
-  min-height: 38px;
-}
-.plan-card--highlight .plan-tagline {
-  color: var(--color-brand-accent-soft);
-}
-.plan-price {
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin-bottom: 18px;
-}
-.plan-price span {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-neutral-500);
-}
-.plan-card--highlight .plan-price span {
-  color: var(--color-brand-accent-soft);
-}
-.plan-inherits {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-brand-primary);
-  margin-bottom: 12px;
-}
-.plan-card--highlight .plan-inherits {
-  color: var(--color-brand-accent);
-}
-.plan-features {
-  list-style: none;
-  margin: 0 0 24px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
-.plan-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.plan-check {
-  color: var(--color-success);
-  font-weight: 800;
-  flex-shrink: 0;
-}
-.plan-card--highlight .plan-check {
-  color: var(--color-brand-accent);
-}
-.plan-cta {
-  border: 1px solid var(--color-brand-primary);
-  background: #fff;
-  color: var(--color-brand-primary-dark);
-  font-weight: 700;
-  font-size: 15px;
-  padding: 13px 18px;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.plan-cta:hover {
-  background: var(--color-brand-primary-soft);
-}
-.plan-cta--highlight {
-  background: var(--color-brand-accent);
-  border-color: var(--color-brand-accent);
-  color: #04282c;
-}
-.plan-cta--highlight:hover {
-  filter: brightness(1.05);
-}
-.plan-cta:disabled {
-  opacity: 0.6;
-  cursor: default;
+  color: var(--color-white);
+  background: linear-gradient(120deg, var(--color-brand-primary), var(--color-brand-accent));
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(var(--color-brand-primary-rgb), 0.32);
 }
 
-/* Catedral */
+.plan-card h2 {
+  margin: 6px 0 4px;
+  font-size: 1.5rem;
+  font-weight: 850;
+}
+
+.plan-tagline {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--color-neutral-500);
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 18px 0 20px;
+  font-size: 2.6rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--color-neutral-950);
+}
+
+.plan-price span {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+}
+
+.plan-cta {
+  width: 100%;
+  padding: 13px 18px;
+  font-size: 0.98rem;
+  font-weight: 850;
+  color: var(--color-brand-primary-dark);
+  background: var(--color-brand-primary-soft);
+  border: 1px solid rgba(var(--color-brand-primary-rgb), 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.16s, transform 0.15s, box-shadow 0.2s;
+}
+
+.plan-cta:hover {
+  background: rgba(var(--color-brand-primary-rgb), 0.16);
+  transform: translateY(-1px);
+}
+
+.plan-cta--highlight {
+  color: var(--color-white);
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 14px 30px rgba(var(--color-brand-primary-rgb), 0.3);
+}
+
+.plan-cta--highlight:hover {
+  background: var(--color-brand-primary-dark);
+  box-shadow: 0 18px 38px rgba(var(--color-brand-primary-rgb), 0.36);
+}
+
+.plan-cta:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.plan-inherits {
+  margin: 22px 0 12px;
+  padding-top: 18px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--color-brand-primary-dark);
+  border-top: 1px dashed var(--color-neutral-200);
+}
+
+.plan-features {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-features li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 9px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--color-neutral-700);
+}
+
+.plan-check {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: var(--color-brand-primary);
+  background: var(--color-brand-primary-soft);
+  border-radius: 50%;
+}
+
+/* ── Catedral ──────────────────────────────────────────────── */
 .planos-catedral {
-  max-width: 1080px;
-  margin: 32px auto 0;
-  background: var(--color-neutral-950);
-  color: #fff;
-  border-radius: var(--radius-xl);
-  padding: 28px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-.planos-catedral-info h2 {
-  margin: 0 0 6px;
-  font-size: 22px;
-}
-.planos-catedral-price {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-brand-accent);
-}
-.planos-catedral-info p {
-  margin: 0 0 12px;
-  color: var(--color-neutral-300);
-  font-size: 14px;
-}
-.planos-catedral-info ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-.planos-catedral-info li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-.planos-catedral-cta {
-  flex-shrink: 0;
-  background: var(--color-brand-accent);
-  border: none;
-  color: #04282c;
-  font-weight: 700;
-  font-size: 15px;
-  padding: 13px 22px;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-}
-.planos-catedral-cta:hover {
-  filter: brightness(1.05);
+  gap: 28px;
+  max-width: 1120px;
+  margin: 8px auto 0;
+  padding: 32px;
+  color: var(--color-white);
+  background:
+    radial-gradient(600px 200px at 90% -40px, rgba(var(--color-brand-accent-rgb), 0.35), transparent 70%),
+    linear-gradient(120deg, #0b3a39, var(--color-brand-primary-dark));
+  border-radius: 22px;
+  box-shadow: 0 24px 56px rgba(8, 36, 35, 0.34);
 }
 
-/* Modal */
+.planos-catedral-info h2 {
+  margin: 0 0 6px;
+  font-size: 1.6rem;
+  font-weight: 850;
+}
+
+.planos-catedral-price {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-brand-accent-soft);
+}
+
+.planos-catedral-info > p {
+  margin: 0 0 16px;
+  font-size: 0.98rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.planos-catedral-info ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planos-catedral-info li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 9px;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.planos-catedral-info .plan-check {
+  color: var(--color-white);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.planos-catedral-cta {
+  flex-shrink: 0;
+  padding: 15px 26px;
+  font-size: 1rem;
+  font-weight: 850;
+  white-space: nowrap;
+  color: var(--color-brand-primary-dark);
+  background: var(--color-white);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+
+.planos-catedral-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
+}
+
+/* ── FAQ ───────────────────────────────────────────────────── */
+.planos-faq {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px 24px 16px;
+}
+
+.planos-faq > h2 {
+  margin: 0 0 24px;
+  font-size: 1.7rem;
+  font-weight: 850;
+  text-align: center;
+}
+
+.planos-faq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.planos-faq-item {
+  padding: 20px 22px;
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 16px;
+}
+
+.planos-faq-item h3 {
+  margin: 0 0 8px;
+  font-size: 1.02rem;
+  font-weight: 820;
+  color: var(--color-neutral-950);
+}
+
+.planos-faq-item p {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: var(--color-neutral-700);
+}
+
+/* ── Modal de cadastro ─────────────────────────────────────── */
 .planos-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(22, 36, 35, 0.55);
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  z-index: 50;
+  padding: 24px;
+  background: rgba(22, 36, 35, 0.55);
+  backdrop-filter: blur(4px);
 }
+
 .planos-modal {
   position: relative;
-  background: #fff;
-  border-radius: var(--radius-xl);
-  padding: 32px 28px;
   width: 100%;
   max-width: 460px;
-  box-shadow: var(--shadow-soft);
   max-height: 92vh;
-  overflow-y: auto;
+  overflow: auto;
+  padding: 30px 28px;
+  background: var(--color-white);
+  border-radius: 20px;
+  box-shadow: var(--shadow-soft);
 }
+
 .planos-modal-close {
   position: absolute;
   top: 14px;
   right: 16px;
-  border: none;
-  background: none;
-  font-size: 26px;
+  width: 36px;
+  height: 36px;
+  font-size: 1.5rem;
   line-height: 1;
   color: var(--color-neutral-500);
+  background: var(--color-neutral-100);
+  border: 0;
+  border-radius: 10px;
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
+
+.planos-modal-close:hover {
+  color: var(--color-neutral-950);
+  background: var(--color-neutral-200);
+}
+
 .planos-modal h3 {
   margin: 0 0 6px;
-  font-size: 21px;
+  font-size: 1.35rem;
+  font-weight: 800;
 }
+
 .planos-modal-sub {
   margin: 0 0 20px;
+  font-size: 0.94rem;
   color: var(--color-neutral-500);
-  font-size: 14px;
 }
+
 .planos-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 14px;
 }
+
 .planos-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
+  display: grid;
+  gap: 7px;
+  font-size: 0.88rem;
+  font-weight: 800;
   color: var(--color-neutral-700);
 }
+
 .planos-form input {
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  padding: 11px 13px;
-  font-size: 15px;
-  font-family: inherit;
+  min-height: 48px;
+  padding: 0 14px;
+  font-size: 1rem;
   color: var(--color-neutral-950);
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
 }
+
 .planos-form input:focus {
-  outline: none;
-  border-color: var(--color-brand-accent);
-  box-shadow: 0 0 0 3px var(--color-brand-accent-soft);
+  outline: 0;
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 4px rgba(var(--color-brand-primary-rgb), 0.12);
 }
+
 .planos-form-error {
-  background: var(--color-danger-soft);
+  padding: 11px 13px;
+  font-size: 0.88rem;
+  font-weight: 760;
   color: var(--color-danger);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
-  font-size: 13px;
+  background: var(--color-danger-soft);
+  border-radius: 10px;
 }
+
 .planos-form-note {
-  margin: 2px 0 0;
-  font-size: 12px;
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
   color: var(--color-neutral-500);
-  text-align: center;
 }
+
 .planos-modal-done {
   text-align: center;
-  padding: 8px 0;
 }
+
 .planos-modal-done-icon {
+  display: inline-grid;
+  place-items: center;
   width: 56px;
   height: 56px;
-  margin: 0 auto 16px;
+  margin: 6px auto 14px;
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: var(--color-white);
+  background: var(--color-success);
   border-radius: 50%;
-  background: var(--color-success-soft);
-  color: var(--color-success);
-  font-size: 30px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
+
 .planos-modal-done h3 {
-  margin: 0 0 10px;
+  margin-bottom: 10px;
 }
+
 .planos-modal-done p {
-  color: var(--color-neutral-500);
-  font-size: 14px;
+  margin: 0 0 20px;
+  font-size: 0.96rem;
   line-height: 1.6;
-  margin: 0 0 22px;
+  color: var(--color-neutral-700);
 }
 
-/* Footer */
+/* ── Footer ────────────────────────────────────────────────── */
 .planos-footer {
-  max-width: 1080px;
-  margin: 48px auto 0;
+  margin-top: 40px;
+  padding: 28px 24px 40px;
   text-align: center;
+  font-size: 0.92rem;
   color: var(--color-neutral-500);
-  font-size: 13px;
-}
-.planos-footer strong {
-  color: var(--color-brand-accent);
+  border-top: 1px solid var(--color-neutral-200);
 }
 
-/* Responsivo */
-@media (max-width: 860px) {
+.planos-footer strong {
+  color: var(--color-brand-primary);
+}
+
+/* ── Responsivo ────────────────────────────────────────────── */
+@media (max-width: 960px) {
   .planos-grid {
     grid-template-columns: 1fr;
-    max-width: 460px;
+    max-width: 520px;
   }
+
   .plan-card--highlight {
-    transform: none;
+    order: -1;
   }
-  .planos-appbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+}
+
+@media (max-width: 760px) {
+  .planos-appbar,
   .planos-catedral {
     flex-direction: column;
     align-items: flex-start;
+    text-align: left;
+  }
+
+  .planos-appbar-cta,
+  .planos-catedral-cta {
+    width: 100%;
+    text-align: center;
+  }
+
+  .planos-catedral-info ul,
+  .planos-faq-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -4,8 +4,6 @@ import {
   BellRing,
   CalendarCheck,
   Check,
-  ChevronDown,
-  Church,
   Eye,
   EyeOff,
   Fingerprint,
@@ -17,23 +15,17 @@ import {
   ShieldCheck,
   Sparkles,
   UsersRound,
+  X,
 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import {
   Button,
   FeatureItem,
-  IconButton,
-  MetricCard,
   StatusBadge,
   TextField,
 } from "./design-system/components";
-import {
-  calendarItems,
-  clientStats,
-  memberRows,
-  notificationItems,
-} from "./data/clientDashboard";
+import { calendarItems, clientStats, memberRows, notificationItems } from "./data/clientDashboard";
 import { features, modules, tenantCards } from "./data/landing";
 import { resolvePostLoginPath } from "./lib/accessRouting";
 import { PolicyFooter } from "./components/PolicyFooter";
@@ -187,6 +179,23 @@ export function App() {
   const [firstAccessToken, setFirstAccessToken] = useState("");
   const [firstAccessContext, setFirstAccessContext] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = showLogin ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showLogin]);
+
+  useEffect(() => {
+    if (!showLogin) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setShowLogin(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showLogin]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -426,257 +435,290 @@ export function App() {
   }
 
   return (
-    <main>
-      <section className="app-shell">
-        <div className="brand-panel" aria-label="Apresentação do SirvaOS">
-          <nav className="topbar">
-            <a className="brand-mark" href="/" aria-label="SirvaOS">
-              <img src="/img/logo-horizontal-sirvaos.svg" alt="SirvaOS" />
-            </a>
+    <main className="home-shell">
+      <header className="home-nav">
+        <a className="home-logo" href="/" aria-label="SirvaOS">
+          <img src="/img/logo-horizontal-sirvaos.svg" alt="SirvaOS" />
+        </a>
+        <nav className="home-nav-links" aria-label="Navegação principal">
+          <a href="#produto">
+            <Layers3 size={17} />
+            Produto
+          </a>
+          <a href="/planos">
+            <Sparkles size={17} />
+            Planos
+          </a>
+        </nav>
+        <div className="home-nav-actions">
+          <button type="button" className="home-login-btn" onClick={() => setShowLogin(true)}>
+            <ArrowRight size={17} />
+            Entrar
+          </button>
+        </div>
+      </header>
 
-            <div className="nav-actions" aria-label="Acesso rápido">
-              <a className="ghost-link" href="#produto">
-                <Layers3 size={17} />
-                Produto
-              </a>
-              <a className="ghost-link" href="#por-dentro">
-                <Eye size={17} />
-                Por dentro
-              </a>
-              <a className="ghost-link" href="/planos">
-                <Sparkles size={17} />
-                Planos
-              </a>
-              <IconButton ariaLabel="Selecionar idioma">
-                PT
-                <ChevronDown size={14} />
-              </IconButton>
+      <section className="home-hero" aria-labelledby="home-hero-title">
+        <span className="eyebrow">
+          <ShieldCheck size={18} />
+          Plataforma operacional para igrejas e ministérios
+        </span>
+        <h1 id="home-hero-title">
+          Gestão completa<br />da sua igreja.
+        </h1>
+        <p>
+          Membros, ministérios, agenda, escalas e comunicados em um fluxo único —
+          com aplicativo para os membros. Cada igreja opera com sua marca, seus
+          módulos e seus dados.
+        </p>
+        <div className="home-hero-actions">
+          <a className="primary-button" href="/planos">
+            <Sparkles size={18} />
+            Ver planos
+          </a>
+          <button type="button" className="secondary-button" onClick={() => setShowLogin(true)}>
+            <ArrowRight size={18} />
+            Entrar no painel
+          </button>
+        </div>
+        <div className="trust-row" aria-label="Pilares do SirvaOS">
+          {["Multi-tenant", "White-label por igreja", "Permissões por perfil"].map((item) => (
+            <span key={item}>
+              <Check size={16} />
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-showcase" aria-label="Prévia do sistema SirvaOS" aria-hidden="true">
+        <div className="hs-window">
+          <div className="hs-bar">
+            <span className="hs-dot" />
+            <span className="hs-dot" />
+            <span className="hs-dot" />
+            <span className="hs-url">app.sirvaos.com.br</span>
+          </div>
+          <div className="hs-body">
+            <div className="hs-metrics">
+              {modules.map((m) => (
+                <article key={m.name} className="hs-metric">
+                  <span className="hs-metric-label">{m.name}</span>
+                  <strong className="hs-metric-value">{m.metric}</strong>
+                  <small>{m.label}</small>
+                </article>
+              ))}
             </div>
-          </nav>
-
-          <div className="hero-grid">
-            <div className="hero-copy">
-              <span className="eyebrow">
-                <ShieldCheck size={18} />
-                Plataforma operacional para igrejas e ministérios
-              </span>
-
-              <h1>Gestão completa da igreja em um só lugar.</h1>
-
-              <p>
-                Cadastros, calendário, escalas e comunicados com modularidade real e
-                isolamento por tenant. Cada igreja opera com sua marca, seus módulos e
-                seus dados.
-              </p>
-
-              <div className="hero-actions">
-                <a className="primary-button" href="#login">
-                  <ArrowRight size={18} />
-                  Entrar no painel
-                </a>
-                <a className="secondary-button" href="/planos">
-                  <Sparkles size={18} />
-                  Ver planos
-                </a>
-              </div>
-
-              <div className="trust-row" aria-label="Pilares do SirvaOS">
-                {["Multi-tenant", "White-label por igreja", "Permissões por perfil"].map((item) => (
-                  <span key={item}>
-                    <Check size={16} />
-                    {item}
+            <div className="hs-panels">
+              <article className="hs-panel">
+                <div className="hs-panel-head">
+                  <span>
+                    <UsersRound size={15} />
+                    Membresia
                   </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="product-preview" aria-label="Prévia do painel SirvaOS">
-              <div className="preview-sidebar">
-                <img src="/img/icon-sirvaos.svg" alt="" />
-                <div className="sidebar-line active" />
-                <div className="sidebar-line" />
-                <div className="sidebar-line short" />
-              </div>
-
-              <div className="preview-content">
-                <div className="preview-header">
-                  <div>
-                    <span>Admin da Igreja</span>
-                    <strong>Painel administrativo</strong>
-                  </div>
-                  <span className="preview-cta">Configurar módulos</span>
+                  <em className="hs-trend">+12 este mês</em>
                 </div>
-
-                <div className="module-strip">
-                  {modules.map((module) => (
-                    <MetricCard key={module.name} {...module} />
-                  ))}
-                </div>
-
-                <div className="tenant-list">
-                  {tenantCards.map((tenant) => (
-                    <article key={tenant.name}>
-                      <div className="tenant-icon">
-                        <Church size={20} />
-                      </div>
+                <div className="hs-member-list">
+                  {memberRows.map((member) => (
+                    <div key={member.name} className="hs-member-row">
+                      <span className="hs-avatar">{member.name.slice(0, 1)}</span>
                       <div>
-                        <strong>{tenant.name}</strong>
-                        <span>{tenant.modules}</span>
+                        <strong>{member.name}</strong>
+                        <small>
+                          {member.group} · {member.detail}
+                        </small>
                       </div>
-                      <StatusBadge tone={tenant.status === "Online" ? "success" : "warning"}>
-                        {tenant.status}
-                      </StatusBadge>
-                    </article>
+                      <em className={member.status === "Ativo" ? "success" : "warning"}>{member.status}</em>
+                    </div>
                   ))}
                 </div>
-              </div>
+              </article>
+              <article className="hs-panel">
+                <div className="hs-panel-head">
+                  <span>
+                    <CalendarCheck size={15} />
+                    Próximos eventos
+                  </span>
+                </div>
+                <div className="hs-event-list">
+                  {calendarItems.map((item) => (
+                    <div key={item.title} className="hs-event-row">
+                      <time>{item.date}</time>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <small>{item.meta}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hs-chips">
+                  {modules.map((m) => (
+                    <span key={m.name} className="hs-chip">
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
+              </article>
             </div>
           </div>
         </div>
-
-        <aside className="login-panel" id="login" aria-label="Login do sistema">
-          <div className="login-card">
-            <div className="login-card-header">
-              <img src="/img/icon-sirvaos.svg" alt="" />
-              <div>
-                <span>Acesso da igreja</span>
-                <h2>Entrar no SirvaOS</h2>
-              </div>
-            </div>
-
-            <form
-              className="login-form"
-              method="post"
-              onSubmit={
-                loginMode === "login"
-                  ? handleLandingLogin
-                  : firstAccessStep === "identify"
-                    ? handleFirstAccessStart
-                    : handleFirstAccessComplete
-              }
-            >
-              {loginMode === "login" || firstAccessStep === "identify" ? (
-                <TextField
-                  autoComplete="email"
-                  icon={<Mail size={18} />}
-                  label="E-mail"
-                  name={loginMode === "login" ? "email" : "firstAccessEmail"}
-                  onChange={(event) => setFirstAccessEmail(event.target.value)}
-                  placeholder="admin@suaigreja.org"
-                  type="email"
-                  value={firstAccessEmail}
-                />
-              ) : null}
-
-              {loginMode === "first-access" && firstAccessRequiresBirthDate && firstAccessStep === "identify" ? (
-                <label>
-                  <span>Data de nascimento</span>
-                  <div className="field">
-                    <Fingerprint size={18} />
-                    <input
-                      autoComplete="bday"
-                      name="dateOfBirth"
-                      onChange={(event) => setFirstAccessBirthDate(event.target.value)}
-                      type="date"
-                      value={firstAccessBirthDate}
-                    />
-                  </div>
-                </label>
-              ) : null}
-
-              {loginMode === "login" ? (
-                <TextField
-                  autoComplete="current-password"
-                  endIcon={
-                    <button
-                      type="button"
-                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                      onClick={() => setShowPassword((v) => !v)}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  }
-                  icon={<LockKeyhole size={18} />}
-                  label="Senha"
-                  name="password"
-                  placeholder="Sua senha"
-                  type={showPassword ? "text" : "password"}
-                />
-              ) : null}
-
-              {loginMode === "first-access" && firstAccessStep === "password" ? (
-                <>
-                  <p className="first-access-context">{firstAccessContext}</p>
-                  <TextField
-                    autoComplete="new-password"
-                    icon={<LockKeyhole size={18} />}
-                    label="Criar senha"
-                    name="newPassword"
-                    placeholder="Mínimo 8 caracteres"
-                    type="password"
-                  />
-                  <TextField
-                    autoComplete="new-password"
-                    icon={<LockKeyhole size={18} />}
-                    label="Confirmar senha"
-                    name="newPasswordConfirm"
-                    placeholder="Repita a senha"
-                    type="password"
-                  />
-                </>
-              ) : null}
-
-              <div className="form-options">
-                <label className="remember">
-                  <input
-                    type="checkbox"
-                    checked={loginMode === "first-access"}
-                    onChange={(event) => {
-                      setLoginMode(event.target.checked ? "first-access" : "login");
-                      setFirstAccessStep("identify");
-                      setLoginStatus("idle");
-                      setLoginMessage("");
-                    }}
-                  />
-                  <span>Primeiro acesso</span>
-                </label>
-                <a href="/">Esqueci a senha</a>
-              </div>
-
-              <Button
-                type="submit"
-                className="submit-button"
-                icon={<ArrowRight size={18} />}
-                disabled={loginStatus === "loading"}
-              >
-                {loginStatus === "loading"
-                  ? "Aguarde..."
-                  : loginMode === "first-access" && firstAccessStep === "password"
-                    ? "Criar senha e entrar"
-                    : loginMode === "first-access"
-                      ? "Continuar primeiro acesso"
-                      : "Acessar SirvaOS"}
-              </Button>
-
-              {loginMessage ? <p className={`login-feedback ${loginStatus}`}>{loginMessage}</p> : null}
-            </form>
-
-            <div className="divider">
-              <span>ou</span>
-            </div>
-
-            <Button variant="sso" icon={<Fingerprint size={18} />}>
-              Entrar com código seguro
-            </Button>
-          </div>
-
-          <div className="feature-list" aria-label="Recursos do SirvaOS">
-            {features.map(({ icon: Icon, title, text }) => (
-              <FeatureItem key={title} icon={<Icon size={20} />} title={title} text={text} />
-            ))}
-          </div>
-        </aside>
       </section>
+
+      {showLogin ? (
+        <div
+          className="login-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Acesso ao SirvaOS"
+          onClick={() => setShowLogin(false)}
+        >
+          <div className="login-modal" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="login-modal-close"
+              aria-label="Fechar"
+              onClick={() => setShowLogin(false)}
+            >
+              <X size={20} />
+            </button>
+
+            <div className="login-card login-card--modal">
+              <div className="login-card-header">
+                <img src="/img/icon-sirvaos.svg" alt="" />
+                <div>
+                  <span>Acesso da igreja</span>
+                  <h2>Entrar no SirvaOS</h2>
+                </div>
+              </div>
+
+              <form
+                className="login-form"
+                method="post"
+                onSubmit={
+                  loginMode === "login"
+                    ? handleLandingLogin
+                    : firstAccessStep === "identify"
+                      ? handleFirstAccessStart
+                      : handleFirstAccessComplete
+                }
+              >
+                {loginMode === "login" || firstAccessStep === "identify" ? (
+                  <TextField
+                    autoComplete="email"
+                    icon={<Mail size={18} />}
+                    label="E-mail"
+                    name={loginMode === "login" ? "email" : "firstAccessEmail"}
+                    onChange={(event) => setFirstAccessEmail(event.target.value)}
+                    placeholder="admin@suaigreja.org"
+                    type="email"
+                    value={firstAccessEmail}
+                  />
+                ) : null}
+
+                {loginMode === "first-access" && firstAccessRequiresBirthDate && firstAccessStep === "identify" ? (
+                  <label>
+                    <span>Data de nascimento</span>
+                    <div className="field">
+                      <Fingerprint size={18} />
+                      <input
+                        autoComplete="bday"
+                        name="dateOfBirth"
+                        onChange={(event) => setFirstAccessBirthDate(event.target.value)}
+                        type="date"
+                        value={firstAccessBirthDate}
+                      />
+                    </div>
+                  </label>
+                ) : null}
+
+                {loginMode === "login" ? (
+                  <TextField
+                    autoComplete="current-password"
+                    endIcon={
+                      <button
+                        type="button"
+                        aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                    icon={<LockKeyhole size={18} />}
+                    label="Senha"
+                    name="password"
+                    placeholder="Sua senha"
+                    type={showPassword ? "text" : "password"}
+                  />
+                ) : null}
+
+                {loginMode === "first-access" && firstAccessStep === "password" ? (
+                  <>
+                    <p className="first-access-context">{firstAccessContext}</p>
+                    <TextField
+                      autoComplete="new-password"
+                      icon={<LockKeyhole size={18} />}
+                      label="Criar senha"
+                      name="newPassword"
+                      placeholder="Mínimo 8 caracteres"
+                      type="password"
+                    />
+                    <TextField
+                      autoComplete="new-password"
+                      icon={<LockKeyhole size={18} />}
+                      label="Confirmar senha"
+                      name="newPasswordConfirm"
+                      placeholder="Repita a senha"
+                      type="password"
+                    />
+                  </>
+                ) : null}
+
+                <div className="form-options">
+                  <label className="remember">
+                    <input
+                      type="checkbox"
+                      checked={loginMode === "first-access"}
+                      onChange={(event) => {
+                        setLoginMode(event.target.checked ? "first-access" : "login");
+                        setFirstAccessStep("identify");
+                        setLoginStatus("idle");
+                        setLoginMessage("");
+                      }}
+                    />
+                    <span>Primeiro acesso</span>
+                  </label>
+                  <a href="/">Esqueci a senha</a>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="submit-button"
+                  icon={<ArrowRight size={18} />}
+                  disabled={loginStatus === "loading"}
+                >
+                  {loginStatus === "loading"
+                    ? "Aguarde..."
+                    : loginMode === "first-access" && firstAccessStep === "password"
+                      ? "Criar senha e entrar"
+                      : loginMode === "first-access"
+                        ? "Continuar primeiro acesso"
+                        : "Acessar SirvaOS"}
+                </Button>
+
+                {loginMessage ? <p className={`login-feedback ${loginStatus}`}>{loginMessage}</p> : null}
+              </form>
+
+              <div className="divider">
+                <span>ou</span>
+              </div>
+
+              <Button variant="sso" icon={<Fingerprint size={18} />}>
+                Entrar com código seguro
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="marketing-section" id="produto" aria-labelledby="produto-title">
         <div className="section-heading">
