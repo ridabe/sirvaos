@@ -238,19 +238,44 @@ async function handleSubscriptionCompleted(
   }
   if (!tenantId) throw new Error("tenant_slug_exhausted");
 
-  // 2) Ativa todos os módulos da plataforma para o tenant.
-  const { data: modules } = await admin
-    .from("platform_modules")
-    .select("id")
-    .eq("status", "active");
-  if (modules && modules.length > 0) {
-    const rows = modules.map((m: { id: string }) => ({
-      tenant_id: tenantId,
-      module_id: m.id,
-      status: "active",
-      enabled_at: nowIso,
-    }));
-    await admin.from("tenant_modules").upsert(rows, { onConflict: "tenant_id,module_id" });
+  // 2) Ativa APENAS os módulos liberados pelo plano contratado.
+  const planCode = signup.plan_code;
+  if (planCode) {
+    const { data: planMods } = await admin
+      .from("plan_modules")
+      .select("module_code")
+      .eq("plan_code", planCode);
+    const moduleCodes = (planMods ?? []).map((m: { module_code: string }) => m.module_code);
+    if (moduleCodes.length > 0) {
+      const { data: modules } = await admin
+        .from("platform_modules")
+        .select("id")
+        .in("code", moduleCodes)
+        .eq("status", "active");
+      if (modules && modules.length > 0) {
+        const rows = modules.map((m: { id: string }) => ({
+          tenant_id: tenantId,
+          module_id: m.id,
+          status: "active",
+          enabled_at: nowIso,
+        }));
+        await admin.from("tenant_modules").upsert(rows, { onConflict: "tenant_id,module_id" });
+      }
+    }
+
+    // Feature flags do plano (ex.: whatsapp off no Básico).
+    const { data: planFlags } = await admin
+      .from("plan_feature_flags")
+      .select("flag_key, enabled")
+      .eq("plan_code", planCode);
+    if (planFlags && planFlags.length > 0) {
+      const flagRows = planFlags.map((f: { flag_key: string; enabled: boolean }) => ({
+        tenant_id: tenantId,
+        flag_key: f.flag_key,
+        enabled: f.enabled,
+      }));
+      await admin.from("tenant_feature_flags").upsert(flagRows, { onConflict: "tenant_id,flag_key" });
+    }
   }
 
   // 3) Provisiona o admin (owner) reutilizando provision-tenant-admin (chamada interna).
@@ -328,12 +353,13 @@ async function findSignupRequest(
       contact_email: string;
       contact_phone: string | null;
       plan_id: string | null;
+      plan_code: string | null;
       tenant_id: string | null;
     }
   | null
 > {
   const cols =
-    "id, status, slug, church_name, legal_name, document_number, contact_name, contact_email, contact_phone, plan_id, tenant_id";
+    "id, status, slug, church_name, legal_name, document_number, contact_name, contact_email, contact_phone, plan_id, plan_code, tenant_id";
 
   // 1) Pelo externalId (= id do signup_request).
   if (keys.externalId) {

@@ -1459,7 +1459,7 @@ h1 {
 .tenant-table-head,
 .tenant-table-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.35fr) minmax(120px, 0.72fr) minmax(86px, auto) minmax(96px, auto) minmax(210px, auto);
+  grid-template-columns: minmax(170px, 1.25fr) minmax(110px, 0.68fr) minmax(80px, auto) minmax(90px, auto) minmax(150px, auto) minmax(200px, auto);
   gap: 12px;
   align-items: center;
 }

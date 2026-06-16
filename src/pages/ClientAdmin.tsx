@@ -3223,6 +3223,16 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
       const currentProfile = await loadClientData(data.user.id);
       if (currentProfile) {
         setProfile(currentProfile);
+        // Registra o acesso ao restaurar a sessão (auto-login), mas só uma vez
+        // por aba/sessão do navegador — recarregar a página não infla a contagem.
+        try {
+          if (typeof window !== "undefined" && !window.sessionStorage.getItem("tenant_access_registered")) {
+            window.sessionStorage.setItem("tenant_access_registered", "1");
+            void supabase.rpc("register_tenant_access");
+          }
+        } catch {
+          // sessionStorage indisponível — ignora silenciosamente.
+        }
       }
     });
   }, [demoMode]);
@@ -5201,6 +5211,15 @@ export function ClientAdmin({ demoMode = false }: ClientAdminProps) {
 
     const currentProfile = await loadClientData(data.user.id);
     if (currentProfile) {
+      // Registra o acesso (login) do cliente para métricas no Admin Global.
+      // Não bloqueia o fluxo de login em caso de falha.
+      void supabase.rpc("register_tenant_access");
+      // Marca esta aba como já contabilizada para a restauração de sessão não duplicar.
+      try {
+        window.sessionStorage.setItem("tenant_access_registered", "1");
+      } catch {
+        // sessionStorage indisponível — ignora.
+      }
       setProfile(currentProfile);
       setLoginStatus("success");
     } else {

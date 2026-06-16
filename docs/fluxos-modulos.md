@@ -3,7 +3,7 @@
 > **Documento:** Catálogo de Fluxos por Módulo
 > **Produto:** SirvaOS
 > **Status:** Documento vivo — **DEVE ser atualizado sempre que um fluxo for criado ou alterado.**
-> **Última atualização:** 2026-06-13
+> **Última atualização:** 2026-06-16
 > **Para que serve:** fonte única para (1) entender qualquer fluxo de qualquer módulo, (2) gerar tutoriais de uso para clientes, (3) onboarding de novos desenvolvedores.
 
 ---
@@ -39,22 +39,46 @@
 
 ## 1. Provisionamento de Igreja (Onboarding)
 
-**Propósito:** criar uma nova igreja (tenant) na plataforma e dar o primeiro acesso ao pastor/admin.
+**Propósito:** criar uma nova igreja (tenant) na plataforma e dar o primeiro acesso ao pastor/admin. Há **dois caminhos**: (1A) **self-service por assinatura** (automático, planos Básico/Essencial/Ultra) e (1B) **manual pelo Admin Global** (plano Catedral, cortesias/trial e operação interna).
+
+> Plano de referência e detalhes: `docs/plano-assinaturas-abacatepay.md` e `docs/abacatepay-setup-checklist.md`.
+
+### 1A. Self-service por assinatura (automático) — AbacatePay
+
+**Quem usa:** visitante do site (futuro cliente).
+
+**Onde inicia:** página pública de planos **`/planos`** (`src/pages/Planos.tsx`).
+
+**Passo a passo:**
+1. Visitante escolhe um plano automático e preenche os dados da igreja/contato → o front chama a Edge Function **`create-subscription-checkout`**.
+2. A função valida o plano (`plans`, `billing_type = 'automatic'`), gera um `slug` único, grava o cadastro em **`signup_requests`** (status `pending_payment`), cria o cliente no AbacatePay (`/customers/create`) e o **checkout de assinatura** (`/subscriptions/create`, `externalId = signup_requests.id`). Retorna a `url` do AbacatePay.
+3. O cliente paga no AbacatePay (cartão, recorrente). Ao ativar, o AbacatePay envia `subscription.completed` para o webhook **`abacatepay-webhook`** (`?webhookSecret=` + HMAC; idempotência por `subscription_events.abacatepay_event_id`).
+4. O webhook localiza o `signup_requests` pelo `externalId`/billing/customer e **provisiona**: cria `tenants` (status `active`, `subscription_status = active`, `plan_id`, `abacatepay_customer_id/subscription_id`, `current_period_end`); ativa **apenas os módulos do plano** (`plan_modules` → `tenant_modules`); aplica **feature flags do plano** (`plan_feature_flags` → `tenant_feature_flags`, ex.: `whatsapp=false` no Básico).
+5. O webhook chama **`provision-tenant-admin`** (servidor-a-servidor, header `x-internal-secret`) que cria o usuário (auth) + `profiles` (`tenant_role = owner`) e envia o e-mail de acesso (Resend). Marca `signup_requests.status = 'provisioned'`.
+6. Renovação: `subscription.renewed` atualiza `current_period_end`. Cancelamento: `subscription.cancelled` → `tenants.subscription_status = 'cancelled'` (acesso até o fim do período).
+
+**Página de retorno:** `completionUrl = /assinatura/sucesso` (`AssinaturaSucesso.tsx`).
+
+### 1B. Manual pelo Admin Global (Catedral, cortesia/trial, interno)
 
 **Quem usa:** Admin Global (super_admin/operations).
 
-**Onde inicia:** Painel **Admin Global** (`/admin-global`, página `AdminGlobalAccess.tsx`).
+**Onde inicia:** Painel **Admin Global** (`/admin-global`, `AdminGlobalAccess.tsx`). Para Catedral, o pedido chega antes por e-mail ao suporte (a `create-subscription-checkout` em plano `manual` grava `signup_requests` com status `manual_pending` e envia e-mail ao `SUPPORT_EMAIL`).
 
 **Passo a passo:**
-1. Admin Global cadastra a igreja → cria linha em `tenants` (status `em configuração`), define plano (`plans`) e módulos contratados (`tenant_modules`).
-2. Provisiona o admin da igreja → Edge Function **`provision-tenant-admin`** cria o usuário (auth) + `profiles` com `tenant_id` e `tenant_role = owner`.
-3. Gera token de primeiro acesso → `first_access_tokens`. O pastor recebe e-mail de boas-vindas (template em `docs/email-boas-vindas-cliente.html`).
-4. Primeiro acesso → Edge Function **`first-access`** valida o token (`first_access_attempts`), ativa a conta e força troca de senha.
-5. Trial: `tenants.trial_*` controla período de teste (migration `tenant_trial_30_days`).
+1. Admin Global cadastra a igreja → cria linha em `tenants`, define plano (`plans`) e módulos (`tenant_modules`).
+2. Provisiona o admin → **`provision-tenant-admin`** cria usuário (auth) + `profiles` (`tenant_role = owner`).
+3. E-mail de acesso / token de primeiro acesso (`first_access_tokens`); primeiro acesso valida via **`first-access`** (`first_access_attempts`) e força troca de senha.
+4. Trial: `tenants.trial_*` controla período de teste gratuito (migration `tenant_trial_30_days`) — usado como cortesia/avaliação, independente da assinatura.
 
-**Integrações:** `tenants`, `plans`, `platform_modules`, `tenant_modules`, `profiles`, `first_access_tokens`, Edge Functions `provision-tenant-admin`, `first-access`, `create-global-admin`.
+### Regras por plano (entitlements) — válidas para ambos os caminhos
+- **Módulos:** `plan_modules` define o que cada plano libera; o webhook ativa só esses. RLS (`is_module_enabled`) bloqueia o resto. (Básico: members, events, announcements, financial, bible-school.)
+- **Feature flags:** `plan_feature_flags` (ex.: `whatsapp`). `send-whatsapp` bloqueia envio quando a flag `whatsapp` existe e é `false` (Básico). Retrocompatível: ausência da flag = liberado (tenants antigos não quebram).
+- **Limites:** `plans.max_members`/`max_admins` aplicados por triggers `enforce_member_limit_trg` (em `members`) e `enforce_admin_limit_trg` (em `profiles`). `NULL` = ilimitado.
 
-**Onde termina:** pastor logado no **Admin Cliente** da sua igreja, com módulos ativos visíveis.
+**Integrações:** `tenants`, `plans`, `plan_modules`, `plan_feature_flags`, `platform_modules`, `tenant_modules`, `tenant_feature_flags`, `profiles`, `signup_requests`, `subscription_events`, `first_access_tokens`; Edge Functions `create-subscription-checkout`, `abacatepay-webhook`, `provision-tenant-admin`, `first-access`, `create-global-admin`; provedores AbacatePay (pagamento) e Resend (e-mail).
+
+**Onde termina:** pastor logado no **Admin Cliente** da sua igreja, com **apenas os módulos do plano** ativos e os limites/flags aplicados.
 
 ---
 
@@ -72,6 +96,12 @@
 5. Sem `tenant_id` → erro (usuário sem igreja).
 
 **Integrações:** `profiles`, Supabase Auth.
+
+**Métrica de acesso por cliente (NOVO):** ao concluir o login na **área do cliente** (`ClientAdmin.tsx`), o app chama a RPC `register_tenant_access()` (SECURITY DEFINER), que incrementa `tenants.access_count` e atualiza `tenants.last_accessed_at = now()` para o tenant do perfil autenticado. Esses dois campos são exibidos no **Admin Global** (coluna "Acessos" na lista de clientes e no painel de detalhes: "Total de acessos" e "Último acesso"). Registra acesso na **web** e no **app**:
+> - **Web (`ClientAdmin.tsx`):** no **login explícito** (e-mail/senha) e na **restauração de sessão** (auto-login), neste caso com guarda em `sessionStorage` (`tenant_access_registered`) para contar **no máximo uma vez por aba/sessão do navegador** — recarregar a página não infla a contagem.
+> - **App (Expo — `SirvaOSApp`):** no **login** (`lib/auth.ts → signIn`) e a cada **abertura do app** com sessão salva (`context/AuthContext.tsx`, no `getSession` inicial) — um acesso por inicialização.
+>
+> Migration: `20260616120000_tenant_access_tracking.sql`.
 
 **Onde termina:** usuário no painel/portal correspondente ao seu papel.
 

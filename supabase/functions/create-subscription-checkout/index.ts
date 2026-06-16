@@ -239,17 +239,7 @@ serve(async (req) => {
 
   return jsonResponse(
     200,
-    {
-      mode: "checkout",
-      request_id: requestId,
-      url: checkoutRes.data.url,
-      // DEBUG temporário: devMode revela se a chave é de produção ou de testes.
-      debug: {
-        customer_devmode: (customerRes.data as Record<string, unknown>)?.devMode ?? null,
-        billing_devmode: (checkoutRes.data as Record<string, unknown>)?.devMode ?? null,
-        billing_status: checkoutRes.data.status ?? null,
-      },
-    },
+    { mode: "checkout", request_id: requestId, url: checkoutRes.data.url },
     corsHeaders,
   );
 });

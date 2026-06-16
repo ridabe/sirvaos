@@ -46,6 +46,20 @@ import { supabase, supabaseUrl } from "../lib/supabase";
 type LoginStatus = "idle" | "loading" | "success" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 
+type SignupRequestRow = {
+  id: string;
+  status: "pending_payment" | "paid" | "provisioned" | "manual_pending" | "failed" | "expired";
+  church_name: string;
+  slug: string;
+  plan_code: string | null;
+  contact_name: string | null;
+  contact_email: string;
+  contact_phone: string | null;
+  document_number: string | null;
+  tenant_id: string | null;
+  created_at: string;
+};
+
 type GlobalProfile = {
   global_role: "super_admin" | "operations" | "support" | null;
   status: "active" | "invited" | "suspended";
@@ -90,6 +104,8 @@ type TenantRecord = {
   }>;
   members_total?: number;
   members_active?: number;
+  access_count: number;
+  last_accessed_at: string | null;
 };
 
 type TrialTenantRecord = {
@@ -211,7 +227,7 @@ type AdminDashboardData = {
   };
 };
 
-type AdminSection = "dashboard" | "clients" | "plans" | "modules" | "admins" | "app" | "tutorials";
+type AdminSection = "dashboard" | "clients" | "plans" | "subscriptions" | "modules" | "admins" | "app" | "tutorials";
 
 type TutorialPdfRecord = {
   id: string;
@@ -368,6 +384,17 @@ function formatDateBR(value: string | null) {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
+function formatDateTimeBR(value: string | null) {
+  if (!value) return "Nunca acessou";
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function createSlug(value: string) {
   return value
     .normalize("NFD")
@@ -413,6 +440,9 @@ export function AdminGlobalAccess() {
   const [statusFilter, setStatusFilter] = useState<TenantStatus | "all">("all");
   const [planFilter, setPlanFilter] = useState<string>("all");
   const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
+  const [signupRequests, setSignupRequests] = useState<SignupRequestRow[]>([]);
+  const [signupRequestsStatus, setSignupRequestsStatus] = useState<LoadStatus>("idle");
+  const [signupActionId, setSignupActionId] = useState<string | null>(null);
   const [isAdminFormOpen, setIsAdminFormOpen] = useState(false);
   const [adminForm, setAdminForm] = useState<GlobalAdminFormState>({ email: "", password: "", full_name: "", global_role: "operations" });
   const [adminSaveStatus, setAdminSaveStatus] = useState<LoginStatus>("idle");
@@ -592,6 +622,9 @@ export function AdminGlobalAccess() {
     if (activeSection === "tutorials" && tutorialPdfsStatus === "idle") {
       void loadTutorialPdfs();
     }
+    if (activeSection === "subscriptions" && signupRequestsStatus === "idle") {
+      void loadSignupRequests();
+    }
   }, [activeSection]);
 
   useEffect(() => {
@@ -696,6 +729,37 @@ export function AdminGlobalAccess() {
     return count ?? 0;
   }
 
+  async function loadSignupRequests() {
+    setSignupRequestsStatus("loading");
+    const { data, error } = await supabase
+      .from("signup_requests")
+      .select(
+        "id, status, church_name, slug, plan_code, contact_name, contact_email, contact_phone, document_number, tenant_id, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) {
+      setSignupRequestsStatus("error");
+      return;
+    }
+    setSignupRequests((data ?? []) as SignupRequestRow[]);
+    setSignupRequestsStatus("ready");
+  }
+
+  // Marca um pedido (ex.: Catedral provisionado manualmente) como concluído.
+  async function markSignupProvisioned(id: string) {
+    setSignupActionId(id);
+    const { error } = await supabase
+      .from("signup_requests")
+      .update({ status: "provisioned" })
+      .eq("id", id);
+    setSignupActionId(null);
+    if (!error) {
+      await loadSignupRequests();
+    }
+  }
+
   async function getTenantStatusCount(status: TenantStatus) {
     const { count, error } = await supabase
       .from("tenants")
@@ -750,6 +814,8 @@ export function AdminGlobalAccess() {
             trial_started_at,
             trial_ends_at,
             trial_dismissed_at,
+            access_count,
+            last_accessed_at,
             plans (name, code),
             tenant_modules (
               module_id,
@@ -1950,6 +2016,17 @@ export function AdminGlobalAccess() {
               <span className="sidebar-label">Planos</span>
             </button>
             <button
+              className={activeSection === "subscriptions" ? "active" : undefined}
+              type="button"
+              onClick={() => {
+                setActiveSection("subscriptions");
+                setIsMobileSidebarOpen(false);
+              }}
+            >
+              <Building2 size={18} />
+              <span className="sidebar-label">Assinaturas</span>
+            </button>
+            <button
               className={activeSection === "admins" ? "active" : undefined}
               type="button"
               onClick={() => {
@@ -1998,6 +2075,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "dashboard" && "Visão geral"}
                 {activeSection === "clients" && "Clientes / Igrejas"}
                 {activeSection === "plans" && "Gestão de planos"}
+                {activeSection === "subscriptions" && "Assinaturas / Solicitações"}
                 {activeSection === "modules" && "Catálogo global de módulos"}
                 {activeSection === "admins" && "Admins Globais"}
                 {activeSection === "app" && "App Mobile — Versões"}
@@ -2007,6 +2085,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "dashboard" && "Acompanhe saúde do SaaS, auditoria e métricas do Admin Global."}
                 {activeSection === "clients" && "Gerencie clientes, contratos e ativação de módulos por tenant."}
                 {activeSection === "plans" && "Crie e mantenha o catálogo de planos comerciais do SirvaOS."}
+                {activeSection === "subscriptions" && "Cadastros de assinatura (self-service) e pedidos manuais do plano Catedral."}
                 {activeSection === "modules" && "Configure o catálogo global de módulos e seus metadados."}
                 {activeSection === "admins" && "Gerencie os usuários com acesso ao painel Admin Global do SirvaOS."}
                 {activeSection === "app" && "Controle qual versão mínima do app Android é exigida ou recomendada para os usuários."}
@@ -2026,6 +2105,8 @@ export function AdminGlobalAccess() {
                   setAdminSaveStatus("idle");
                   setAdminSaveMessage("");
                   setIsAdminFormOpen(true);
+                } else if (activeSection === "subscriptions") {
+                  void loadSignupRequests();
                 } else if (activeSection === "app") {
                   void loadAppConfig();
                 } else if (activeSection === "tutorials") {
@@ -2047,6 +2128,8 @@ export function AdminGlobalAccess() {
                 ? "Novo módulo"
                 : activeSection === "admins"
                 ? "Novo admin global"
+                : activeSection === "subscriptions"
+                ? "Recarregar"
                 : activeSection === "app"
                 ? "Recarregar"
                 : activeSection === "tutorials"
@@ -3255,6 +3338,7 @@ export function AdminGlobalAccess() {
                         <span>Plano</span>
                         <span>Módulos</span>
                         <span>Membros</span>
+                        <span>Acessos</span>
                         <span>Status</span>
                       </div>
 
@@ -3296,6 +3380,12 @@ export function AdminGlobalAccess() {
                             </span>
                             <span>
                               {tenant.members_active ?? 0}/{tenant.members_total ?? 0}
+                            </span>
+                            <span title={`Último acesso: ${formatDateTimeBR(tenant.last_accessed_at)}`}>
+                              <strong style={{ display: "block" }}>{tenant.access_count ?? 0}</strong>
+                              <small style={{ color: "var(--color-neutral-500)" }}>
+                                {tenant.last_accessed_at ? formatDateTimeBR(tenant.last_accessed_at) : "Nunca acessou"}
+                              </small>
                             </span>
                             <div className="tenant-row-actions">
                               <em className={tenant.status}>{statusLabels[tenant.status]}</em>
@@ -3393,6 +3483,14 @@ export function AdminGlobalAccess() {
                           <article>
                             <strong>Módulos ativos</strong>
                             <span>{selectedTenant.tenant_modules.filter((m) => m.status === "active").length || 0}</span>
+                          </article>
+                          <article>
+                            <strong>Total de acessos</strong>
+                            <span>{selectedTenant.access_count ?? 0}</span>
+                          </article>
+                          <article>
+                            <strong>Último acesso</strong>
+                            <span>{formatDateTimeBR(selectedTenant.last_accessed_at)}</span>
                           </article>
                           <article>
                             <strong>Principais módulos</strong>
@@ -3741,6 +3839,86 @@ export function AdminGlobalAccess() {
                           <Building2 size={22} />
                           <strong>Nenhum plano cadastrado.</strong>
                           <span>Crie seu primeiro plano para ofertar aos tenants.</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : activeSection === "subscriptions" ? (
+                    <div className="tenant-table">
+                      <div className="tenant-table-head">
+                        <span>Igreja</span>
+                        <span>Plano</span>
+                        <span>Contato</span>
+                        <span>Status</span>
+                      </div>
+                      {signupRequestsStatus === "loading" ? (
+                        <div className="empty-admin-state">
+                          <CircleDashed size={22} />
+                          <strong>Carregando solicitações...</strong>
+                        </div>
+                      ) : signupRequests.length > 0 ? (
+                        signupRequests.map((req) => {
+                          const statusLabel =
+                            req.status === "provisioned"
+                              ? "Provisionado"
+                              : req.status === "manual_pending"
+                              ? "Catedral — pendente"
+                              : req.status === "pending_payment"
+                              ? "Aguardando pagamento"
+                              : req.status === "paid"
+                              ? "Pago"
+                              : req.status === "failed"
+                              ? "Falhou"
+                              : req.status === "expired"
+                              ? "Expirado"
+                              : req.status;
+                          const statusClass =
+                            req.status === "provisioned"
+                              ? "active"
+                              : req.status === "manual_pending"
+                              ? "configuring"
+                              : "suspended";
+                          const canMark =
+                            req.status === "manual_pending" ||
+                            req.status === "pending_payment" ||
+                            req.status === "failed";
+                          return (
+                            <article key={req.id} className="tenant-table-row">
+                              <div>
+                                <strong>{req.church_name}</strong>
+                                <small>
+                                  {req.slug}
+                                  {req.document_number ? ` · ${req.document_number}` : ""}
+                                </small>
+                              </div>
+                              <span>{req.plan_code ?? "—"}</span>
+                              <div>
+                                <a href={`mailto:${req.contact_email}`}>{req.contact_email}</a>
+                                <small>
+                                  {req.contact_name ?? ""}
+                                  {req.contact_phone ? ` · ${req.contact_phone}` : ""}
+                                </small>
+                              </div>
+                              <div className="tenant-row-actions">
+                                <em className={statusClass}>{statusLabel}</em>
+                                {canMark ? (
+                                  <button
+                                    type="button"
+                                    aria-label={`Marcar ${req.church_name} como provisionado`}
+                                    disabled={signupActionId === req.id}
+                                    onClick={() => void markSignupProvisioned(req.id)}
+                                  >
+                                    {signupActionId === req.id ? "..." : "Marcar provisionado"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <div className="empty-admin-state">
+                          <Building2 size={22} />
+                          <strong>Nenhuma solicitação de assinatura.</strong>
+                          <span>Cadastros pela página de planos e pedidos do Catedral aparecem aqui.</span>
                         </div>
                       )}
                     </div>

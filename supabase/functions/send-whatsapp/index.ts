@@ -117,6 +117,23 @@ Deno.serve(async (req) => {
     return json({ error: 'FORBIDDEN' }, 403);
   }
 
+  // Enforcement de plano: bloqueia se a flag "whatsapp" existir e estiver desabilitada
+  // (ex.: plano Básico). Tenants sem a flag continuam liberados (compatível com o legado).
+  if (!isGlobalAdmin) {
+    const { data: waFlag } = await admin
+      .from('tenant_feature_flags')
+      .select('enabled')
+      .eq('tenant_id', tenant_id)
+      .eq('flag_key', 'whatsapp')
+      .maybeSingle<{ enabled: boolean }>();
+    if (waFlag && waFlag.enabled === false) {
+      return json(
+        { error: 'WHATSAPP_NOT_IN_PLAN', message: 'O envio por WhatsApp não está incluído no plano atual.' },
+        403,
+      );
+    }
+  }
+
   let sent = 0;
   let failed = 0;
   const results: Array<{ phone: string; status: string; providerMessageId?: string; error?: string }> = [];
