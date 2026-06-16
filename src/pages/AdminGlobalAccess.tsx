@@ -395,6 +395,34 @@ function formatDateTimeBR(value: string | null) {
   });
 }
 
+type TenantSortKey = "name" | "access_count" | "last_accessed_at" | "members" | "status";
+
+const tenantStatusOrder: Record<TenantStatus, number> = {
+  active: 0,
+  configuring: 1,
+  suspended: 2,
+};
+
+function compareTenants(a: TenantRecord, b: TenantRecord, key: TenantSortKey): number {
+  switch (key) {
+    case "name":
+      return a.name.localeCompare(b.name, "pt-BR");
+    case "access_count":
+      return (a.access_count ?? 0) - (b.access_count ?? 0);
+    case "last_accessed_at": {
+      const av = a.last_accessed_at ? new Date(a.last_accessed_at).getTime() : -Infinity;
+      const bv = b.last_accessed_at ? new Date(b.last_accessed_at).getTime() : -Infinity;
+      return av - bv;
+    }
+    case "members":
+      return (a.members_active ?? 0) - (b.members_active ?? 0);
+    case "status":
+      return tenantStatusOrder[a.status] - tenantStatusOrder[b.status];
+    default:
+      return 0;
+  }
+}
+
 function createSlug(value: string) {
   return value
     .normalize("NFD")
@@ -439,6 +467,8 @@ export function AdminGlobalAccess() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<TenantStatus | "all">("all");
   const [planFilter, setPlanFilter] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<TenantSortKey>("access_count");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
   const [signupRequests, setSignupRequests] = useState<SignupRequestRow[]>([]);
   const [signupRequestsStatus, setSignupRequestsStatus] = useState<LoadStatus>("idle");
@@ -598,6 +628,25 @@ export function AdminGlobalAccess() {
         .includes(term);
     });
   }, [dashboardData, searchTerm, statusFilter, planFilter]);
+
+  const sortedTenants = useMemo(() => {
+    const list = [...filteredTenants];
+    list.sort((a, b) => {
+      const base = compareTenants(a, b, sortKey);
+      return sortDir === "asc" ? base : -base;
+    });
+    return list;
+  }, [filteredTenants, sortKey, sortDir]);
+
+  function toggleSort(key: TenantSortKey) {
+    if (sortKey === key) {
+      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // Nome começa A→Z; métricas começam do maior para o menor.
+      setSortDir(key === "name" || key === "status" ? "asc" : "desc");
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -3334,16 +3383,35 @@ export function AdminGlobalAccess() {
                     <>
                       <div className="tenant-table">
                         <div className="tenant-table-head">
-                        <span>Igreja</span>
-                        <span>Plano</span>
-                        <span>Módulos</span>
-                        <span>Membros</span>
-                        <span>Acessos</span>
-                        <span>Status</span>
+                        {([
+                          { key: "name" as const, label: "Igreja", sortable: true },
+                          { key: null, label: "Plano", sortable: false },
+                          { key: null, label: "Módulos", sortable: false },
+                          { key: "members" as const, label: "Membros", sortable: true },
+                          { key: "access_count" as const, label: "Acessos", sortable: true },
+                          { key: "status" as const, label: "Status", sortable: true },
+                        ]).map((col, idx) =>
+                          col.sortable && col.key ? (
+                            <button
+                              key={col.label}
+                              type="button"
+                              className={`tenant-sort-header${sortKey === col.key ? " is-active" : ""}`}
+                              onClick={() => toggleSort(col.key as TenantSortKey)}
+                              title={`Ordenar por ${col.label}`}
+                            >
+                              {col.label}
+                              <span className="tenant-sort-arrow" aria-hidden="true">
+                                {sortKey === col.key ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                              </span>
+                            </button>
+                          ) : (
+                            <span key={`${col.label}-${idx}`}>{col.label}</span>
+                          ),
+                        )}
                       </div>
 
-                      {filteredTenants.length > 0 ? (
-                        filteredTenants.map((tenant) => (
+                      {sortedTenants.length > 0 ? (
+                        sortedTenants.map((tenant) => (
                           <article key={tenant.id} className="tenant-table-row">
                             <div>
                               <strong>{tenant.name}</strong>

@@ -1472,6 +1472,40 @@ h1 {
   text-transform: uppercase;
 }
 
+.tenant-sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 860;
+  letter-spacing: inherit;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: max-content;
+}
+
+.tenant-sort-header:hover {
+  color: var(--color-brand-primary);
+}
+
+.tenant-sort-header.is-active {
+  color: var(--color-brand-primary);
+}
+
+.tenant-sort-arrow {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.tenant-sort-header:not(.is-active) .tenant-sort-arrow {
+  opacity: 0.35;
+}
+
 .tenant-table-row {
   min-height: 66px;
   padding: 12px 14px;

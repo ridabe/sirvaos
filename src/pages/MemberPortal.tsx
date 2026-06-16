@@ -2,6 +2,7 @@ import {
   Baby,
   Bell,
   BookOpen,
+  Cake,
   CalendarCheck,
   CalendarDays,
   Check,
@@ -122,6 +123,20 @@ type PortalTenantInfo = {
   name: string;
   contact_phone: string | null;
   logo_url: string | null;
+};
+
+type PortalBirthdayRecord = {
+  id: string;
+  name: string;
+  date_of_birth: string | null;
+};
+
+type PortalBirthday = {
+  id: string;
+  name: string;
+  day: number;
+  month: number;
+  isToday: boolean;
 };
 
 type PortalAnnouncementRecord = {
@@ -488,6 +503,29 @@ const emptyBibleSchoolClassForm: BibleSchoolClassFormState = {
   is_active: true,
 };
 
+// Monta a lista de aniversariantes do mês corrente a partir dos membros ativos.
+// Usa apenas dia/mês (ignora o ano, por privacidade) e ordena por dia.
+function buildMonthBirthdays(rows: PortalBirthdayRecord[]): PortalBirthday[] {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const todayDay = now.getDate();
+
+  return rows
+    .map((row) => {
+      if (!row.date_of_birth) return null;
+      // date_of_birth é "YYYY-MM-DD" — parseia sem fuso para evitar deslocamento de dia.
+      const parts = row.date_of_birth.split("T")[0].split("-");
+      if (parts.length < 3) return null;
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      if (!month || !day) return null;
+      return { id: row.id, name: row.name, day, month, isToday: false };
+    })
+    .filter((b): b is PortalBirthday => b !== null && b.month === currentMonth)
+    .map((b) => ({ ...b, isToday: b.day === todayDay }))
+    .sort((a, b) => a.day - b.day || a.name.localeCompare(b.name, "pt-BR"));
+}
+
 export function MemberPortal() {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginMessage, setLoginMessage] = useState("");
@@ -504,6 +542,7 @@ export function MemberPortal() {
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<Set<string>>(new Set());
   const [assignments, setAssignments] = useState<MemberAssignment[]>([]);
   const [portalEvents, setPortalEvents] = useState<PortalEventRecord[]>([]);
+  const [birthdays, setBirthdays] = useState<PortalBirthday[]>([]);
   const [portalAnnouncements, setPortalAnnouncements] = useState<PortalAnnouncementRecord[]>([]);
   const [memberMinistries, setMemberMinistries] = useState<PortalMinistryRecord[]>([]);
   const [moduleAdminAccesses, setModuleAdminAccesses] = useState<PortalModuleAccessRecord[]>([]);
@@ -997,7 +1036,7 @@ export function MemberPortal() {
     // Tenant info e eventos são públicos para todo membro do tenant — carregamos
     // antes de qualquer guarda de member_id ou módulo específico.
     if (profileData.tenant_id) {
-      const [tenantInfoRes, eventsRes, announcementsRes, socialMediaRes] = await Promise.all([
+      const [tenantInfoRes, eventsRes, announcementsRes, socialMediaRes, birthdaysRes] = await Promise.all([
         supabase
           .from("tenants")
           .select("name, contact_phone, logo_url")
@@ -1027,6 +1066,13 @@ export function MemberPortal() {
           .eq("is_active", true)
           .order("created_at", { ascending: true })
           .returns<SocialMediaChannelPortalRecord[]>(),
+        supabase
+          .from("members")
+          .select("id, name, date_of_birth")
+          .eq("tenant_id", profileData.tenant_id)
+          .eq("status", "active")
+          .not("date_of_birth", "is", null)
+          .returns<PortalBirthdayRecord[]>(),
       ]);
       setPortalTenantInfo(tenantInfoRes.data ?? null);
       setResolvedTenantLogoUrl(
@@ -1035,6 +1081,7 @@ export function MemberPortal() {
           : null,
       );
       setPortalEvents(eventsRes.data ?? []);
+      setBirthdays(buildMonthBirthdays(birthdaysRes.data ?? []));
       setPortalAnnouncements(announcementsRes.data ?? []);
       const channels = socialMediaRes.data ?? [];
       setSocialMediaChannels(channels);
@@ -2620,6 +2667,76 @@ export function MemberPortal() {
                   </button>
                 );
               })}
+            </div>
+          </AccordionPanel>
+        ) : null}
+
+        {/* ── Seção: Aniversariantes do mês ────────────────────────────── */}
+        {activePortalTab === "inicio" && birthdays.length > 0 ? (
+          <AccordionPanel
+            id="birthdays"
+            title="Aniversariantes do mês"
+            description="Celebre quem faz aniversário na sua igreja este mês."
+            icon={<Cake size={18} />}
+            badge={birthdays.length}
+            defaultOpen={true}
+            className="member-portal-section member-portal-feed-section member-portal-birthdays-section"
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {birthdays.map((b) => (
+                <div
+                  key={b.id}
+                  style={{
+                    width: "100%",
+                    background: b.isToday ? "var(--color-brand-primary-soft, #ECF7F4)" : "var(--color-white)",
+                    border: `1px solid ${b.isToday ? "var(--color-brand-primary, #087C7A)" : "var(--color-border)"}`,
+                    borderRadius: 10,
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        background: b.isToday ? "var(--color-brand-primary, #087C7A)" : "var(--color-bg-subtle, #F1F5F4)",
+                        color: b.isToday ? "#fff" : "var(--color-text-secondary)",
+                      }}
+                    >
+                      <Cake size={16} />
+                    </div>
+                    <strong
+                      style={{
+                        fontSize: "0.9rem",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {b.name}
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                      color: b.isToday ? "var(--color-brand-primary, #087C7A)" : "var(--color-text-secondary)",
+                    }}
+                  >
+                    {b.isToday ? "Hoje 🎉" : `${String(b.day).padStart(2, "0")}/${String(b.month).padStart(2, "0")}`}
+                  </span>
+                </div>
+              ))}
             </div>
           </AccordionPanel>
         ) : null}

@@ -102,6 +102,10 @@
 > - **App (Expo — `SirvaOSApp`):** no **login** (`lib/auth.ts → signIn`) e a cada **abertura do app** com sessão salva (`context/AuthContext.tsx`, no `getSession` inicial) — um acesso por inicialização.
 >
 > Migration: `20260616120000_tenant_access_tracking.sql`.
+>
+> No **Admin Global**, a lista de clientes pode ser ordenada clicando nos cabeçalhos **Igreja**, **Membros**, **Acessos** e **Status** (alterna asc/desc; padrão: mais acessos primeiro).
+
+**Aniversariantes do mês (Portal do Membro — NOVO):** na tela inicial do **Portal Web** (`MemberPortal.tsx`) e na **home do app** (`SirvaOSApp` → `app/(app)/index.tsx` via hook `useBirthdays`), todo membro vê a lista de aniversariantes do mês da **sua igreja**. Mostra **nome + dia/mês** (sem o ano, por privacidade), considera apenas **membros ativos** (`members.status = 'active'` com `date_of_birth` preenchido), ordena por dia e **destaca os aniversariantes do dia**. A RLS de `members` (`Tenant members can read members`) já garante que cada membro só enxerga a própria igreja — sem necessidade de nova permissão.
 
 **Onde termina:** usuário no painel/portal correspondente ao seu papel.
 
