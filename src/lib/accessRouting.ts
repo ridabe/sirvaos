@@ -44,6 +44,25 @@ export async function resolvePostLoginPath(userId: string) {
     throw new Error("O acesso da sua igreja está suspenso. Entre em contato com o administrador do SirvaOS.");
   }
 
+  // Registra o acesso (login) do cliente para a métrica do Admin Global.
+  // Este é o ponto único pós-login da web (roda em todos os logins).
+  // IMPORTANTE: aguardamos a RPC concluir, pois o chamador faz
+  // window.location.assign logo em seguida, o que cancelaria a requisição
+  // em andamento. Uma falha aqui não deve bloquear o direcionamento.
+  // Marca a aba para a restauração de sessão do ClientAdmin não recontar o login.
+  try {
+    await supabase.rpc("register_tenant_access");
+  } catch {
+    // Falha ao registrar acesso — ignora para não travar o login.
+  }
+  try {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("tenant_access_registered", "1");
+    }
+  } catch {
+    // sessionStorage indisponível — ignora.
+  }
+
   if (profileData.tenant_role === "owner" || profileData.tenant_role === "admin") {
     return "/admin-cliente";
   }
