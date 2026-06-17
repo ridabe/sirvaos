@@ -36,6 +36,8 @@ import { MemberPortal } from "./pages/MemberPortal";
 import { Produto } from "./pages/Produto";
 import { Planos } from "./pages/Planos";
 import { AssinaturaSucesso } from "./pages/AssinaturaSucesso";
+import { Ebooks } from "./pages/Ebooks";
+import { EbooksAdmin } from "./pages/EbooksAdmin";
 
 type LandingLoginStatus = "idle" | "loading" | "success" | "error";
 type LoginMode = "login" | "first-access";
@@ -226,6 +228,20 @@ export function App() {
 
   if (window.location.pathname === "/assinatura/sucesso") {
     return <AssinaturaSucesso />;
+  }
+
+  if (
+    window.location.pathname === "/ebooks" ||
+    window.location.pathname === "/ebooks/"
+  ) {
+    return <Ebooks />;
+  }
+
+  if (
+    window.location.pathname === "/ebooks/admin" ||
+    window.location.pathname === "/ebooks/admin/"
+  ) {
+    return <EbooksAdmin />;
   }
 
   /* Faz login pelo Supabase sem enviar credenciais via query string. */
