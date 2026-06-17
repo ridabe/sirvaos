@@ -37,7 +37,6 @@ import { Produto } from "./pages/Produto";
 import { Planos } from "./pages/Planos";
 import { AssinaturaSucesso } from "./pages/AssinaturaSucesso";
 import { Ebooks } from "./pages/Ebooks";
-import { EbooksAdmin } from "./pages/EbooksAdmin";
 
 type LandingLoginStatus = "idle" | "loading" | "success" | "error";
 type LoginMode = "login" | "first-access";
@@ -241,7 +240,8 @@ export function App() {
     window.location.pathname === "/ebooks/admin" ||
     window.location.pathname === "/ebooks/admin/"
   ) {
-    return <EbooksAdmin />;
+    window.location.replace("/admin-global");
+    return null;
   }
 
   /* Faz login pelo Supabase sem enviar credenciais via query string. */

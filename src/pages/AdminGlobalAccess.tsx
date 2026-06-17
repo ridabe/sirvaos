@@ -6,9 +6,11 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
   Clock3,
   DollarSign,
+  Download,
   Edit3,
   ExternalLink,
   Eye,
@@ -31,9 +33,11 @@ import {
   ShieldCheck,
   Smartphone,
   Trash2,
+  TrendingUp,
   Upload,
   UserCog,
   UserPlus,
+  Users,
   UsersRound,
   X,
 } from "lucide-react";
@@ -41,6 +45,17 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { PolicyFooter } from "../components/PolicyFooter";
 import { Button, TextField } from "../design-system/components";
+import {
+  getAllEbookLeads,
+  deleteEbookLeads,
+  getAllEbooksAdmin,
+  createEbook,
+  deleteEbook,
+  toggleEbookActive,
+  getCoverPublicUrl,
+  type EbookLead,
+  type EbookRecord,
+} from "../lib/ebooksSupabase";
 import { supabase, supabaseUrl } from "../lib/supabase";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
@@ -227,7 +242,7 @@ type AdminDashboardData = {
   };
 };
 
-type AdminSection = "dashboard" | "clients" | "plans" | "subscriptions" | "modules" | "admins" | "app" | "tutorials";
+type AdminSection = "dashboard" | "clients" | "plans" | "subscriptions" | "modules" | "admins" | "app" | "tutorials" | "ebooks";
 
 type TutorialPdfRecord = {
   id: string;
@@ -506,6 +521,29 @@ export function AdminGlobalAccess() {
   const [appConfigSaveStatus, setAppConfigSaveStatus] = useState<LoginStatus>("idle");
   const [appConfigSaveMessage, setAppConfigSaveMessage] = useState("");
 
+  const [ebookLeads, setEbookLeads] = useState<EbookLead[]>([]);
+  const [ebookLeadsStatus, setEbookLeadsStatus] = useState<LoadStatus>("idle");
+  const [ebookSearch, setEbookSearch] = useState("");
+
+  const [ebookCatalog, setEbookCatalog] = useState<EbookRecord[]>([]);
+  const [ebookCatalogStatus, setEbookCatalogStatus] = useState<LoadStatus>("idle");
+  const [isEbookCatalogOpen, setIsEbookCatalogOpen] = useState(true);
+  const [isEbookFormOpen, setIsEbookFormOpen] = useState(false);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set());
+  const [leadDeleteStatus, setLeadDeleteStatus] = useState<LoginStatus>("idle");
+  const [ebookFormVolume, setEbookFormVolume] = useState("");
+  const [ebookFormTitle, setEbookFormTitle] = useState("");
+  const [ebookFormSubtitle, setEbookFormSubtitle] = useState("");
+  const [ebookFormDescription, setEbookFormDescription] = useState("");
+  const [ebookFormTopics, setEbookFormTopics] = useState("");
+  const [ebookFormAccentColor, setEbookFormAccentColor] = useState("#1e3a5f");
+  const [ebookFormSortOrder, setEbookFormSortOrder] = useState("99");
+  const [ebookFormCoverFile, setEbookFormCoverFile] = useState<File | null>(null);
+  const [ebookFormPdfFile, setEbookFormPdfFile] = useState<File | null>(null);
+  const [ebookSaveStatus, setEbookSaveStatus] = useState<LoginStatus>("idle");
+  const [ebookSaveMessage, setEbookSaveMessage] = useState("");
+  const [ebookDeleteConfirmId, setEbookDeleteConfirmId] = useState<number | null>(null);
+
   const [tutorialPdfs, setTutorialPdfs] = useState<TutorialPdfRecord[]>([]);
   const [tutorialPdfsStatus, setTutorialPdfsStatus] = useState<LoadStatus>("idle");
   const [isTutorialFormOpen, setIsTutorialFormOpen] = useState(false);
@@ -673,6 +711,20 @@ export function AdminGlobalAccess() {
     }
     if (activeSection === "subscriptions" && signupRequestsStatus === "idle") {
       void loadSignupRequests();
+    }
+    if (activeSection === "ebooks") {
+      if (ebookLeadsStatus === "idle") {
+        setEbookLeadsStatus("loading");
+        getAllEbookLeads()
+          .then((data) => { setEbookLeads(data); setEbookLeadsStatus("ready"); })
+          .catch(() => setEbookLeadsStatus("error"));
+      }
+      if (ebookCatalogStatus === "idle") {
+        setEbookCatalogStatus("loading");
+        getAllEbooksAdmin()
+          .then((data) => { setEbookCatalog(data); setEbookCatalogStatus("ready"); })
+          .catch(() => setEbookCatalogStatus("error"));
+      }
     }
   }, [activeSection]);
 
@@ -2108,6 +2160,17 @@ export function AdminGlobalAccess() {
               <GraduationCap size={18} />
               <span className="sidebar-label">Tutoriais</span>
             </button>
+            <button
+              className={activeSection === "ebooks" ? "active" : undefined}
+              type="button"
+              onClick={() => {
+                setActiveSection("ebooks");
+                setIsMobileSidebarOpen(false);
+              }}
+            >
+              <BookOpen size={18} />
+              <span className="sidebar-label">Leads Ebooks</span>
+            </button>
           </nav>
 
           <button className="global-admin-logout" type="button" onClick={handleSignOut}>
@@ -2129,6 +2192,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "admins" && "Admins Globais"}
                 {activeSection === "app" && "App Mobile — Versões"}
                 {activeSection === "tutorials" && "Tutoriais — Materiais de apoio"}
+                {activeSection === "ebooks" && "Leads — Ebooks"}
               </h1>
               <p>
                 {activeSection === "dashboard" && "Acompanhe saúde do SaaS, auditoria e métricas do Admin Global."}
@@ -2139,6 +2203,7 @@ export function AdminGlobalAccess() {
                 {activeSection === "admins" && "Gerencie os usuários com acesso ao painel Admin Global do SirvaOS."}
                 {activeSection === "app" && "Controle qual versão mínima do app Android é exigida ou recomendada para os usuários."}
                 {activeSection === "tutorials" && "Publique PDFs e disponibilize vídeos do YouTube para todos os admins de clientes."}
+                {activeSection === "ebooks" && "Leads capturados na landing page da série Os 5 Pilares da Gestão Eclesiástica."}
               </p>
             </div>
             <Button
@@ -2164,6 +2229,8 @@ export function AdminGlobalAccess() {
                   setTutorialSaveStatus("idle");
                   setTutorialSaveMessage("");
                   setIsTutorialFormOpen(true);
+                } else if (activeSection === "ebooks") {
+                  setIsEbookFormOpen(true);
                 } else {
                   setActiveSection("clients");
                 }
@@ -2183,6 +2250,8 @@ export function AdminGlobalAccess() {
                 ? "Recarregar"
                 : activeSection === "tutorials"
                 ? "Enviar PDF"
+                : activeSection === "ebooks"
+                ? "Novo ebook"
                 : "Ver clientes"}
             </Button>
           </header>
@@ -2920,6 +2989,517 @@ export function AdminGlobalAccess() {
                     </div>
                   ) : null}
                 </section>
+              ) : null}
+
+              {activeSection === "ebooks" ? (
+                <>
+                  {/* ── CATÁLOGO (sanfona) ───────────────────────────────── */}
+                  <section className="global-panel" aria-label="Catálogo de Ebooks">
+                    <button
+                      type="button"
+                      onClick={() => setIsEbookCatalogOpen((v) => !v)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
+                    >
+                      <div>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-secondary)" }}>Biblioteca</span>
+                        <h2 style={{ margin: "2px 0 0", fontSize: "1rem", fontWeight: 700 }}>
+                          Ebooks cadastrados
+                          {ebookCatalog.length > 0 && (
+                            <span style={{ marginLeft: 8, fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>({ebookCatalog.length})</span>
+                          )}
+                        </h2>
+                      </div>
+                      <span style={{ color: "var(--color-text-secondary)", display: "flex", transition: "transform 0.2s", transform: isEbookCatalogOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                        <ChevronDown size={18} />
+                      </span>
+                    </button>
+
+                    {isEbookCatalogOpen && (<>
+                    <div style={{ height: 1, background: "var(--color-neutral-200, #e2e8f0)", margin: "14px 0" }} />
+
+                    {ebookCatalogStatus === "loading" ? (
+                      <div className="admin-state-panel">
+                        <CircleDashed size={20} />
+                        <strong>Carregando ebooks...</strong>
+                      </div>
+                    ) : ebookCatalogStatus === "error" ? (
+                      <div className="admin-state-panel error">
+                        <Bell size={20} />
+                        <strong>Erro ao carregar catálogo.</strong>
+                      </div>
+                    ) : ebookCatalog.length === 0 ? (
+                      <div className="admin-state-panel">
+                        <BookOpen size={28} />
+                        <strong>Nenhum ebook cadastrado ainda.</strong>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {ebookCatalog.map((ebook) => (
+                          <div
+                            key={ebook.id}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 14,
+                              padding: "12px 14px",
+                              background: ebook.is_active ? "var(--color-neutral-50, #f8fafc)" : "var(--color-bg-subtle, #f1f5f9)",
+                              border: "1px solid var(--color-neutral-200, #e2e8f0)",
+                              borderRadius: 10, opacity: ebook.is_active ? 1 : 0.6,
+                            }}
+                          >
+                            {/* Capa */}
+                            <div style={{ width: 48, height: 64, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: ebook.accent_color }}>
+                              {ebook.cover_path ? (
+                                <img
+                                  src={getCoverPublicUrl(ebook.cover_path)}
+                                  alt={ebook.volume}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
+                              ) : null}
+                            </div>
+
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "0.7rem", fontWeight: 700, background: "var(--color-accent-subtle, #e6f2f1)", color: "var(--color-accent)", padding: "1px 7px", borderRadius: 4 }}>
+                                  {ebook.volume}
+                                </span>
+                                {!ebook.is_active && (
+                                  <span style={{ fontSize: "0.7rem", fontWeight: 600, background: "var(--color-bg-subtle)", color: "var(--color-text-secondary)", padding: "1px 7px", borderRadius: 4 }}>
+                                    Inativo
+                                  </span>
+                                )}
+                              </div>
+                              <p style={{ margin: "3px 0 1px", fontWeight: 600, fontSize: "0.88rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ebook.title}</p>
+                              {ebook.subtitle ? <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{ebook.subtitle}</p> : null}
+                            </div>
+
+                            {/* Downloads */}
+                            <div style={{ textAlign: "center", flexShrink: 0, minWidth: 64 }}>
+                              <p style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "var(--color-accent)" }}>{ebookLeads.length}</p>
+                              <p style={{ margin: 0, fontSize: "0.68rem", color: "var(--color-text-secondary)" }}>downloads</p>
+                            </div>
+
+                            {/* PDF link */}
+                            {ebook.pdf_path ? (
+                              <a
+                                href={getCoverPublicUrl(ebook.pdf_path)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Abrir PDF"
+                                style={{ color: "var(--color-accent)", display: "flex", alignItems: "center", padding: 6, flexShrink: 0 }}
+                              >
+                                <ExternalLink size={16} />
+                              </a>
+                            ) : null}
+
+                            {/* Toggle ativo */}
+                            <button
+                              type="button"
+                              title={ebook.is_active ? "Desativar (ocultar da landing page)" : "Ativar"}
+                              onClick={() => {
+                                void toggleEbookActive(ebook.id, !ebook.is_active).then(({ ok }) => {
+                                  if (ok) setEbookCatalog((prev) => prev.map((e) => e.id === ebook.id ? { ...e, is_active: !ebook.is_active } : e));
+                                });
+                              }}
+                              style={{ color: ebook.is_active ? "var(--color-success, #16a34a)" : "var(--color-text-secondary)", display: "flex", alignItems: "center", padding: 6, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
+                            >
+                              <CheckCircle2 size={17} />
+                            </button>
+
+                            {/* Deletar */}
+                            {ebookDeleteConfirmId === ebook.id ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                <span style={{ fontSize: "0.75rem", color: "var(--color-error, #dc2626)" }}>Confirmar?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void deleteEbook(ebook).then(({ ok, error }) => {
+                                      if (ok) {
+                                        setEbookCatalog((prev) => prev.filter((e) => e.id !== ebook.id));
+                                        setEbookDeleteConfirmId(null);
+                                      } else {
+                                        alert(`Erro ao remover: ${error ?? "desconhecido"}`);
+                                      }
+                                    });
+                                  }}
+                                  style={{ fontSize: "0.75rem", fontWeight: 700, color: "#fff", background: "var(--color-error, #dc2626)", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}
+                                >
+                                  Sim
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEbookDeleteConfirmId(null)}
+                                  style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "3px 4px" }}
+                                >
+                                  Não
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                title="Remover ebook"
+                                onClick={() => setEbookDeleteConfirmId(ebook.id)}
+                                style={{ color: "var(--color-error, #dc2626)", display: "flex", alignItems: "center", padding: 6, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    </>)}
+                  </section>
+
+                  {/* ── FORMULÁRIO NOVO EBOOK ────────────────────────────── */}
+                  {isEbookFormOpen ? (
+                    <section className="global-panel tenant-form-panel" aria-label="Novo ebook">
+                      <div className="global-panel-heading">
+                        <div>
+                          <span>Cadastro</span>
+                          <h2>Adicionar novo ebook</h2>
+                        </div>
+                        <button className="panel-icon-button" type="button" onClick={() => { setIsEbookFormOpen(false); setEbookSaveStatus("idle"); setEbookSaveMessage(""); }}>
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <form
+                        className="tenant-form"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!ebookFormTitle.trim()) return;
+                          setEbookSaveStatus("loading");
+                          setEbookSaveMessage("");
+                          void createEbook({
+                            volume: ebookFormVolume.trim(),
+                            title: ebookFormTitle.trim(),
+                            subtitle: ebookFormSubtitle.trim() || undefined,
+                            description: ebookFormDescription.trim() || undefined,
+                            topics: ebookFormTopics.split(",").map((t) => t.trim()).filter(Boolean),
+                            accent_color: ebookFormAccentColor,
+                            sort_order: Number(ebookFormSortOrder) || 99,
+                            coverFile: ebookFormCoverFile ?? undefined,
+                            pdfFile: ebookFormPdfFile ?? undefined,
+                          }).then(({ ok, error, id }) => {
+                            if (!ok) {
+                              setEbookSaveStatus("error");
+                              setEbookSaveMessage(error ?? "Erro desconhecido");
+                              return;
+                            }
+                            setEbookSaveStatus("success");
+                            setEbookSaveMessage("Ebook cadastrado com sucesso!");
+                            setEbookCatalogStatus("idle");
+                            getAllEbooksAdmin().then((data) => { setEbookCatalog(data); setEbookCatalogStatus("ready"); });
+                            setEbookFormVolume(""); setEbookFormTitle(""); setEbookFormSubtitle("");
+                            setEbookFormDescription(""); setEbookFormTopics(""); setEbookFormAccentColor("#1e3a5f");
+                            setEbookFormSortOrder("99"); setEbookFormCoverFile(null); setEbookFormPdfFile(null);
+                            setTimeout(() => { setIsEbookFormOpen(false); setEbookSaveStatus("idle"); setEbookSaveMessage(""); }, 1500);
+                          });
+                        }}
+                      >
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                          <label>
+                            <span>Volume <em style={{ color: "var(--color-text-secondary)", fontStyle: "normal" }}>(ex: Vol. 6)</em></span>
+                            <input value={ebookFormVolume} onChange={(e) => setEbookFormVolume(e.target.value)} placeholder="Vol. 6" />
+                          </label>
+                          <label>
+                            <span>Ordem de exibição</span>
+                            <input type="number" value={ebookFormSortOrder} onChange={(e) => setEbookFormSortOrder(e.target.value)} placeholder="6" />
+                          </label>
+                        </div>
+
+                        <label>
+                          <span>Título <em style={{ color: "var(--color-error, #dc2626)", fontStyle: "normal" }}>*</em></span>
+                          <input required value={ebookFormTitle} onChange={(e) => setEbookFormTitle(e.target.value)} placeholder="Nome do ebook" />
+                        </label>
+
+                        <label>
+                          <span>Subtítulo</span>
+                          <input value={ebookFormSubtitle} onChange={(e) => setEbookFormSubtitle(e.target.value)} placeholder="Descrição curta" />
+                        </label>
+
+                        <label>
+                          <span>Descrição</span>
+                          <textarea
+                            value={ebookFormDescription}
+                            onChange={(e) => setEbookFormDescription(e.target.value)}
+                            placeholder="Texto exibido na landing page..."
+                            rows={3}
+                            style={{ resize: "vertical" }}
+                          />
+                        </label>
+
+                        <label>
+                          <span>Tópicos <em style={{ color: "var(--color-text-secondary)", fontStyle: "normal" }}>(separados por vírgula)</em></span>
+                          <input value={ebookFormTopics} onChange={(e) => setEbookFormTopics(e.target.value)} placeholder="Gestão, Finanças, Liderança" />
+                        </label>
+
+                        <label>
+                          <span>Cor de destaque</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <input type="color" value={ebookFormAccentColor} onChange={(e) => setEbookFormAccentColor(e.target.value)} style={{ width: 40, height: 36, padding: 2, border: "1px solid var(--color-neutral-200)", borderRadius: 6, cursor: "pointer" }} />
+                            <input value={ebookFormAccentColor} onChange={(e) => setEbookFormAccentColor(e.target.value)} placeholder="#1e3a5f" style={{ flex: 1 }} />
+                          </div>
+                        </label>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                          <label>
+                            <span>Capa (imagem)</span>
+                            <input
+                              type="file" accept="image/*"
+                              onChange={(e) => setEbookFormCoverFile(e.target.files?.[0] ?? null)}
+                              style={{ fontSize: "0.82rem" }}
+                            />
+                            {ebookFormCoverFile && <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 2, display: "block" }}>{ebookFormCoverFile.name}</span>}
+                          </label>
+                          <label>
+                            <span>Arquivo PDF</span>
+                            <input
+                              type="file" accept="application/pdf"
+                              onChange={(e) => setEbookFormPdfFile(e.target.files?.[0] ?? null)}
+                              style={{ fontSize: "0.82rem" }}
+                            />
+                            {ebookFormPdfFile && <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 2, display: "block" }}>{ebookFormPdfFile.name}</span>}
+                          </label>
+                        </div>
+
+                        {ebookSaveMessage ? (
+                          <p className={`login-feedback ${ebookSaveStatus}`}>{ebookSaveMessage}</p>
+                        ) : null}
+
+                        <div className="form-actions">
+                          <button type="button" className="secondary-action" onClick={() => { setIsEbookFormOpen(false); setEbookSaveStatus("idle"); setEbookSaveMessage(""); }}>
+                            Cancelar
+                          </button>
+                          <Button type="submit" disabled={ebookSaveStatus === "loading"} icon={<Upload size={16} />}>
+                            {ebookSaveStatus === "loading" ? "Salvando..." : "Cadastrar ebook"}
+                          </Button>
+                        </div>
+                      </form>
+                    </section>
+                  ) : null}
+
+                  {/* ── LEADS ────────────────────────────────────────────── */}
+                  {(() => {
+                    const filtered = ebookLeads.filter((l) => {
+                      if (!ebookSearch.trim()) return true;
+                      const q = ebookSearch.toLowerCase();
+                      return l.name.toLowerCase().includes(q) || l.email.toLowerCase().includes(q) || (l.ebook_title ?? "").toLowerCase().includes(q);
+                    });
+                    const allFilteredIds = filtered.map((l) => l.id).filter((id): id is number => id !== undefined);
+                    const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedLeadIds.has(id));
+                    const someSelected = selectedLeadIds.size > 0;
+
+                    function exportLeadsCsv(leads: EbookLead[]) {
+                      const header = "Email,Full Name,First Name,Last Name,Phone Number 1,Phone Number 2,Url,Address,Notes,Birthday,Designation,Department,Company\n";
+                      const rows = leads.map((l) => {
+                        const parts = l.name.trim().split(" ");
+                        const firstName = parts[0] ?? "";
+                        const lastName = parts.slice(1).join(" ");
+                        const notes = (l.ebook_title ?? "").replace(/,/g, ";");
+                        const date = l.created_at ? new Date(l.created_at).toLocaleDateString("pt-BR") : "";
+                        return `"${l.email}","${l.name}","${firstName}","${lastName}","","","","","${notes} — ${date}","","","",""`;
+                      }).join("\n");
+                      const blob = new Blob(["﻿" + header + rows], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `leads_ebooks_${new Date().toISOString().split("T")[0]}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }
+
+                    return (
+                      <section className="global-panel" aria-label="Leads — Ebooks">
+                        {/* Header */}
+                        <div className="global-panel-heading" style={{ marginBottom: 16 }}>
+                          <div>
+                            <span>Capturas</span>
+                            <h2>Leads da landing page</h2>
+                          </div>
+                        </div>
+
+                        {/* Stats */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: 12, marginBottom: 20 }}>
+                          {[
+                            { icon: Users, label: "Total de Leads", value: ebookLeads.length },
+                            { icon: FileText, label: "E-mails Únicos", value: new Set(ebookLeads.map((l) => l.email)).size },
+                            { icon: TrendingUp, label: "Capturas Hoje", value: ebookLeads.filter((l) => l.created_at && new Date(l.created_at).toDateString() === new Date().toDateString()).length },
+                          ].map((s) => (
+                            <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--color-neutral-50, #f8fafc)", border: "1px solid var(--color-neutral-200, #e2e8f0)", borderRadius: 10 }}>
+                              <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--color-accent-subtle, #e6f2f1)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-accent)", flexShrink: 0 }}>
+                                <s.icon size={16} />
+                              </div>
+                              <div>
+                                <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>{s.label}</p>
+                                <p style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, lineHeight: 1.2 }}>{s.value}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Toolbar */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                          {/* Busca */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 180, padding: "7px 12px", background: "var(--color-neutral-50, #f8fafc)", border: "1px solid var(--color-neutral-200, #e2e8f0)", borderRadius: 8 }}>
+                            <Search size={14} style={{ color: "var(--color-text-secondary)", flexShrink: 0 }} />
+                            <input
+                              type="text"
+                              placeholder="Nome, e-mail ou ebook..."
+                              value={ebookSearch}
+                              onChange={(e) => setEbookSearch(e.target.value)}
+                              style={{ border: "none", background: "transparent", outline: "none", fontSize: "0.85rem", width: "100%" }}
+                            />
+                          </div>
+
+                          {/* Exportar todos */}
+                          <button
+                            type="button"
+                            disabled={ebookLeads.length === 0}
+                            onClick={() => exportLeadsCsv(filtered)}
+                            title="Exportar todos os leads visíveis"
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", background: "var(--color-accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: "0.83rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                          >
+                            <Download size={14} /> Exportar todos
+                          </button>
+
+                          {/* Exportar selecionados — só aparece quando há seleção */}
+                          {someSelected && (
+                            <button
+                              type="button"
+                              onClick={() => exportLeadsCsv(ebookLeads.filter((l) => l.id !== undefined && selectedLeadIds.has(l.id as number)))}
+                              title={`Exportar ${selectedLeadIds.size} selecionados`}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", background: "transparent", color: "var(--color-accent)", border: "1.5px solid var(--color-accent)", borderRadius: 8, fontSize: "0.83rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                            >
+                              <Download size={14} /> Exportar selecionados ({selectedLeadIds.size})
+                            </button>
+                          )}
+
+                          {/* Deletar selecionados */}
+                          {someSelected && (
+                            <button
+                              type="button"
+                              disabled={leadDeleteStatus === "loading"}
+                              onClick={() => {
+                                if (!window.confirm(`Remover ${selectedLeadIds.size} lead(s)? Esta ação não pode ser desfeita.`)) return;
+                                setLeadDeleteStatus("loading");
+                                void deleteEbookLeads([...selectedLeadIds]).then(({ ok, error }) => {
+                                  if (!ok) { alert(`Erro ao deletar: ${error ?? "desconhecido"}`); setLeadDeleteStatus("idle"); return; }
+                                  setEbookLeads((prev) => prev.filter((l) => l.id === undefined || !selectedLeadIds.has(l.id as number)));
+                                  setSelectedLeadIds(new Set());
+                                  setLeadDeleteStatus("idle");
+                                });
+                              }}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", background: "var(--color-error, #dc2626)", color: "#fff", border: "none", borderRadius: 8, fontSize: "0.83rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                            >
+                              <Trash2 size={14} />
+                              {leadDeleteStatus === "loading" ? "Removendo..." : `Deletar (${selectedLeadIds.size})`}
+                            </button>
+                          )}
+
+                          {/* Contagem */}
+                          <span style={{ fontSize: "0.76rem", color: "var(--color-text-secondary)", marginLeft: "auto", whiteSpace: "nowrap" }}>
+                            {someSelected ? `${selectedLeadIds.size} selecionados · ` : ""}
+                            {filtered.length} de {ebookLeads.length}
+                          </span>
+                        </div>
+
+                        {/* Tabela */}
+                        {ebookLeadsStatus === "loading" ? (
+                          <div className="admin-state-panel">
+                            <CircleDashed size={20} />
+                            <strong>Carregando leads...</strong>
+                          </div>
+                        ) : ebookLeadsStatus === "error" ? (
+                          <div className="admin-state-panel error">
+                            <Bell size={20} />
+                            <strong>Erro ao carregar leads.</strong>
+                          </div>
+                        ) : filtered.length === 0 ? (
+                          <div className="admin-state-panel">
+                            <FileText size={28} />
+                            <strong>{ebookSearch ? "Nenhum resultado." : "Nenhum lead capturado ainda."}</strong>
+                          </div>
+                        ) : (
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+                              <thead>
+                                <tr style={{ borderBottom: "2px solid var(--color-neutral-200, #e2e8f0)" }}>
+                                  <th style={{ padding: "8px 10px", width: 36 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={allSelected}
+                                      onChange={() => {
+                                        if (allSelected) {
+                                          setSelectedLeadIds((prev) => { const n = new Set(prev); allFilteredIds.forEach((id) => n.delete(id)); return n; });
+                                        } else {
+                                          setSelectedLeadIds((prev) => { const n = new Set(prev); allFilteredIds.forEach((id) => n.add(id)); return n; });
+                                        }
+                                      }}
+                                      style={{ cursor: "pointer", accentColor: "var(--color-accent)" }}
+                                    />
+                                  </th>
+                                  {["Nome", "E-mail", "Ebook", "Data", ""].map((h) => (
+                                    <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filtered.map((lead, idx) => {
+                                  const isSelected = lead.id !== undefined && selectedLeadIds.has(lead.id as number);
+                                  return (
+                                    <tr
+                                      key={lead.id ?? idx}
+                                      style={{ borderBottom: "1px solid var(--color-neutral-100, #f1f5f9)", background: isSelected ? "var(--color-accent-subtle, #e6f2f1)" : undefined }}
+                                    >
+                                      <td style={{ padding: "8px 10px" }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => {
+                                            if (lead.id === undefined) return;
+                                            setSelectedLeadIds((prev) => {
+                                              const n = new Set(prev);
+                                              if (n.has(lead.id as number)) n.delete(lead.id as number);
+                                              else n.add(lead.id as number);
+                                              return n;
+                                            });
+                                          }}
+                                          style={{ cursor: "pointer", accentColor: "var(--color-accent)" }}
+                                        />
+                                      </td>
+                                      <td style={{ padding: "8px 10px", fontWeight: 500 }}>{lead.name}</td>
+                                      <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{lead.email}</td>
+                                      <td style={{ padding: "8px 10px" }}>
+                                        <span style={{ fontSize: "0.71rem", fontWeight: 600, background: "var(--color-accent-subtle, #e6f2f1)", color: "var(--color-accent)", padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap" }}>
+                                          {(lead.ebook_title ?? "").replace("Série Completa — ", "").replace("Os 5 Pilares da Gestão Eclesiástica", "Série Completa")}
+                                        </span>
+                                      </td>
+                                      <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                                        {lead.created_at ? new Date(lead.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                      </td>
+                                      <td style={{ padding: "8px 6px" }}>
+                                        <button
+                                          type="button"
+                                          title="Exportar este lead"
+                                          onClick={() => exportLeadsCsv([lead])}
+                                          style={{ color: "var(--color-accent)", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}
+                                        >
+                                          <Download size={14} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })()}
+                </>
               ) : null}
 
               {activeSection === "modules" && isModuleFormOpen ? (

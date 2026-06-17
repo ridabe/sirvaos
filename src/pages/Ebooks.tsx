@@ -5,12 +5,14 @@
  */
 
 import { BookOpen, Check, ChevronRight, Download, Sparkles, Star, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  EBOOKS,
+  EBOOKS_FALLBACK,
+  getEbooksFromDb,
   getAllPdfSignedUrls,
   getCoverPublicUrl,
   insertEbookLead,
+  type EbookMeta,
 } from "../lib/ebooksSupabase";
 import "./Ebooks.css";
 
@@ -25,6 +27,12 @@ interface DownloadEntry {
 }
 
 export function Ebooks() {
+  const [ebooks, setEbooks] = useState<EbookMeta[]>(EBOOKS_FALLBACK);
+
+  useEffect(() => {
+    getEbooksFromDb().then(setEbooks).catch(() => setEbooks(EBOOKS_FALLBACK));
+  }, []);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [formState, setFormState] = useState<FormState>("idle");
   const [formError, setFormError] = useState("");
@@ -78,9 +86,9 @@ export function Ebooks() {
       }
 
       // 2. Gerar URLs assinadas para todos os PDFs
-      const signedUrls = await getAllPdfSignedUrls(86400); // 24h
+      const signedUrls = await getAllPdfSignedUrls(86400, ebooks); // 24h
 
-      const entries: DownloadEntry[] = EBOOKS.map((ebook) => ({
+      const entries: DownloadEntry[] = ebooks.map((ebook) => ({
         id: ebook.id,
         volume: ebook.volume,
         title: ebook.title,
@@ -285,7 +293,7 @@ export function Ebooks() {
           </div>
 
           <div className="ebooks-grid">
-            {EBOOKS.map((ebook) => (
+            {ebooks.map((ebook) => (
               <article
                 key={ebook.id}
                 className="ebooks-card"
